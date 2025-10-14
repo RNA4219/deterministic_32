@@ -47,7 +47,15 @@ function _stringify(v: unknown, stack: Set<any>): string {
   if (Array.isArray(v)) {
     if (stack.has(v)) throw new TypeError("Cyclic object");
     stack.add(v);
-    const out = "[" + v.map((x) => _stringify(x, stack)).join(",") + "]";
+    const parts: string[] = [];
+    for (let i = 0; i < v.length; i += 1) {
+      if (Object.prototype.hasOwnProperty.call(v, i)) {
+        parts.push(_stringify(v[i], stack));
+      } else {
+        parts.push(JSON.stringify(typeSentinel("hole")));
+      }
+    }
+    const out = "[" + parts.join(",") + "]";
     stack.delete(v);
     return out;
   }
