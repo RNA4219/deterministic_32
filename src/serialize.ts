@@ -21,7 +21,13 @@ function _stringify(v: unknown, stack: Set<any>): string {
   const t = typeof v;
 
   if (t === "string") return JSON.stringify(v);
-  if (t === "number" || t === "boolean") return JSON.stringify(v);
+  if (t === "number") {
+    if (Number.isNaN(v)) {
+      return JSON.stringify(typeSentinel("number", "NaN"));
+    }
+    return JSON.stringify(v);
+  }
+  if (t === "boolean") return JSON.stringify(v);
   if (t === "bigint") return JSON.stringify(typeSentinel("bigint", (v as bigint).toString()));
   if (t === "undefined") return JSON.stringify(typeSentinel("undefined"));
   if (t === "function" || t === "symbol") return JSON.stringify(String(v));
@@ -65,7 +71,8 @@ function _stringify(v: unknown, stack: Set<any>): string {
     if (stack.has(v)) throw new TypeError("Cyclic object");
     stack.add(v);
     const arr = Array.from(v.values()).map((x) => _stringify(x, stack));
-    const out = "[" + arr.join(",") + "]";
+    const out =
+      "[\"__set__\"" + (arr.length > 0 ? "," + arr.join(",") : "") + "]";
     stack.delete(v);
     return out;
   }
