@@ -124,8 +124,9 @@ export class Cat32 {
   }
 
   private normalizeIndex(i: number): number {
-    const n = Math.trunc(i);
-    if (n < 0 || n > 31) throw new Error(`index out of range: ${i}`);
-    return n;
+    if (!Number.isFinite(i) || !Number.isInteger(i) || i < 0 || i > 31) {
+      throw new Error(`index out of range: ${i}`);
+    }
+    return i;
   }
 }
