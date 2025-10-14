@@ -123,8 +123,18 @@ test("override by label", () => {
   assert.equal(a.label, "L31");
 });
 
-test("override by NaN index throws", () => {
-  assert.throws(() => new Cat32({ overrides: { foo: Number.NaN as any } }));
+test("override rejects NaN with explicit error", () => {
+  assert.throws(
+    () => new Cat32({ overrides: { foo: Number.NaN as any } }),
+    (error) => error instanceof Error && error.message === "index out of range: NaN",
+  );
+});
+
+test("override rejects NaN", () => {
+  assert.throws(
+    () => new Cat32({ overrides: { foo: Number.NaN as any } }),
+    (error) => error instanceof Error,
+  );
 });
 
 test("range 0..31 and various types", () => {
