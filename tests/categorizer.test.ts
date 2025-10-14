@@ -4,7 +4,7 @@ import assert from "node:assert";
 import { Cat32 } from "../src/index.js";
 
 type SpawnOptions = {
-  stdio?: ("pipe" | "inherit")[];
+  stdio?: ("pipe" | "inherit" | "ignore")[];
   env?: Record<string, string | undefined>;
 };
 
@@ -120,6 +120,21 @@ test("NaN serialized distinctly from null", () => {
 
   assert.equal(nanAssignment.key === nullAssignment.key, false);
   assert.equal(nanAssignment.hash === nullAssignment.hash, false);
+});
+
+test("Map keys normalize to sorted object representation", () => {
+  const c = new Cat32();
+  const map = new Map<string, number>([
+    ["b", 2],
+    ["a", 1],
+  ]);
+
+  const mapAssignment = c.assign(map);
+  const objectAssignment = c.assign({ a: 1, b: 2 });
+
+  assert.equal(mapAssignment.key, "{\"a\":1,\"b\":2}");
+  assert.equal(mapAssignment.key, objectAssignment.key);
+  assert.equal(mapAssignment.hash, objectAssignment.hash);
 });
 
 test("Infinity serialized distinctly from string sentinel", () => {
@@ -254,7 +269,7 @@ test("map object key differs from same-name string key", () => {
   assert.ok(a.key !== b.key);
 });
 
-test("map differs from plain object with same entries", () => {
+test("map payload matches plain object with same entries", () => {
   const c = new Cat32();
   const mapInput = {
     payload: new Map<unknown, unknown>([
@@ -272,8 +287,8 @@ test("map differs from plain object with same entries", () => {
   const mapAssignment = c.assign(mapInput);
   const objectAssignment = c.assign(objectInput);
 
-  assert.ok(mapAssignment.key !== objectAssignment.key);
-  assert.ok(mapAssignment.hash !== objectAssignment.hash);
+  assert.equal(mapAssignment.key, objectAssignment.key);
+  assert.equal(mapAssignment.hash, objectAssignment.hash);
 });
 
 test("set differs from array with same entries", () => {
