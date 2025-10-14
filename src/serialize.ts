@@ -22,10 +22,14 @@ function _stringify(v: unknown, stack: Set<any>): string {
 
   if (t === "string") return JSON.stringify(v);
   if (t === "number") {
-    if (Number.isNaN(v)) {
+    const numberValue = v as number;
+    if (Number.isNaN(numberValue)) {
       return JSON.stringify(typeSentinel("number", "NaN"));
     }
-    return JSON.stringify(v);
+    if (!Number.isFinite(numberValue)) {
+      return JSON.stringify(typeSentinel("number", String(numberValue)));
+    }
+    return JSON.stringify(numberValue);
   }
   if (t === "boolean") return JSON.stringify(v);
   if (t === "bigint") return JSON.stringify(typeSentinel("bigint", (v as bigint).toString()));
