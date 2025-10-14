@@ -102,6 +102,7 @@ test("top-level bigint differs from number", () => {
   const c = new Cat32();
   const bigintAssignment = c.assign(1n);
   const numberAssignment = c.assign(1);
+  assert.equal(bigintAssignment.key, "__bigint__:1");
   assert.ok(bigintAssignment.key !== numberAssignment.key);
   assert.ok(bigintAssignment.hash !== numberAssignment.hash);
 });
