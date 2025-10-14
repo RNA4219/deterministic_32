@@ -210,6 +210,15 @@ test("map differs from plain object with same entries", () => {
   assert.ok(mapAssignment.hash !== objectAssignment.hash);
 });
 
+test("set differs from array with same entries", () => {
+  const c = new Cat32();
+  const setAssignment = c.assign(new Set([1, 2]));
+  const arrayAssignment = c.assign([1, 2]);
+
+  assert.ok(setAssignment.key !== arrayAssignment.key);
+  assert.ok(setAssignment.hash !== arrayAssignment.hash);
+});
+
 test("CLI preserves leading whitespace from stdin", async () => {
   const { spawn } = (await dynamicImport("node:child_process")) as { spawn: SpawnFunction };
   const child = spawn(process.argv[0], [CLI_PATH], {
@@ -250,6 +259,30 @@ test("CLI handles empty string key from argv", async () => {
   });
 
   child.stdin.end();
+
+  let stdout = "";
+  child.stdout.setEncoding("utf8");
+  child.stdout.on("data", (chunk: string) => {
+    stdout += chunk;
+  });
+
+  const exitCode: number | null = await new Promise((resolve) => {
+    child.on("close", (code: number | null) => resolve(code));
+  });
+  assert.equal(exitCode, 0);
+
+  const result = JSON.parse(stdout);
+  assert.equal(result.key, "");
+
+  const expected = new Cat32().assign("");
+  assert.equal(result.hash, expected.hash);
+});
+
+test("CLI command cat32 \"\" exits successfully", async () => {
+  const { spawn } = (await dynamicImport("node:child_process")) as { spawn: SpawnFunction };
+  const child = spawn(process.argv[0], [CLI_PATH, ""], {
+    stdio: ["pipe", "pipe", "inherit"],
+  });
 
   let stdout = "";
   child.stdout.setEncoding("utf8");
