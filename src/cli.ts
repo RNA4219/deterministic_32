@@ -74,7 +74,11 @@ function isSpecificationViolation(error: unknown): boolean {
 try {
   await main();
 } catch (error) {
-  console.error(error);
+  if (error instanceof Error) {
+    console.error(error);
+  } else {
+    console.error(new Error(String(error)));
+  }
   const exitCode = isSpecificationViolation(error) ? 2 : 1;
   process.exit(exitCode);
 }
