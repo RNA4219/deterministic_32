@@ -71,21 +71,32 @@ function _stringify(v: unknown, stack: Set<any>): string {
   if (v instanceof Map) {
     if (stack.has(v)) throw new TypeError("Cyclic object");
     stack.add(v);
-    const entries = Array.from(v.entries()).map(([k, val], idx) => ({
-      key: _stringify(k, stack),
-      value: _stringify(val, stack),
-      order: idx,
-    }));
+    const entries = Array.from(v.entries()).map(([k, val], idx) => {
+      const serializedKey = _stringify(k, stack);
+      let normalizedKey = serializedKey;
+      if (serializedKey.length >= 2 && serializedKey.startsWith("\"") && serializedKey.endsWith("\"")) {
+        try {
+          normalizedKey = JSON.parse(serializedKey) as string;
+        } catch {
+          normalizedKey = serializedKey;
+        }
+      }
+      return {
+        key: normalizedKey,
+        value: _stringify(val, stack),
+        order: idx,
+      };
+    });
     entries.sort((a, b) => {
       if (a.key < b.key) return -1;
       if (a.key > b.key) return 1;
       return a.order - b.order;
     });
     const body = entries
-      .map(({ key, value }) => "[" + key + "," + value + "]")
+      .map(({ key, value }) => JSON.stringify(key) + ":" + value)
       .join(",");
     stack.delete(v);
-    return "[\"__map__\"" + (body.length ? "," + body : "") + "]";
+    return "{" + body + "}";
   }
 
   // Set
