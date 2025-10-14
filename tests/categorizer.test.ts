@@ -41,6 +41,24 @@ test("normalization NFKC merges fullwidth", () => {
   assert.equal(x.index, y.index);
 });
 
+test("bigint values serialize deterministically", () => {
+  const c = new Cat32({ salt: "s", namespace: "ns" });
+  const input = {
+    value: 123n,
+    nested: { arr: [1n, { deep: 2n }] },
+  } as const;
+
+  const first = c.assign(input);
+  const second = c.assign({
+    nested: { arr: [1n, { deep: 2n }] },
+    value: 123n,
+  });
+
+  assert.equal(first.index, second.index);
+  assert.equal(first.label, second.label);
+  assert.equal(first.hash, second.hash);
+});
+
 test("cyclic object throws", () => {
   const a: any = { x: 1 };
   a.self = a;
