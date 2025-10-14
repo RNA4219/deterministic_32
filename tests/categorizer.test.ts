@@ -160,6 +160,46 @@ test("undefined sentinel string differs from undefined value", () => {
   assert.ok(undefinedAssignment.hash !== stringAssignment.hash);
 });
 
+test("sentinel strings differ from actual values at top level", () => {
+  const c = new Cat32();
+
+  const bigintValue = c.assign(1n);
+  const bigintSentinel = c.assign("__bigint__:1");
+  assert.ok(bigintValue.key !== bigintSentinel.key);
+  assert.ok(bigintValue.hash !== bigintSentinel.hash);
+
+  const undefinedValue = c.assign(undefined);
+  const undefinedSentinel = c.assign("__undefined__");
+  assert.ok(undefinedValue.key !== undefinedSentinel.key);
+  assert.ok(undefinedValue.hash !== undefinedSentinel.hash);
+
+  const date = new Date("2024-01-02T03:04:05.678Z");
+  const dateValue = c.assign(date);
+  const dateSentinel = c.assign("__date__:" + date.toISOString());
+  assert.ok(dateValue.key !== dateSentinel.key);
+  assert.ok(dateValue.hash !== dateSentinel.hash);
+});
+
+test("sentinel strings differ from actual values when nested", () => {
+  const c = new Cat32();
+
+  const bigintValue = c.assign({ value: 1n });
+  const bigintSentinel = c.assign({ value: "__bigint__:1" });
+  assert.ok(bigintValue.key !== bigintSentinel.key);
+  assert.ok(bigintValue.hash !== bigintSentinel.hash);
+
+  const undefinedValue = c.assign({ value: undefined });
+  const undefinedSentinel = c.assign({ value: "__undefined__" });
+  assert.ok(undefinedValue.key !== undefinedSentinel.key);
+  assert.ok(undefinedValue.hash !== undefinedSentinel.hash);
+
+  const date = new Date("2024-01-02T03:04:05.678Z");
+  const dateValue = c.assign({ value: date });
+  const dateSentinel = c.assign({ value: "__date__:" + date.toISOString() });
+  assert.ok(dateValue.key !== dateSentinel.key);
+  assert.ok(dateValue.hash !== dateSentinel.hash);
+});
+
 test("cyclic object throws", () => {
   const a: any = { x: 1 };
   a.self = a;

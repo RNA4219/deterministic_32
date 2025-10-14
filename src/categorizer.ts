@@ -1,5 +1,9 @@
 import { fnv1a32, toHex32 } from "./hash.js";
-import { stableStringify, typeSentinel } from "./serialize.js";
+import {
+  escapeSentinelString,
+  stableStringify,
+  typeSentinel,
+} from "./serialize.js";
 
 export type NormalizeMode = "none" | "nfc" | "nfkc";
 
@@ -88,12 +92,20 @@ export class Cat32 {
     let s: string;
     switch (typeof input) {
       case "string":
-        s = input;
+        s = escapeSentinelString(input);
         break;
       case "bigint":
         s = typeSentinel("bigint", input.toString());
         break;
-      case "number":
+      case "number": {
+        const value = input as number;
+        if (Number.isNaN(value) || !Number.isFinite(value)) {
+          s = typeSentinel("number", String(value));
+        } else {
+          s = String(value);
+        }
+        break;
+      }
       case "boolean":
         s = String(input);
         break;
