@@ -15,7 +15,7 @@ function _stringify(v: unknown, stack: Set<any>): string {
 
   if (t === "string") return JSON.stringify(v);
   if (t === "number" || t === "boolean") return JSON.stringify(v);
-  if (t === "bigint") return JSON.stringify(`__bigint__:${(v as bigint).toString()}`);
+  if (t === "bigint") return `"__bigint__:${(v as bigint).toString()}"`;
   if (t === "undefined") return '"__undefined__"';
   if (t === "function" || t === "symbol") return JSON.stringify(String(v));
 
