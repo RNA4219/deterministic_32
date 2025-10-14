@@ -277,3 +277,27 @@ test("CLI handles empty string key from argv", async () => {
   const expected = new Cat32().assign("");
   assert.equal(result.hash, expected.hash);
 });
+
+test("CLI command cat32 \"\" exits successfully", async () => {
+  const { spawn } = (await dynamicImport("node:child_process")) as { spawn: SpawnFunction };
+  const child = spawn(process.argv[0], [CLI_PATH, ""], {
+    stdio: ["pipe", "pipe", "inherit"],
+  });
+
+  let stdout = "";
+  child.stdout.setEncoding("utf8");
+  child.stdout.on("data", (chunk: string) => {
+    stdout += chunk;
+  });
+
+  const exitCode: number | null = await new Promise((resolve) => {
+    child.on("close", (code: number | null) => resolve(code));
+  });
+  assert.equal(exitCode, 0);
+
+  const result = JSON.parse(stdout);
+  assert.equal(result.key, "");
+
+  const expected = new Cat32().assign("");
+  assert.equal(result.hash, expected.hash);
+});
