@@ -80,6 +80,13 @@ test("normalization NFKC merges fullwidth", () => {
   assert.equal(x.index, y.index);
 });
 
+test("unsupported normalization option throws", () => {
+  assert.throws(
+    () => new Cat32({ normalize: "nfkd" as any }),
+    (error) => error instanceof RangeError,
+  );
+});
+
 test("bigint values serialize deterministically", () => {
   const c = new Cat32({ salt: "s", namespace: "ns" });
   const input = {
