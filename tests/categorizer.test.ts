@@ -169,6 +169,15 @@ test("sparse arrays differ from empty arrays", () => {
   assert.ok(sparseAssignment.hash !== emptyAssignment.hash);
 });
 
+test("top-level sparse arrays differ from empty arrays", () => {
+  const c = new Cat32({ salt: "s", namespace: "ns" });
+  const sparseAssignment = c.assign(new Array(1));
+  const emptyAssignment = c.assign([]);
+
+  assert.ok(sparseAssignment.key !== emptyAssignment.key);
+  assert.ok(sparseAssignment.hash !== emptyAssignment.hash);
+});
+
 test("sentinel strings differ from actual values at top level", () => {
   const c = new Cat32();
 

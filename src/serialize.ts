@@ -7,6 +7,7 @@
 const SENTINEL_PREFIX = "\u0000cat32:";
 const SENTINEL_SUFFIX = "\u0000";
 const STRING_SENTINEL_PREFIX = `${SENTINEL_PREFIX}string:`;
+const HOLE_SENTINEL = JSON.stringify(typeSentinel("hole"));
 
 export function typeSentinel(type: string, payload = ""): string {
   return `${SENTINEL_PREFIX}${type}:${payload}${SENTINEL_SUFFIX}`;
@@ -47,12 +48,13 @@ function _stringify(v: unknown, stack: Set<any>): string {
   if (Array.isArray(v)) {
     if (stack.has(v)) throw new TypeError("Cyclic object");
     stack.add(v);
-    const parts: string[] = [];
-    for (let i = 0; i < v.length; i += 1) {
-      if (Object.prototype.hasOwnProperty.call(v, i)) {
-        parts.push(_stringify(v[i], stack));
+    const length = v.length;
+    const parts: string[] = new Array(length);
+    for (let i = 0; i < length; i += 1) {
+      if (Object.hasOwn(v, i)) {
+        parts[i] = _stringify(v[i], stack);
       } else {
-        parts.push(JSON.stringify(typeSentinel("hole")));
+        parts[i] = HOLE_SENTINEL;
       }
     }
     const out = "[" + parts.join(",") + "]";
