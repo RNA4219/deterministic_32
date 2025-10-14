@@ -1,5 +1,5 @@
 import { fnv1a32, toHex32 } from "./hash.js";
-import { stableStringify } from "./serialize.js";
+import { stableStringify, typeSentinel } from "./serialize.js";
 
 export type NormalizeMode = "none" | "nfc" | "nfkc";
 
@@ -86,7 +86,7 @@ export class Cat32 {
         s = input;
         break;
       case "bigint":
-        s = `__bigint__:${input.toString()}`;
+        s = typeSentinel("bigint", input.toString());
         break;
       case "number":
       case "boolean":
@@ -96,7 +96,7 @@ export class Cat32 {
         s = stableStringify(input);
         break;
       case "undefined":
-        s = "__undefined__";
+        s = typeSentinel("undefined");
         break;
       default:
         s = String(input);
