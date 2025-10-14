@@ -431,6 +431,19 @@ test("CLI command cat32 \"\" exits successfully", async () => {
   assert.equal(result.hash, expected.hash);
 });
 
+test("CLI exits with code 2 for invalid normalize option using stdin", async () => {
+  const { spawn } = (await dynamicImport("node:child_process")) as { spawn: SpawnFunction };
+  const child = spawn(process.argv[0], [CLI_PATH, "--normalize=invalid"], {
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+
+  const exitCode: number | null = await new Promise((resolve) => {
+    child.on("close", (code: number | null) => resolve(code));
+  });
+
+  assert.equal(exitCode, 2);
+});
+
 test("CLI exits with code 2 for invalid normalize option", async () => {
   const { spawn } = (await dynamicImport("node:child_process")) as { spawn: SpawnFunction };
   const child = spawn(process.argv[0], [CLI_PATH, "foo", "--normalize=invalid"], {
