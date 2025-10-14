@@ -145,6 +145,28 @@ test("map object key differs from same-name string key", () => {
   assert.ok(a.key !== b.key);
 });
 
+test("map differs from plain object with same entries", () => {
+  const c = new Cat32();
+  const mapInput = {
+    payload: new Map<unknown, unknown>([
+      [1, "one"],
+      [2, "two"],
+    ]),
+  };
+  const objectInput = {
+    payload: {
+      1: "one",
+      2: "two",
+    },
+  };
+
+  const mapAssignment = c.assign(mapInput);
+  const objectAssignment = c.assign(objectInput);
+
+  assert.ok(mapAssignment.key !== objectAssignment.key);
+  assert.ok(mapAssignment.hash !== objectAssignment.hash);
+});
+
 test("CLI preserves leading whitespace from stdin", async () => {
   const { spawn } = (await dynamicImport("node:child_process")) as { spawn: SpawnFunction };
   const child = spawn(process.argv[0], [CLI_PATH], {
