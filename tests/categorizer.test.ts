@@ -75,3 +75,24 @@ test("cyclic object throws", () => {
   const c = new Cat32();
   assert.throws(() => c.assign(a), /Cyclic object/);
 });
+
+test("map object key differs from same-name string key", () => {
+  const c = new Cat32();
+  const objectKey = { foo: 1 };
+  const stringKey = String(objectKey);
+  const inputWithObjectKey = {
+    payload: new Map<unknown, string>([
+      [objectKey, "object"],
+      [stringKey, "string"],
+    ]),
+  };
+  const inputWithStringKey = {
+    payload: new Map<unknown, string>([
+      [stringKey, "object"],
+      [objectKey, "string"],
+    ]),
+  };
+  const a = c.assign(inputWithObjectKey);
+  const b = c.assign(inputWithStringKey);
+  assert.notEqual(a.key, b.key);
+});

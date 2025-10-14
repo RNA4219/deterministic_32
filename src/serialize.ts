@@ -36,9 +36,17 @@ function _stringify(v: unknown, stack: Set<any>): string {
   if (v instanceof Map) {
     if (stack.has(v)) throw new TypeError("Cyclic object");
     stack.add(v);
-    const entries = Array.from(v.entries()).map(([k, val]) => [String(k), val] as const);
-    entries.sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
-    const body = entries.map(([k, val]) => JSON.stringify(k) + ":" + _stringify(val, stack));
+    const entries = Array.from(v.entries()).map(([k, val], idx) => ({
+      key: _stringify(k, stack),
+      value: val,
+      order: idx,
+    }));
+    entries.sort((a, b) => {
+      if (a.key < b.key) return -1;
+      if (a.key > b.key) return 1;
+      return a.order - b.order;
+    });
+    const body = entries.map(({ key, value }) => JSON.stringify(key) + ":" + _stringify(value, stack));
     stack.delete(v);
     return "{" + body.join(",") + "}";
   }
