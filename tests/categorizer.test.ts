@@ -98,6 +98,14 @@ test("bigint values serialize deterministically", () => {
   assert.equal(first.hash, second.hash);
 });
 
+test("top-level bigint differs from number", () => {
+  const c = new Cat32();
+  const bigintAssignment = c.assign(1n);
+  const numberAssignment = c.assign(1);
+  assert.ok(bigintAssignment.key !== numberAssignment.key);
+  assert.ok(bigintAssignment.hash !== numberAssignment.hash);
+});
+
 test("cyclic object throws", () => {
   const a: any = { x: 1 };
   a.self = a;

@@ -85,8 +85,10 @@ export class Cat32 {
       case "string":
         s = input;
         break;
-      case "number":
       case "bigint":
+        s = stableStringify(input);
+        break;
+      case "number":
       case "boolean":
         s = String(input);
         break;
