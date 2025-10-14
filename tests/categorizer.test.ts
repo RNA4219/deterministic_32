@@ -110,8 +110,8 @@ test("NaN serialized distinctly from null", () => {
   const nanAssignment = c.assign({ value: NaN });
   const nullAssignment = c.assign({ value: null });
 
-  assert.ok(nanAssignment.key !== nullAssignment.key);
-  assert.ok(nanAssignment.hash !== nullAssignment.hash);
+  assert.equal(nanAssignment.key === nullAssignment.key, false);
+  assert.equal(nanAssignment.hash === nullAssignment.hash, false);
 });
 
 test("Infinity serialized distinctly from string sentinel", () => {
@@ -119,8 +119,8 @@ test("Infinity serialized distinctly from string sentinel", () => {
   const infinityAssignment = c.assign({ value: Infinity });
   const sentinelAssignment = c.assign({ value: "__number__:Infinity" });
 
-  assert.ok(infinityAssignment.key !== sentinelAssignment.key);
-  assert.ok(infinityAssignment.hash !== sentinelAssignment.hash);
+  assert.equal(infinityAssignment.key === sentinelAssignment.key, false);
+  assert.equal(infinityAssignment.hash === sentinelAssignment.hash, false);
 });
 
 test("top-level bigint differs from number", () => {

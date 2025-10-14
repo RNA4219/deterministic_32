@@ -21,7 +21,17 @@ function _stringify(v: unknown, stack: Set<any>): string {
   const t = typeof v;
 
   if (t === "string") return JSON.stringify(v);
-  if (t === "number" || t === "boolean") return JSON.stringify(v);
+  if (t === "number") {
+    const numberValue = v as number;
+    if (Number.isNaN(numberValue)) {
+      return JSON.stringify(typeSentinel("number", "NaN"));
+    }
+    if (!Number.isFinite(numberValue)) {
+      return JSON.stringify(typeSentinel("number", String(numberValue)));
+    }
+    return JSON.stringify(numberValue);
+  }
+  if (t === "boolean") return JSON.stringify(v);
   if (t === "bigint") return JSON.stringify(typeSentinel("bigint", (v as bigint).toString()));
   if (t === "undefined") return JSON.stringify(typeSentinel("undefined"));
   if (t === "function" || t === "symbol") return JSON.stringify(String(v));
