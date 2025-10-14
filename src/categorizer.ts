@@ -37,7 +37,12 @@ export class Cat32 {
     const baseSalt = opts.salt ?? "";
     const ns = opts.namespace ? `|ns:${opts.namespace}` : "";
     this.salt = `${baseSalt}${ns}`;
-    this.normalize = opts.normalize ?? "nfkc";
+
+    const normalize = opts.normalize ?? "nfkc";
+    if (normalize !== "none" && normalize !== "nfc" && normalize !== "nfkc") {
+      throw new RangeError("normalize must be one of \"none\", \"nfc\", or \"nfkc\"");
+    }
+    this.normalize = normalize;
     this.overrides = new Map();
 
     if (opts.overrides) {
