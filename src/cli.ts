@@ -23,7 +23,9 @@ function parseArgs(argv: string[]) {
 
 async function main() {
   const args = parseArgs(process.argv);
-  const key = args._ as string | undefined;
+  const key = Object.prototype.hasOwnProperty.call(args, "_")
+    ? ((args as { _: string })._)
+    : undefined;
   const salt = (args.salt as string) ?? "";
   const namespace = (args.namespace as string) ?? "";
   const norm = (args.normalize as string) ?? "nfkc";
@@ -34,7 +36,7 @@ async function main() {
     process.exit(1);
   }
 
-  const input = key !== undefined ? key : await readStdin();
+  const input = key ?? (await readStdin());
   const res = cat.assign(input);
   process.stdout.write(JSON.stringify(res) + "\n");
 }
