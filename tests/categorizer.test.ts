@@ -66,6 +66,10 @@ test("override by label", () => {
   assert.equal(a.label, "L31");
 });
 
+test("override by NaN index throws", () => {
+  assert.throws(() => new Cat32({ overrides: { foo: Number.NaN as any } }));
+});
+
 test("range 0..31 and various types", () => {
   const c = new Cat32();
   for (const k of ["a", "b", "c", "日本語", "ＡＢＣ", 123, true, null]) {
