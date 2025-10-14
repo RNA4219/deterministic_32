@@ -105,6 +105,24 @@ test("bigint values serialize deterministically", () => {
   assert.equal(first.hash, second.hash);
 });
 
+test("NaN serialized distinctly from null", () => {
+  const c = new Cat32({ salt: "s", namespace: "ns" });
+  const nanAssignment = c.assign({ value: NaN });
+  const nullAssignment = c.assign({ value: null });
+
+  assert.ok(nanAssignment.key !== nullAssignment.key);
+  assert.ok(nanAssignment.hash !== nullAssignment.hash);
+});
+
+test("Infinity serialized distinctly from string sentinel", () => {
+  const c = new Cat32({ salt: "s", namespace: "ns" });
+  const infinityAssignment = c.assign({ value: Infinity });
+  const sentinelAssignment = c.assign({ value: "__number__:Infinity" });
+
+  assert.ok(infinityAssignment.key !== sentinelAssignment.key);
+  assert.ok(infinityAssignment.hash !== sentinelAssignment.hash);
+});
+
 test("top-level bigint differs from number", () => {
   const c = new Cat32();
   const bigintAssignment = c.assign(1n);

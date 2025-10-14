@@ -14,7 +14,16 @@ function _stringify(v: unknown, stack: Set<any>): string {
   const t = typeof v;
 
   if (t === "string") return JSON.stringify(v);
-  if (t === "number" || t === "boolean") return JSON.stringify(v);
+  if (t === "number") {
+    const num = v as number;
+    if (Number.isNaN(num)) return '"__nan__"';
+    if (!Number.isFinite(num)) {
+      const sign = num > 0 ? "+" : "-";
+      return JSON.stringify(`__inf__:${sign}`);
+    }
+    return JSON.stringify(num);
+  }
+  if (t === "boolean") return JSON.stringify(v);
   if (t === "bigint") return `"__bigint__:${(v as bigint).toString()}"`;
   if (t === "undefined") return '"__undefined__"';
   if (t === "function" || t === "symbol") return JSON.stringify(String(v));
