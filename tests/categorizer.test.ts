@@ -110,8 +110,8 @@ test("NaN serialized distinctly from null", () => {
   const nanAssignment = c.assign({ value: NaN });
   const nullAssignment = c.assign({ value: null });
 
-  assert.ok(nanAssignment.key !== nullAssignment.key);
-  assert.ok(nanAssignment.hash !== nullAssignment.hash);
+  assert.equal(nanAssignment.key === nullAssignment.key, false);
+  assert.equal(nanAssignment.hash === nullAssignment.hash, false);
 });
 
 test("Infinity serialized distinctly from string sentinel", () => {
@@ -119,8 +119,8 @@ test("Infinity serialized distinctly from string sentinel", () => {
   const infinityAssignment = c.assign({ value: Infinity });
   const sentinelAssignment = c.assign({ value: "__number__:Infinity" });
 
-  assert.ok(infinityAssignment.key !== sentinelAssignment.key);
-  assert.ok(infinityAssignment.hash !== sentinelAssignment.hash);
+  assert.equal(infinityAssignment.key === sentinelAssignment.key, false);
+  assert.equal(infinityAssignment.hash === sentinelAssignment.hash, false);
 });
 
 test("top-level bigint differs from number", () => {
@@ -250,6 +250,15 @@ test("map differs from plain object with same entries", () => {
   assert.ok(mapAssignment.hash !== objectAssignment.hash);
 });
 
+test("set differs from array with same entries", () => {
+  const c = new Cat32();
+  const setAssignment = c.assign(new Set([1, 2]));
+  const arrayAssignment = c.assign([1, 2]);
+
+  assert.ok(setAssignment.key !== arrayAssignment.key);
+  assert.ok(setAssignment.hash !== arrayAssignment.hash);
+});
+
 test("CLI preserves leading whitespace from stdin", async () => {
   const { spawn } = (await dynamicImport("node:child_process")) as { spawn: SpawnFunction };
   const child = spawn(process.argv[0], [CLI_PATH], {
@@ -290,6 +299,30 @@ test("CLI handles empty string key from argv", async () => {
   });
 
   child.stdin.end();
+
+  let stdout = "";
+  child.stdout.setEncoding("utf8");
+  child.stdout.on("data", (chunk: string) => {
+    stdout += chunk;
+  });
+
+  const exitCode: number | null = await new Promise((resolve) => {
+    child.on("close", (code: number | null) => resolve(code));
+  });
+  assert.equal(exitCode, 0);
+
+  const result = JSON.parse(stdout);
+  assert.equal(result.key, "");
+
+  const expected = new Cat32().assign("");
+  assert.equal(result.hash, expected.hash);
+});
+
+test("CLI command cat32 \"\" exits successfully", async () => {
+  const { spawn } = (await dynamicImport("node:child_process")) as { spawn: SpawnFunction };
+  const child = spawn(process.argv[0], [CLI_PATH, ""], {
+    stdio: ["pipe", "pipe", "inherit"],
+  });
 
   let stdout = "";
   child.stdout.setEncoding("utf8");

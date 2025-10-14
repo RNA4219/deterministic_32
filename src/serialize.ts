@@ -83,7 +83,8 @@ function _stringify(v: unknown, stack: Set<any>): string {
     if (stack.has(v)) throw new TypeError("Cyclic object");
     stack.add(v);
     const arr = Array.from(v.values()).map((x) => _stringify(x, stack));
-    const out = "[" + arr.join(",") + "]";
+    const out =
+      "[\"__set__\"" + (arr.length > 0 ? "," + arr.join(",") : "") + "]";
     stack.delete(v);
     return out;
   }
