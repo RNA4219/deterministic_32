@@ -160,6 +160,15 @@ test("undefined sentinel string differs from undefined value", () => {
   assert.ok(undefinedAssignment.hash !== stringAssignment.hash);
 });
 
+test("sparse arrays differ from empty arrays", () => {
+  const c = new Cat32({ salt: "s", namespace: "ns" });
+  const sparseAssignment = c.assign({ value: new Array(1) });
+  const emptyAssignment = c.assign({ value: [] });
+
+  assert.ok(sparseAssignment.key !== emptyAssignment.key);
+  assert.ok(sparseAssignment.hash !== emptyAssignment.hash);
+});
+
 test("sentinel strings differ from actual values at top level", () => {
   const c = new Cat32();
 
