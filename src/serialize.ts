@@ -6,9 +6,20 @@
 
 const SENTINEL_PREFIX = "\u0000cat32:";
 const SENTINEL_SUFFIX = "\u0000";
+const STRING_SENTINEL_PREFIX = `${SENTINEL_PREFIX}string:`;
 
 export function typeSentinel(type: string, payload = ""): string {
   return `${SENTINEL_PREFIX}${type}:${payload}${SENTINEL_SUFFIX}`;
+}
+
+export function escapeSentinelString(value: string): string {
+  if (!value.startsWith(SENTINEL_PREFIX)) {
+    return value;
+  }
+  if (value.startsWith(STRING_SENTINEL_PREFIX) && value.endsWith(SENTINEL_SUFFIX)) {
+    return value;
+  }
+  return typeSentinel("string", value);
 }
 
 export function stableStringify(v: unknown): string {
@@ -20,8 +31,15 @@ function _stringify(v: unknown, stack: Set<any>): string {
   if (v === null) return "null";
   const t = typeof v;
 
-  if (t === "string") return JSON.stringify(v);
-  if (t === "number" || t === "boolean") return JSON.stringify(v);
+  if (t === "string") return JSON.stringify(escapeSentinelString(v as string));
+  if (t === "number") {
+    const value = v as number;
+    if (Number.isNaN(value) || !Number.isFinite(value)) {
+      return JSON.stringify(typeSentinel("number", String(value)));
+    }
+    return JSON.stringify(value);
+  }
+  if (t === "boolean") return JSON.stringify(v);
   if (t === "bigint") return JSON.stringify(typeSentinel("bigint", (v as bigint).toString()));
   if (t === "undefined") return JSON.stringify(typeSentinel("undefined"));
   if (t === "function" || t === "symbol") return JSON.stringify(String(v));
