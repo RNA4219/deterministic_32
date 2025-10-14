@@ -58,7 +58,23 @@ function readStdin(): Promise<string> {
   });
 }
 
-main().catch((e) => {
-  console.error(e);
-  process.exit(1);
-});
+function isSpecificationViolation(error: unknown): boolean {
+  if (error instanceof RangeError) {
+    return true;
+  }
+  if (error instanceof TypeError) {
+    const message = String(error.message ?? "").toLowerCase();
+    if (message.includes("cyclic object")) {
+      return true;
+    }
+  }
+  return false;
+}
+
+try {
+  await main();
+} catch (error) {
+  console.error(error);
+  const exitCode = isSpecificationViolation(error) ? 2 : 1;
+  process.exit(exitCode);
+}
