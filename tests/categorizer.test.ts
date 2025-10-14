@@ -80,6 +80,13 @@ test("normalization NFKC merges fullwidth", () => {
   assert.equal(x.index, y.index);
 });
 
+test("unsupported normalization option throws", () => {
+  assert.throws(
+    () => new Cat32({ normalize: "nfkd" as any }),
+    (error) => error instanceof RangeError,
+  );
+});
+
 test("bigint values serialize deterministically", () => {
   const c = new Cat32({ salt: "s", namespace: "ns" });
   const input = {
@@ -96,6 +103,24 @@ test("bigint values serialize deterministically", () => {
   assert.equal(first.index, second.index);
   assert.equal(first.label, second.label);
   assert.equal(first.hash, second.hash);
+});
+
+test("NaN serialized distinctly from null", () => {
+  const c = new Cat32({ salt: "s", namespace: "ns" });
+  const nanAssignment = c.assign({ value: NaN });
+  const nullAssignment = c.assign({ value: null });
+
+  assert.ok(nanAssignment.key !== nullAssignment.key);
+  assert.ok(nanAssignment.hash !== nullAssignment.hash);
+});
+
+test("Infinity serialized distinctly from string sentinel", () => {
+  const c = new Cat32({ salt: "s", namespace: "ns" });
+  const infinityAssignment = c.assign({ value: Infinity });
+  const sentinelAssignment = c.assign({ value: "__number__:Infinity" });
+
+  assert.ok(infinityAssignment.key !== sentinelAssignment.key);
+  assert.ok(infinityAssignment.hash !== sentinelAssignment.hash);
 });
 
 test("top-level bigint differs from number", () => {
@@ -163,6 +188,28 @@ test("map object key differs from same-name string key", () => {
   assert.ok(a.key !== b.key);
 });
 
+test("map differs from plain object with same entries", () => {
+  const c = new Cat32();
+  const mapInput = {
+    payload: new Map<unknown, unknown>([
+      [1, "one"],
+      [2, "two"],
+    ]),
+  };
+  const objectInput = {
+    payload: {
+      1: "one",
+      2: "two",
+    },
+  };
+
+  const mapAssignment = c.assign(mapInput);
+  const objectAssignment = c.assign(objectInput);
+
+  assert.ok(mapAssignment.key !== objectAssignment.key);
+  assert.ok(mapAssignment.hash !== objectAssignment.hash);
+});
+
 test("CLI preserves leading whitespace from stdin", async () => {
   const { spawn } = (await dynamicImport("node:child_process")) as { spawn: SpawnFunction };
   const child = spawn(process.argv[0], [CLI_PATH], {
@@ -187,5 +234,37 @@ test("CLI preserves leading whitespace from stdin", async () => {
   assert.equal(result.key, "  spaced");
 
   const expected = new Cat32().assign("  spaced");
+  assert.equal(result.hash, expected.hash);
+});
+
+test("CLI handles empty string key from argv", async () => {
+  const { spawn } = (await dynamicImport("node:child_process")) as { spawn: SpawnFunction };
+  const script = [
+    "const path = process.argv.at(-1);",
+    "process.stdin.isTTY = true;",
+    'process.argv = [process.argv[0], path, ""];',
+    "import(path).catch((err) => { console.error(err); process.exit(1); });",
+  ].join(" ");
+  const child = spawn(process.argv[0], ["-e", script, CLI_PATH], {
+    stdio: ["pipe", "pipe", "inherit"],
+  });
+
+  child.stdin.end();
+
+  let stdout = "";
+  child.stdout.setEncoding("utf8");
+  child.stdout.on("data", (chunk: string) => {
+    stdout += chunk;
+  });
+
+  const exitCode: number | null = await new Promise((resolve) => {
+    child.on("close", (code: number | null) => resolve(code));
+  });
+  assert.equal(exitCode, 0);
+
+  const result = JSON.parse(stdout);
+  assert.equal(result.key, "");
+
+  const expected = new Cat32().assign("");
   assert.equal(result.hash, expected.hash);
 });

@@ -45,7 +45,7 @@ function _stringify(v: unknown, stack: Set<any>): string {
     stack.add(v);
     const entries = Array.from(v.entries()).map(([k, val], idx) => ({
       key: _stringify(k, stack),
-      value: val,
+      value: _stringify(val, stack),
       order: idx,
     }));
     entries.sort((a, b) => {
@@ -53,9 +53,11 @@ function _stringify(v: unknown, stack: Set<any>): string {
       if (a.key > b.key) return 1;
       return a.order - b.order;
     });
-    const body = entries.map(({ key, value }) => JSON.stringify(key) + ":" + _stringify(value, stack));
+    const body = entries
+      .map(({ key, value }) => "[" + key + "," + value + "]")
+      .join(",");
     stack.delete(v);
-    return "{" + body.join(",") + "}";
+    return "[\"__map__\"" + (body.length ? "," + body : "") + "]";
   }
 
   // Set
