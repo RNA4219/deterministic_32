@@ -3,6 +3,35 @@ import test from "node:test";
 import assert from "node:assert";
 import { Cat32 } from "../src/index.js";
 
+type SpawnOptions = {
+  stdio?: ("pipe" | "inherit")[];
+};
+
+type SpawnedProcess = {
+  stdin: {
+    write(chunk: string): void;
+    end(): void;
+  };
+  stdout: {
+    setEncoding(encoding: "utf8"): void;
+    on(event: "data", listener: (chunk: string) => void): void;
+  };
+  on(event: "close", listener: (code: number | null, signal: string | null) => void): void;
+};
+
+type SpawnFunction = (
+  command: string,
+  args: string[],
+  options?: SpawnOptions,
+) => SpawnedProcess;
+
+const dynamicImport = new Function(
+  "specifier",
+  "return import(specifier);",
+) as (specifier: string) => Promise<unknown>;
+
+const CLI_PATH = new URL("../src/cli.js", import.meta.url).pathname;
+
 test("deterministic mapping for object key order", () => {
   const c = new Cat32({ salt: "s", namespace: "ns" });
   const a1 = c.assign({ id: 123, tags: ["a", "b"] });
@@ -94,5 +123,32 @@ test("map object key differs from same-name string key", () => {
   };
   const a = c.assign(inputWithObjectKey);
   const b = c.assign(inputWithStringKey);
-  assert.notEqual(a.key, b.key);
+  assert.ok(a.key !== b.key);
+});
+
+test("CLI preserves leading whitespace from stdin", async () => {
+  const { spawn } = (await dynamicImport("node:child_process")) as { spawn: SpawnFunction };
+  const child = spawn(process.argv[0], [CLI_PATH], {
+    stdio: ["pipe", "pipe", "inherit"],
+  });
+
+  child.stdin.write("  spaced\n");
+  child.stdin.end();
+
+  let stdout = "";
+  child.stdout.setEncoding("utf8");
+  child.stdout.on("data", (chunk: string) => {
+    stdout += chunk;
+  });
+
+  const exitCode: number | null = await new Promise((resolve) => {
+    child.on("close", (code: number | null) => resolve(code));
+  });
+  assert.equal(exitCode, 0);
+
+  const result = JSON.parse(stdout);
+  assert.equal(result.key, "  spaced");
+
+  const expected = new Cat32().assign("  spaced");
+  assert.equal(result.hash, expected.hash);
 });

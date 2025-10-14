@@ -44,7 +44,15 @@ function readStdin(): Promise<string> {
     let data = "";
     process.stdin.setEncoding("utf8");
     process.stdin.on("data", (chunk) => (data += chunk));
-    process.stdin.on("end", () => resolve(data.trim()));
+    process.stdin.on("end", () => {
+      let finalData = data;
+      if (finalData.endsWith("\r\n")) {
+        finalData = finalData.slice(0, -2);
+      } else if (finalData.endsWith("\n")) {
+        finalData = finalData.slice(0, -1);
+      }
+      resolve(finalData);
+    });
   });
 }
 
