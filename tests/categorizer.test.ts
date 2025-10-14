@@ -33,6 +33,63 @@ const dynamicImport = new Function(
 
 const CLI_PATH = new URL("../src/cli.js", import.meta.url).pathname;
 
+const CLI_SET_ASSIGN_SCRIPT = [
+  "(async () => {",
+  "  const cliPath = process.argv.at(-1);",
+  "  const { pathToFileURL } = await import('node:url');",
+  "  const { Cat32 } = await import(new URL('../src/categorizer.js', pathToFileURL(cliPath)));",
+  "  const magic = process.env.CAT32_MAGIC;",
+  "  const values = JSON.parse(process.env.CAT32_SET_VALUES ?? '[]');",
+  "  const originalAssign = Cat32.prototype.assign;",
+  "  Cat32.prototype.assign = function(input) {",
+  "    if (input === magic) {",
+  "      const set = new Set();",
+  "      for (const value of values) set.add(value);",
+  "      return originalAssign.call(this, set);",
+  "    }",
+  "    return originalAssign.call(this, input);",
+  "  };",
+  "  process.stdin.isTTY = true;",
+  "  process.argv = [process.argv[0], cliPath, magic];",
+  "  try {",
+  "    await import(cliPath);",
+  "  } catch (error) {",
+  "    console.error(error);",
+  "    process.exit(1);",
+  "  }",
+  "})();",
+].join("\n");
+
+async function runCliAssignWithSet(values: unknown[]): Promise<{ key: string; hash: string }> {
+  const { spawn } = (await dynamicImport("node:child_process")) as { spawn: SpawnFunction };
+  const baseEnv = (process as unknown as { env?: Record<string, string | undefined> }).env ?? {};
+
+  const child = spawn(process.argv[0], ["-e", CLI_SET_ASSIGN_SCRIPT, CLI_PATH], {
+    stdio: ["pipe", "pipe", "inherit"],
+    env: {
+      ...baseEnv,
+      CAT32_MAGIC: "__cat32_test_magic__",
+      CAT32_SET_VALUES: JSON.stringify(values),
+    },
+  });
+
+  child.stdin.end();
+
+  let stdout = "";
+  child.stdout.setEncoding("utf8");
+  child.stdout.on("data", (chunk: string) => {
+    stdout += chunk;
+  });
+
+  const exitCode: number | null = await new Promise((resolve) => {
+    child.on("close", (code: number | null) => resolve(code));
+  });
+
+  assert.equal(exitCode, 0);
+
+  return JSON.parse(stdout) as { key: string; hash: string };
+}
+
 test("deterministic mapping for object key order", () => {
   const c = new Cat32({ salt: "s", namespace: "ns" });
   const a1 = c.assign({ id: 123, tags: ["a", "b"] });
@@ -338,66 +395,22 @@ test("CLI handles empty string key from argv", async () => {
 });
 
 test("CLI assign handles sets deterministically", async () => {
-  const { spawn } = (await dynamicImport("node:child_process")) as { spawn: SpawnFunction };
-  const script = [
-    "(async () => {",
-    "  const cliPath = process.argv.at(-1);",
-    "  const { pathToFileURL } = await import('node:url');",
-    "  const { Cat32 } = await import(new URL('../src/categorizer.js', pathToFileURL(cliPath)));",
-    "  const magic = process.env.CAT32_MAGIC;",
-    "  const values = JSON.parse(process.env.CAT32_SET_VALUES);",
-    "  const originalAssign = Cat32.prototype.assign;",
-    "  Cat32.prototype.assign = function(input) {",
-    "    if (input === magic) {",
-    "      const set = new Set();",
-    "      for (const value of values) set.add(value);",
-    "      return originalAssign.call(this, set);",
-    "    }",
-    "    return originalAssign.call(this, input);",
-    "  };",
-    "  process.stdin.isTTY = true;",
-    "  process.argv = [process.argv[0], cliPath, magic];",
-    "  try {",
-    "    await import(cliPath);",
-    "  } catch (error) {",
-    "    console.error(error);",
-    "    process.exit(1);",
-    "  }",
-    "})();",
-  ].join("\n");
+  const first = await runCliAssignWithSet(["alpha", "beta", "gamma"]);
+  const second = await runCliAssignWithSet(["gamma", "beta", "alpha"]);
 
-  const runWithValues = async (values: string[]) => {
-    const baseEnv = (process as unknown as {
-      env?: Record<string, string | undefined>;
-    }).env ?? {};
+  assert.equal(first.key, second.key);
+  assert.equal(first.hash, second.hash);
+});
 
-    const child = spawn(process.argv[0], ["-e", script, CLI_PATH], {
-      stdio: ["pipe", "pipe", "inherit"],
-      env: {
-        ...baseEnv,
-        CAT32_MAGIC: "__cat32_test_magic__",
-        CAT32_SET_VALUES: JSON.stringify(values),
-      },
-    });
-
-    child.stdin.end();
-
-    let stdout = "";
-    child.stdout.setEncoding("utf8");
-    child.stdout.on("data", (chunk: string) => {
-      stdout += chunk;
-    });
-
-    const exitCode: number | null = await new Promise((resolve) => {
-      child.on("close", (code: number | null) => resolve(code));
-    });
-    assert.equal(exitCode, 0);
-
-    return JSON.parse(stdout);
-  };
-
-  const first = await runWithValues(["alpha", "beta", "gamma"]);
-  const second = await runWithValues(["gamma", "beta", "alpha"]);
+test("CLI assign handles set insertion order for object values", async () => {
+  const first = await runCliAssignWithSet([
+    { id: 1, payload: "first" },
+    { id: 2, payload: "second" },
+  ]);
+  const second = await runCliAssignWithSet([
+    { id: 2, payload: "second" },
+    { id: 1, payload: "first" },
+  ]);
 
   assert.equal(first.key, second.key);
   assert.equal(first.hash, second.hash);

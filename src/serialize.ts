@@ -92,14 +92,14 @@ function _stringify(v: unknown, stack: Set<any>): string {
   if (v instanceof Set) {
     if (stack.has(v)) throw new TypeError("Cyclic object");
     stack.add(v);
-    const arr = Array.from(v.values()).map((x) => _stringify(x, stack));
-    arr.sort((a, b) => {
-      if (a < b) return -1;
-      if (a > b) return 1;
-      return 0;
-    });
+    const serializedValues = Array.from(v.values(), (value) =>
+      _stringify(value, stack),
+    );
+    serializedValues.sort();
     const out =
-      "[\"__set__\"" + (arr.length > 0 ? "," + arr.join(",") : "") + "]";
+      "[\"__set__\"" +
+      (serializedValues.length > 0 ? "," + serializedValues.join(",") : "") +
+      "]";
     stack.delete(v);
     return out;
   }
