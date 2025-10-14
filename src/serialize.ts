@@ -4,6 +4,13 @@
 // - Treats Date as ISO string.
 // - Maps/Sets are serialized as arrays in insertion order (keys sorted for Map via key string).
 
+const SENTINEL_PREFIX = "\u0000cat32:";
+const SENTINEL_SUFFIX = "\u0000";
+
+export function typeSentinel(type: string, payload = ""): string {
+  return `${SENTINEL_PREFIX}${type}:${payload}${SENTINEL_SUFFIX}`;
+}
+
 export function stableStringify(v: unknown): string {
   const stack = new Set<any>();
   return _stringify(v, stack);
@@ -14,18 +21,9 @@ function _stringify(v: unknown, stack: Set<any>): string {
   const t = typeof v;
 
   if (t === "string") return JSON.stringify(v);
-  if (t === "number") {
-    const num = v as number;
-    if (Number.isNaN(num)) return '"__nan__"';
-    if (!Number.isFinite(num)) {
-      const sign = num > 0 ? "+" : "-";
-      return JSON.stringify(`__inf__:${sign}`);
-    }
-    return JSON.stringify(num);
-  }
-  if (t === "boolean") return JSON.stringify(v);
-  if (t === "bigint") return `"__bigint__:${(v as bigint).toString()}"`;
-  if (t === "undefined") return '"__undefined__"';
+  if (t === "number" || t === "boolean") return JSON.stringify(v);
+  if (t === "bigint") return JSON.stringify(typeSentinel("bigint", (v as bigint).toString()));
+  if (t === "undefined") return JSON.stringify(typeSentinel("undefined"));
   if (t === "function" || t === "symbol") return JSON.stringify(String(v));
 
   if (Array.isArray(v)) {
@@ -38,7 +36,7 @@ function _stringify(v: unknown, stack: Set<any>): string {
 
   // Date
   if (v instanceof Date) {
-    return JSON.stringify(`__date__:${v.toISOString()}`);
+    return JSON.stringify(typeSentinel("date", v.toISOString()));
   }
 
   // Map

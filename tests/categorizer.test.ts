@@ -127,7 +127,7 @@ test("top-level bigint differs from number", () => {
   const c = new Cat32();
   const bigintAssignment = c.assign(1n);
   const numberAssignment = c.assign(1);
-  assert.equal(bigintAssignment.key, "__bigint__:1");
+  assert.equal(bigintAssignment.key, "\u0000cat32:bigint:1\u0000");
   assert.ok(bigintAssignment.key !== numberAssignment.key);
   assert.ok(bigintAssignment.hash !== numberAssignment.hash);
 });
@@ -137,9 +137,27 @@ test("top-level bigint canonical key uses bigint prefix", () => {
   const bigintAssignment = c.assign(1n);
   const numberAssignment = c.assign(1);
 
-  assert.equal(bigintAssignment.key, "__bigint__:1");
+  assert.equal(bigintAssignment.key, "\u0000cat32:bigint:1\u0000");
   assert.ok(bigintAssignment.key !== numberAssignment.key);
   assert.ok(bigintAssignment.hash !== numberAssignment.hash);
+});
+
+test("bigint sentinel string differs from bigint value", () => {
+  const c = new Cat32();
+  const bigintAssignment = c.assign(1n);
+  const stringAssignment = c.assign("__bigint__:1");
+
+  assert.ok(bigintAssignment.key !== stringAssignment.key);
+  assert.ok(bigintAssignment.hash !== stringAssignment.hash);
+});
+
+test("undefined sentinel string differs from undefined value", () => {
+  const c = new Cat32();
+  const undefinedAssignment = c.assign(undefined);
+  const stringAssignment = c.assign("__undefined__");
+
+  assert.ok(undefinedAssignment.key !== stringAssignment.key);
+  assert.ok(undefinedAssignment.hash !== stringAssignment.hash);
 });
 
 test("cyclic object throws", () => {
