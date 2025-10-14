@@ -106,6 +106,16 @@ test("top-level bigint differs from number", () => {
   assert.ok(bigintAssignment.hash !== numberAssignment.hash);
 });
 
+test("top-level bigint canonical key uses bigint prefix", () => {
+  const c = new Cat32();
+  const bigintAssignment = c.assign(1n);
+  const numberAssignment = c.assign(1);
+
+  assert.equal(bigintAssignment.key, "__bigint__:1");
+  assert.ok(bigintAssignment.key !== numberAssignment.key);
+  assert.ok(bigintAssignment.hash !== numberAssignment.hash);
+});
+
 test("cyclic object throws", () => {
   const a: any = { x: 1 };
   a.self = a;
