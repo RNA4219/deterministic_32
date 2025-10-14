@@ -124,7 +124,10 @@ export class Cat32 {
   }
 
   private normalizeIndex(i: number): number {
-    if (!Number.isFinite(i) || !Number.isInteger(i) || i < 0 || i > 31) {
+    if (!Number.isFinite(i) || !Number.isInteger(i)) {
+      throw new Error(`index out of range: ${i}`);
+    }
+    if (i < 0 || i > 31) {
       throw new Error(`index out of range: ${i}`);
     }
     return i;

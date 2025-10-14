@@ -4,7 +4,7 @@ import assert from "node:assert";
 import { Cat32 } from "../src/index.js";
 
 type SpawnOptions = {
-  stdio?: ("pipe" | "inherit")[];
+  stdio?: ("pipe" | "inherit" | "ignore")[];
   env?: Record<string, string | undefined>;
 };
 
@@ -64,6 +64,13 @@ test("override by label", () => {
   const a = c.assign("pin");
   assert.equal(a.index, 31);
   assert.equal(a.label, "L31");
+});
+
+test("override rejects NaN with explicit error", () => {
+  assert.throws(
+    () => new Cat32({ overrides: { foo: Number.NaN as any } }),
+    (error) => error instanceof Error && error.message === "index out of range: NaN",
+  );
 });
 
 test("override rejects NaN", () => {
