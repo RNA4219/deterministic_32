@@ -12,6 +12,16 @@ test("deterministic mapping for object key order", () => {
   assert.equal(a1.hash, a2.hash);
 });
 
+test("deterministic mapping for bigint values", () => {
+  const c = new Cat32({ salt: "s", namespace: "ns" });
+  const source = { id: 1n, nested: { value: 2n } };
+  const a1 = c.assign(source);
+  const a2 = c.assign({ nested: { value: 2n }, id: 1n });
+  assert.equal(a1.index, a2.index);
+  assert.equal(a1.label, a2.label);
+  assert.equal(a1.hash, a2.hash);
+});
+
 test("override by index", () => {
   const c = new Cat32({ overrides: { "hello": 7 } });
   const a = c.assign("hello");
