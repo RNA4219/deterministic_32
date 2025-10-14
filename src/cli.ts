@@ -23,18 +23,18 @@ function parseArgs(argv: string[]) {
 
 async function main() {
   const args = parseArgs(process.argv);
-  const key = (args._ as string) ?? "";
+  const key = args._ as string | undefined;
   const salt = (args.salt as string) ?? "";
   const namespace = (args.namespace as string) ?? "";
   const norm = (args.normalize as string) ?? "nfkc";
 
   const cat = new Cat32({ salt, namespace, normalize: norm as any });
-  if (!key && process.stdin.isTTY) {
+  if (key === undefined && process.stdin.isTTY) {
     console.error("Usage: cat32 <key> [--salt=... --namespace=... --normalize=nfkc|nfc|none]");
     process.exit(1);
   }
 
-  const input = key || (await readStdin());
+  const input = key !== undefined ? key : await readStdin();
   const res = cat.assign(input);
   process.stdout.write(JSON.stringify(res) + "\n");
 }
