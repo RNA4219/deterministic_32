@@ -453,6 +453,23 @@ test("stableStringify leaves sentinel-like strings untouched", () => {
   assert.equal(stableStringify("__undefined__"), JSON.stringify("__undefined__"));
 });
 
+test("stableStringify serializes undefined and Date sentinels", () => {
+  const iso = "2024-01-02T03:04:05.678Z";
+
+  assert.equal(stableStringify(undefined), JSON.stringify("__undefined__"));
+  assert.equal(stableStringify(new Date(iso)), JSON.stringify(`__date__:${iso}`));
+});
+
+test("Cat32 assign handles undefined and Date literals", () => {
+  const cat = new Cat32();
+  const iso = "2024-01-02T03:04:05.678Z";
+
+  assert.doesNotThrow(() => {
+    cat.assign(undefined);
+    cat.assign(new Date(iso));
+  });
+});
+
 test("stableStringify uses String() for functions and symbols", () => {
   const fn = function foo() {};
   const sym = Symbol("x");

@@ -141,6 +141,9 @@ function stringifyStringLiteral(value: string): string {
 }
 
 function stringifySentinelLiteral(value: string): string {
+  if (typeof value !== "string") {
+    throw new TypeError("Sentinel literal must be a string");
+  }
   return JSON.stringify(value);
 }
 
