@@ -113,7 +113,7 @@ export class Cat32 {
         s = stableStringify(input);
         break;
       case "undefined":
-        s = "__undefined__";
+        s = stableStringify(input);
         break;
       default:
         s = String(input);
