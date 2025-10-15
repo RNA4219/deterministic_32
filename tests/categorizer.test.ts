@@ -538,6 +538,42 @@ test("CLI exits with code 2 for invalid normalize option", async () => {
   assert.equal(exitCode, 2);
 });
 
+test("CLI exits with code 2 when override label error is thrown", async () => {
+  const { spawn } = (await dynamicImport("node:child_process")) as { spawn: SpawnFunction };
+  const script = [
+    "(async () => {",
+    "  const cliPath = process.argv.at(-1);",
+    "  const { pathToFileURL } = await import('node:url');",
+    "  const { Cat32 } = await import(new URL('../src/categorizer.js', pathToFileURL(cliPath)));",
+    "  const originalAssign = Cat32.prototype.assign;",
+    "  Cat32.prototype.assign = function assign() {",
+    '    Cat32.prototype.assign = originalAssign;',
+    '    throw new Error(\'override label "VIP" not in labels\');',
+    "  };",
+    "  process.stdin.isTTY = true;",
+    "  process.argv = [process.argv[0], cliPath, 'payload'];",
+    "  try {",
+    "    await import(cliPath);",
+    "  } catch (error) {",
+    "    console.error(error);",
+    "    process.exit(1);",
+    "  }",
+    "})();",
+  ].join("\n");
+
+  const child = spawn(process.argv[0], ["-e", script, CLI_PATH], {
+    stdio: ["pipe", "ignore", "pipe"],
+  });
+
+  child.stdin.end();
+
+  const exitCode: number | null = await new Promise((resolve) => {
+    child.on("close", (code: number | null) => resolve(code));
+  });
+
+  assert.equal(exitCode, 2);
+});
+
 test("CLI exits with code 2 when override label is missing", async () => {
   const { spawn } = (await dynamicImport("node:child_process")) as { spawn: SpawnFunction };
   const script = [
