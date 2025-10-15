@@ -41,7 +41,9 @@ function _stringify(v: unknown, stack: Set<any>): string {
   if (t === "boolean") return JSON.stringify(v);
   if (t === "bigint") return JSON.stringify(typeSentinel("bigint", (v as bigint).toString()));
   if (t === "undefined") return JSON.stringify(UNDEFINED_SENTINEL);
-  if (t === "function" || t === "symbol") return String(v);
+  if (t === "function" || t === "symbol") {
+    return String(v);
+  }
 
   if (Array.isArray(v)) {
     if (stack.has(v)) throw new TypeError("Cyclic object");
