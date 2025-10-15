@@ -286,6 +286,12 @@ test("undefined sentinel string differs from undefined value", () => {
   assert.ok(undefinedAssignment.hash !== stringAssignment.hash);
 });
 
+test("top-level undefined serializes with sentinel string", () => {
+  const assignment = new Cat32().assign(undefined);
+
+  assert.equal(assignment.key, JSON.stringify("__undefined__"));
+});
+
 test("undefined object property serializes with sentinel", () => {
   const c = new Cat32();
   const assignment = c.assign({ value: undefined });
