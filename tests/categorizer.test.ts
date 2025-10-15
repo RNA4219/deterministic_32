@@ -453,6 +453,35 @@ test("set serialization matches array entries regardless of insertion order", ()
   assert.equal(reorderedSetAssignment.hash, setAssignment.hash);
 });
 
+test("dist bundle canonical keys match source for Set/Date/undefined", async () => {
+  const distModuleUrl = new URL("../dist/src/categorizer.js", import.meta.url);
+  let distModule: { Cat32: typeof Cat32 };
+  try {
+    distModule = (await import(
+      new URL("../dist/src/categorizer.js", import.meta.url) as unknown as string,
+    )) as { Cat32: typeof Cat32 };
+  } catch (error) {
+    const maybeModuleNotFound = error as Error & { code?: string };
+    if (maybeModuleNotFound.code !== "ERR_MODULE_NOT_FOUND") {
+      throw error;
+    }
+    const normalizedHref = distModuleUrl.href.replace("/dist/dist/", "/dist/");
+    distModule = (await import(normalizedHref)) as { Cat32: typeof Cat32 };
+  }
+  const { Cat32: DistCat32 } = distModule;
+
+  const srcCategorizer = new Cat32();
+  const distCategorizer = new DistCat32();
+
+  const setValue = new Set(["a", "b"]);
+  assert.equal(distCategorizer.assign(setValue).key, srcCategorizer.assign(setValue).key);
+
+  const dateValue = new Date("2024-01-02T03:04:05.678Z");
+  assert.equal(distCategorizer.assign(dateValue).key, srcCategorizer.assign(dateValue).key);
+
+  assert.equal(distCategorizer.assign(undefined).key, srcCategorizer.assign(undefined).key);
+});
+
 test("CLI preserves leading whitespace from stdin", async () => {
   const { spawn } = (await dynamicImport("node:child_process")) as { spawn: SpawnFunction };
   const child = spawn(process.argv[0], [CLI_PATH], {
