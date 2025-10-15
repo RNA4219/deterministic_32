@@ -53,6 +53,12 @@ const dynamicImport = new Function(
 
 const CLI_PATH = new URL("../src/cli.js", import.meta.url).pathname;
 
+const CLI_LITERAL_KEY_SCRIPT = [
+  "const cliPath = process.argv.at(-1);",
+  "process.argv = [process.argv[0], cliPath, '--', '--literal-key'];",
+  "import(cliPath).catch((error) => { console.error(error); process.exit(1); });",
+].join(" ");
+
 test("dist build re-exports stableStringify", async () => {
   const sourceImportMetaUrl = import.meta.url.includes("/dist/tests/")
     ? new URL("../../tests/categorizer.test.ts", import.meta.url)
@@ -202,6 +208,22 @@ test("Cat32 normalizes Map keys with special numeric values", () => {
   );
   assert.equal(mapBigInt.key, objectBigIntSentinel.key);
   assert.equal(mapBigInt.hash, objectBigIntSentinel.hash);
+});
+
+test("Cat32 treats enumerable Symbol keys consistently between objects and maps", () => {
+  const cat = new Cat32();
+  const symbolKey = Symbol("enumerable");
+
+  const emptyObject = cat.assign({});
+  const objectWithSymbol = cat.assign({ [symbolKey]: "value" });
+
+  assert.ok(objectWithSymbol.key !== emptyObject.key);
+  assert.ok(objectWithSymbol.hash !== emptyObject.hash);
+
+  const mapWithSymbol = cat.assign(new Map([[symbolKey, "value"]]));
+
+  assert.equal(objectWithSymbol.key, mapWithSymbol.key);
+  assert.equal(objectWithSymbol.hash, mapWithSymbol.hash);
 });
 
 test("dist entry point exports Cat32", async () => {
