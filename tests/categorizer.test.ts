@@ -4,6 +4,10 @@ import assert from "node:assert";
 import { Cat32 } from "../src/index.js";
 import { stableStringify } from "../src/serialize.js";
 
+declare const Buffer: {
+  from(input: string | Uint8Array): { toString(encoding: string): string };
+};
+
 type SpawnOptions = {
   stdio?: ("pipe" | "inherit" | "ignore")[];
   env?: Record<string, string | undefined>;
@@ -198,6 +202,19 @@ test("string sentinel matches undefined value", () => {
   const sentinelAssignment = c.assign("__undefined__");
   const undefinedAssignment = c.assign(undefined);
   assert.equal(sentinelAssignment.key, undefinedAssignment.key);
+});
+
+test("functions and symbols serialize to bare strings", () => {
+  const fn = function foo() {};
+  const sym = Symbol("x");
+
+  assert.equal(stableStringify(fn), String(fn));
+  assert.equal(stableStringify(sym), String(sym));
+
+  const c = new Cat32();
+
+  assert.equal(c.assign(fn).key, stableStringify(fn));
+  assert.equal(c.assign(sym).key, stableStringify(sym));
 });
 
 test("string sentinel matches date value", () => {
