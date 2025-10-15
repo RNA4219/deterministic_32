@@ -6,6 +6,7 @@
 const SENTINEL_PREFIX = "\u0000cat32:";
 const SENTINEL_SUFFIX = "\u0000";
 const HOLE_SENTINEL = JSON.stringify(typeSentinel("hole"));
+const STRING_SENTINEL_PREFIX = `${SENTINEL_PREFIX}string:`;
 const UNDEFINED_SENTINEL = "__undefined__";
 const DATE_SENTINEL_PREFIX = "__date__:";
 const BIGINT_SENTINEL_PREFIX = "__bigint__:";
@@ -14,7 +15,9 @@ export function typeSentinel(type, payload = "") {
     return `${SENTINEL_PREFIX}${type}:${payload}${SENTINEL_SUFFIX}`;
 }
 export function escapeSentinelString(value) {
-    return JSON.stringify(value);
+    const needsEscaping = value.startsWith(SENTINEL_PREFIX) && !value.startsWith(STRING_SENTINEL_PREFIX);
+    const escaped = needsEscaping ? typeSentinel("string", value) : value;
+    return JSON.stringify(escaped);
 }
 export function stableStringify(v) {
     const stack = new Set();
@@ -25,7 +28,7 @@ function _stringify(v, stack) {
         return "null";
     const t = typeof v;
     if (t === "string")
-        return JSON.stringify(v);
+        return escapeSentinelString(v);
     if (t === "number") {
         const value = v;
         if (Number.isNaN(value) || !Number.isFinite(value)) {
@@ -110,9 +113,18 @@ function _stringify(v, stack) {
 }
 function reviveFromSerialized(serialized) {
     try {
-        return JSON.parse(serialized);
+        const parsed = JSON.parse(serialized);
+        if (typeof parsed === "string" &&
+            parsed.startsWith(STRING_SENTINEL_PREFIX) &&
+            parsed.endsWith(SENTINEL_SUFFIX)) {
+            return parsed.slice(STRING_SENTINEL_PREFIX.length, -SENTINEL_SUFFIX.length);
+        }
+        return parsed;
     }
     catch {
+        if (serialized.startsWith(STRING_SENTINEL_PREFIX) && serialized.endsWith(SENTINEL_SUFFIX)) {
+            return serialized.slice(STRING_SENTINEL_PREFIX.length, -SENTINEL_SUFFIX.length);
+        }
         return serialized;
     }
 }
@@ -125,6 +137,11 @@ function toPropertyKeyString(value, fallback) {
     }
     if (type === "symbol") {
         return value.toString();
+    }
+    if (type === "string" &&
+        value.startsWith(STRING_SENTINEL_PREFIX) &&
+        value.endsWith(SENTINEL_SUFFIX)) {
+        return value.slice(STRING_SENTINEL_PREFIX.length, -SENTINEL_SUFFIX.length);
     }
     return String(value);
 }

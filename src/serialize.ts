@@ -18,7 +18,9 @@ export function typeSentinel(type: string, payload = ""): string {
 }
 
 export function escapeSentinelString(value: string): string {
-  return JSON.stringify(value);
+  const needsEscaping = value.startsWith(SENTINEL_PREFIX) && !value.startsWith(STRING_SENTINEL_PREFIX);
+  const escaped = needsEscaping ? typeSentinel("string", value) : value;
+  return JSON.stringify(escaped);
 }
 
 export function stableStringify(v: unknown): string {
@@ -30,7 +32,7 @@ function _stringify(v: unknown, stack: Set<any>): string {
   if (v === null) return "null";
   const t = typeof v;
 
-  if (t === "string") return JSON.stringify(v);
+  if (t === "string") return escapeSentinelString(v as string);
   if (t === "number") {
     const value = v as number;
     if (Number.isNaN(value) || !Number.isFinite(value)) {
@@ -116,8 +118,19 @@ function _stringify(v: unknown, stack: Set<any>): string {
 
 function reviveFromSerialized(serialized: string): unknown {
   try {
-    return JSON.parse(serialized);
+    const parsed = JSON.parse(serialized);
+    if (
+      typeof parsed === "string" &&
+      parsed.startsWith(STRING_SENTINEL_PREFIX) &&
+      parsed.endsWith(SENTINEL_SUFFIX)
+    ) {
+      return parsed.slice(STRING_SENTINEL_PREFIX.length, -SENTINEL_SUFFIX.length);
+    }
+    return parsed;
   } catch {
+    if (serialized.startsWith(STRING_SENTINEL_PREFIX) && serialized.endsWith(SENTINEL_SUFFIX)) {
+      return serialized.slice(STRING_SENTINEL_PREFIX.length, -SENTINEL_SUFFIX.length);
+    }
     return serialized;
   }
 }
@@ -130,6 +143,13 @@ function toPropertyKeyString(value: unknown, fallback: string): string {
   }
   if (type === "symbol") {
     return (value as symbol).toString();
+  }
+  if (
+    type === "string" &&
+    (value as string).startsWith(STRING_SENTINEL_PREFIX) &&
+    (value as string).endsWith(SENTINEL_SUFFIX)
+  ) {
+    return (value as string).slice(STRING_SENTINEL_PREFIX.length, -SENTINEL_SUFFIX.length);
   }
   return String(value);
 }

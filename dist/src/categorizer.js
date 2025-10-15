@@ -1,5 +1,5 @@
 import { fnv1a32, toHex32 } from "./hash.js";
-import { escapeSentinelString, stableStringify } from "./serialize.js";
+import { stableStringify } from "./serialize.js";
 const DEFAULT_LABELS = [
     ..."ABCDEFGHIJKLMNOPQRSTUVWXYZ",
     ..."012345"
@@ -61,28 +61,15 @@ export class Cat32 {
         return this.salt ? `${s}|salt:${this.salt}` : s;
     }
     canonicalKey(input) {
-        let serialized;
-        switch (typeof input) {
-            case "string":
-                serialized = escapeSentinelString(input);
-                break;
-            case "bigint":
-            case "number":
-            case "boolean":
-            case "undefined":
-                serialized = stableStringify(input);
-                break;
-            case "object":
-                serialized = stableStringify(input);
-                break;
+        const serialized = stableStringify(input);
+        switch (this.normalize) {
+            case "nfc":
+                return serialized.normalize("NFC");
+            case "nfkc":
+                return serialized.normalize("NFKC");
             default:
-                serialized = stableStringify(input);
+                return serialized;
         }
-        if (this.normalize === "nfc")
-            return serialized.normalize("NFC");
-        if (this.normalize === "nfkc")
-            return serialized.normalize("NFKC");
-        return serialized;
     }
     normalizeIndex(i) {
         if (!Number.isFinite(i) || !Number.isInteger(i)) {

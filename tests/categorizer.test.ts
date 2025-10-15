@@ -204,6 +204,12 @@ test("canonical key matches stableStringify for basic primitives", () => {
   }
 });
 
+  assert.equal(c.assign("foo").key, stableStringify("foo"));
+  assert.equal(c.assign(1n).key, stableStringify(1n));
+  assert.equal(c.assign(Number.NaN).key, stableStringify(Number.NaN));
+  assert.equal(c.assign(Symbol("x")).key, stableStringify(Symbol("x")));
+});
+
 test("functions and symbols serialize to bare strings", () => {
   const fn = function foo() {};
   const sym = Symbol("x");
@@ -392,6 +398,15 @@ test("Infinity serialized distinctly from string sentinel", () => {
 
   assert.equal(infinityAssignment.key === sentinelAssignment.key, false);
   assert.equal(infinityAssignment.hash === sentinelAssignment.hash, false);
+});
+
+test("raw number sentinel string differs from Infinity value", () => {
+  const c = new Cat32();
+  const sentinelAssignment = c.assign("\u0000cat32:number:Infinity\u0000");
+  const infinityAssignment = c.assign(Infinity);
+
+  assert.ok(sentinelAssignment.key !== infinityAssignment.key);
+  assert.ok(sentinelAssignment.hash !== infinityAssignment.hash);
 });
 
 test("top-level bigint differs from number", () => {
