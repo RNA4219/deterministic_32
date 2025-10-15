@@ -2,7 +2,7 @@
 import test from "node:test";
 import assert from "node:assert";
 import { Cat32 } from "../src/index.js";
-import { stableStringify } from "../src/serialize.js";
+import { escapeSentinelString, stableStringify } from "../src/serialize.js";
 const dynamicImport = new Function("specifier", "return import(specifier);");
 const CLI_PATH = new URL("../src/cli.js", import.meta.url).pathname;
 test("dist entry point exports Cat32", async () => {
@@ -108,7 +108,7 @@ test("deterministic mapping for object key order", () => {
 test("canonical key encodes undefined sentinel", () => {
     const c = new Cat32();
     const assignment = c.assign({ value: undefined });
-    assert.equal(assignment.key, "{\"value\":\"__undefined__\"}");
+    assert.equal(assignment.key, stableStringify({ value: undefined }));
 });
 test("dist categorizer matches source sentinel encoding", async () => {
     const sourceImportMetaUrl = import.meta.url.includes("/dist/tests/")
@@ -128,20 +128,18 @@ test("canonical key encodes date sentinel", () => {
     const c = new Cat32();
     const date = new Date("2024-01-02T03:04:05.000Z");
     const assignment = c.assign({ value: date });
-    assert.equal(assignment.key, `{"value":"__date__:${date.toISOString()}"}`);
+    assert.equal(assignment.key, stableStringify({ value: date }));
 });
-test("string sentinel matches undefined value", () => {
-    const c = new Cat32();
-    const sentinelAssignment = c.assign("__undefined__");
-    const undefinedAssignment = c.assign(undefined);
-    assert.equal(sentinelAssignment.key, undefinedAssignment.key);
-});
-test("string sentinel matches date value", () => {
-    const c = new Cat32();
-    const iso = "2024-01-02T03:04:05.000Z";
-    const sentinelAssignment = c.assign(`__date__:${iso}`);
-    const dateAssignment = c.assign(new Date(iso));
-    assert.equal(sentinelAssignment.key, dateAssignment.key);
+test("canonical key matches stableStringify for basic primitives", () => {
+    const c = new Cat32({ normalize: "none" });
+    const stringAssignment = c.assign("foo");
+    assert.equal(stringAssignment.key, stableStringify("foo"));
+    const bigintAssignment = c.assign(1n);
+    assert.equal(bigintAssignment.key, stableStringify(1n));
+    const nanAssignment = c.assign(Number.NaN);
+    assert.equal(nanAssignment.key, stableStringify(Number.NaN));
+    const symbolAssignment = c.assign(Symbol("x"));
+    assert.equal(symbolAssignment.key, stableStringify(Symbol("x")));
 });
 test("deterministic mapping for bigint values", () => {
     const c = new Cat32({ salt: "s", namespace: "ns" });
@@ -208,15 +206,29 @@ test("NaN serialized distinctly from null", () => {
     assert.equal(nanAssignment.key === nullAssignment.key, false);
     assert.equal(nanAssignment.hash === nullAssignment.hash, false);
 });
+test("stableStringify leaves sentinel-like strings untouched", () => {
+    assert.equal(stableStringify("__undefined__"), JSON.stringify("__undefined__"));
+});
 test("stableStringify uses String() for functions and symbols", () => {
     const fn = function foo() { };
     const sym = Symbol("x");
     assert.equal(stableStringify(fn), String(fn));
     assert.equal(stableStringify(sym), String(sym));
 });
-test("string sentinel canonical key is JSON string", () => {
+test("canonical key follows String() for functions and symbols", () => {
+    const c = new Cat32();
+    const fnAssignment = c.assign(function foo() { });
+    const symAssignment = c.assign(Symbol("x"));
+    assert.equal(fnAssignment.key, stableStringify(function foo() { }));
+    assert.equal(symAssignment.key, stableStringify(Symbol("x")));
+});
+test("string sentinel literals remain literal canonical keys", () => {
     const assignment = new Cat32().assign("__date__:2024-01-01Z");
-    assert.equal(assignment.key, JSON.stringify("__date__:2024-01-01Z"));
+    assert.equal(assignment.key, stableStringify("__date__:2024-01-01Z"));
+});
+test("escapeSentinelString returns sentinel-like literals", () => {
+    const sentinelLike = "__date__:2024-01-01Z";
+    assert.equal(escapeSentinelString(sentinelLike), sentinelLike);
 });
 test("Map keys match plain object representation regardless of entry order", () => {
     const c = new Cat32();
@@ -263,7 +275,7 @@ test("top-level bigint differs from number", () => {
     const c = new Cat32();
     const bigintAssignment = c.assign(1n);
     const numberAssignment = c.assign(1);
-    assert.equal(bigintAssignment.key, JSON.stringify("\u0000cat32:bigint:1\u0000"));
+    assert.equal(bigintAssignment.key, stableStringify(1n));
     assert.ok(bigintAssignment.key !== numberAssignment.key);
     assert.ok(bigintAssignment.hash !== numberAssignment.hash);
 });
@@ -271,7 +283,7 @@ test("top-level bigint canonical key uses bigint prefix", () => {
     const c = new Cat32();
     const bigintAssignment = c.assign(1n);
     const numberAssignment = c.assign(1);
-    assert.equal(bigintAssignment.key, JSON.stringify("\u0000cat32:bigint:1\u0000"));
+    assert.equal(bigintAssignment.key, stableStringify(1n));
     assert.ok(bigintAssignment.key !== numberAssignment.key);
     assert.ok(bigintAssignment.hash !== numberAssignment.hash);
 });
@@ -298,12 +310,12 @@ test("undefined sentinel string matches undefined value", () => {
 });
 test("top-level undefined serializes with sentinel string", () => {
     const assignment = new Cat32().assign(undefined);
-    assert.equal(assignment.key, JSON.stringify("__undefined__"));
+    assert.equal(assignment.key, stableStringify(undefined));
 });
 test("undefined object property serializes with sentinel", () => {
     const c = new Cat32();
     const assignment = c.assign({ value: undefined });
-    assert.equal(assignment.key, '{"value":"__undefined__"}');
+    assert.equal(assignment.key, stableStringify({ value: undefined }));
 });
 test("sparse arrays differ from empty arrays", () => {
     const c = new Cat32({ salt: "s", namespace: "ns" });
@@ -355,7 +367,7 @@ test("date object property serializes with sentinel", () => {
     const c = new Cat32();
     const date = new Date("2024-01-02T03:04:05.678Z");
     const assignment = c.assign({ value: date });
-    assert.equal(assignment.key, '{"value":"__date__:2024-01-02T03:04:05.678Z"}');
+    assert.equal(assignment.key, stableStringify({ value: date }));
 });
 test("cyclic object throws", () => {
     const a = { x: 1 };

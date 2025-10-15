@@ -2,7 +2,7 @@
 import test from "node:test";
 import assert from "node:assert";
 import { Cat32 } from "../src/index.js";
-import { stableStringify } from "../src/serialize.js";
+import { escapeSentinelString, stableStringify } from "../src/serialize.js";
 
 type SpawnOptions = {
   stdio?: ("pipe" | "inherit" | "ignore")[];
@@ -317,6 +317,11 @@ test("canonical key follows String() for functions and symbols", () => {
 test("string sentinel literals remain literal canonical keys", () => {
   const assignment = new Cat32().assign("__date__:2024-01-01Z");
   assert.equal(assignment.key, stableStringify("__date__:2024-01-01Z"));
+});
+
+test("escapeSentinelString returns sentinel-like literals", () => {
+  const sentinelLike = "__date__:2024-01-01Z";
+  assert.equal(escapeSentinelString(sentinelLike), sentinelLike);
 });
 
 test("Map keys match plain object representation regardless of entry order", () => {

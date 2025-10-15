@@ -18,7 +18,7 @@ export function typeSentinel(type: string, payload = ""): string {
 }
 
 export function escapeSentinelString(value: string): string {
-  return JSON.stringify(value);
+  return value;
 }
 
 export function stableStringify(v: unknown): string {
