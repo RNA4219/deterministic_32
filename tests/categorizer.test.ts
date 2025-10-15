@@ -2,7 +2,7 @@
 import test from "node:test";
 import assert from "node:assert";
 import { Cat32 } from "../src/index.js";
-import { escapeSentinelString, stableStringify } from "../src/serialize.js";
+import { escapeSentinelString, stableStringify, typeSentinel } from "../src/serialize.js";
 
 declare const Buffer: {
   from(input: string | Uint8Array): { toString(encoding: string): string };
@@ -287,6 +287,18 @@ test("canonical key encodes date sentinel", () => {
 
 test("canonical key matches stableStringify for basic primitives", () => {
   const c = new Cat32({ normalize: "none" });
+
+  const stringValue = "foo";
+  const numberValue = 123;
+  const bigintValue = 1n;
+  const nanValue = Number.NaN;
+  const symbolValue = Symbol("x");
+
+  assert.equal(c.assign(stringValue).key, stableStringify(stringValue));
+  assert.equal(c.assign(numberValue).key, stableStringify(numberValue));
+  assert.equal(c.assign(bigintValue).key, stableStringify(bigintValue));
+  assert.equal(c.assign(nanValue).key, stableStringify(nanValue));
+  assert.equal(c.assign(symbolValue).key, stableStringify(symbolValue));
 });
 
 test("functions and symbols serialize to bare strings", () => {
@@ -439,9 +451,21 @@ test("string sentinel literals remain literal canonical keys", () => {
   assert.equal(assignment.key, stableStringify("__date__:2024-01-01Z"));
 });
 
-test("escapeSentinelString returns sentinel-like literals", () => {
-  const sentinelLike = "__date__:2024-01-01Z";
-  assert.equal(escapeSentinelString(sentinelLike), sentinelLike);
+test("escapeSentinelString wraps string literal sentinel prefix", () => {
+  const sentinelLike = "__string__:wrapped";
+  assert.equal(escapeSentinelString(sentinelLike), typeSentinel("string", sentinelLike));
+});
+
+test("stableStringify preserves explicit string sentinels", () => {
+  const sentinel = typeSentinel("string", "already-wrapped");
+  assert.equal(stableStringify(sentinel), sentinel);
+});
+
+test("values containing __string__ escape exactly once", () => {
+  const literal = "__string__:payload";
+  const escaped = stableStringify(literal);
+  assert.equal(escaped, typeSentinel("string", literal));
+  assert.equal(stableStringify(escaped), escaped);
 });
 
 test("Map keys match plain object representation regardless of entry order", () => {
@@ -528,6 +552,16 @@ test("Map string sentinel key matches object property", () => {
 
   assert.equal(mapAssignment.key, objectAssignment.key);
   assert.equal(mapAssignment.hash, objectAssignment.hash);
+});
+
+test("stableStringify accepts Map with sentinel-style string key", () => {
+  const sentinelKey = "\u0000cat32:string:value\u0000";
+  const map = new Map([[sentinelKey, 1]]);
+
+  const serialized = stableStringify(map);
+  const assignment = new Cat32().assign(map);
+
+  assert.equal(assignment.key, serialized);
 });
 
 test("Infinity serialized distinctly from string sentinel", () => {

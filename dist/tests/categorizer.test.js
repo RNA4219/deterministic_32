@@ -218,6 +218,17 @@ test("override by label", () => {
     assert.equal(a.index, 31);
     assert.equal(a.label, "L31");
 });
+test("override accepts canonical key strings", () => {
+    const overrides = {
+        [stableStringify(123)]: 5,
+        [stableStringify(undefined)]: 6,
+        [stableStringify(true)]: 7,
+    };
+    const c = new Cat32({ overrides });
+    assert.equal(c.assign(123).index, 5);
+    assert.equal(c.assign(undefined).index, 6);
+    assert.equal(c.assign(true).index, 7);
+});
 test("override rejects NaN with explicit error", () => {
     assert.throws(() => new Cat32({ overrides: { foo: Number.NaN } }), (error) => error instanceof Error && error.message === "index out of range: NaN");
 });
@@ -359,6 +370,13 @@ test("Map string sentinel key matches object property", () => {
     assert.equal(mapAssignment.key, objectAssignment.key);
     assert.equal(mapAssignment.hash, objectAssignment.hash);
 });
+test("stableStringify accepts Map with sentinel-style string key", () => {
+    const sentinelKey = "\u0000cat32:string:value\u0000";
+    const map = new Map([[sentinelKey, 1]]);
+    const serialized = stableStringify(map);
+    const assignment = new Cat32().assign(map);
+    assert.equal(assignment.key, serialized);
+});
 test("Infinity serialized distinctly from string sentinel", () => {
     const c = new Cat32({ salt: "s", namespace: "ns" });
     const infinityAssignment = c.assign({ value: Infinity });
@@ -391,10 +409,16 @@ test("top-level bigint canonical key uses bigint prefix", () => {
 });
 test("canonical key for primitives uses stable stringify", () => {
     const c = new Cat32();
-    assert.equal(c.assign("foo").key, stableStringify("foo"));
-    assert.equal(c.assign(1n).key, stableStringify(1n));
-    assert.equal(c.assign(Number.NaN).key, stableStringify(Number.NaN));
-    assert.equal(c.assign(Symbol("x")).key, stableStringify(Symbol("x")));
+    const stringValue = "foo";
+    const numberValue = 123;
+    const bigintValue = 1n;
+    const nanValue = Number.NaN;
+    const symbolValue = Symbol("x");
+    assert.equal(c.assign(stringValue).key, stableStringify(stringValue));
+    assert.equal(c.assign(numberValue).key, stableStringify(numberValue));
+    assert.equal(c.assign(bigintValue).key, stableStringify(bigintValue));
+    assert.equal(c.assign(nanValue).key, stableStringify(nanValue));
+    assert.equal(c.assign(symbolValue).key, stableStringify(symbolValue));
 });
 test("bigint sentinel string differs from bigint value", () => {
     const c = new Cat32();
