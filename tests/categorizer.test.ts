@@ -68,12 +68,6 @@ const CLI_LITERAL_KEY_SCRIPT = [
   "})();",
 ].join("\n");
 
-const CLI_LITERAL_KEY_SCRIPT = [
-  "const cliPath = process.argv.at(-1);",
-  "process.argv = [process.argv[0], cliPath, '--', '--literal-key'];",
-  "import(cliPath).catch((error) => { console.error(error); process.exit(1); });",
-].join(" ");
-
 test("dist build re-exports stableStringify", async () => {
   const sourceImportMetaUrl = import.meta.url.includes("/dist/tests/")
     ? new URL("../../tests/categorizer.test.ts", import.meta.url)
