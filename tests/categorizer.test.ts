@@ -2,6 +2,7 @@
 import test from "node:test";
 import assert from "node:assert";
 import { Cat32 } from "../src/index.js";
+import { stableStringify } from "../src/serialize.js";
 
 type SpawnOptions = {
   stdio?: ("pipe" | "inherit" | "ignore")[];
@@ -202,6 +203,15 @@ test("NaN serialized distinctly from null", () => {
   assert.equal(nanAssignment.hash === nullAssignment.hash, false);
 });
 
+test("stableStringify leaves sentinel-like strings untouched", () => {
+  assert.equal(stableStringify("__undefined__"), JSON.stringify("__undefined__"));
+});
+
+test("string sentinel literals remain literal canonical keys", () => {
+  const assignment = new Cat32().assign("__date__:2024-01-01Z");
+  assert.equal(assignment.key, "__date__:2024-01-01Z");
+});
+
 test("Map keys match plain object representation regardless of entry order", () => {
   const c = new Cat32();
   const map = new Map<string, number>([
@@ -337,7 +347,7 @@ test("sentinel strings differ from actual values at top level", () => {
   assert.ok(dateValue.hash !== dateSentinel.hash);
 });
 
-test("sentinel strings differ from actual values when nested", () => {
+test("sentinel string literals match nested undefined/date but not bigint", () => {
   const c = new Cat32();
 
   const bigintValue = c.assign({ value: 1n });
@@ -346,15 +356,15 @@ test("sentinel strings differ from actual values when nested", () => {
   assert.ok(bigintValue.hash !== bigintSentinel.hash);
 
   const undefinedValue = c.assign({ value: undefined });
-  const undefinedSentinel = c.assign({ value: "__undefined__" });
-  assert.ok(undefinedValue.key !== undefinedSentinel.key);
-  assert.ok(undefinedValue.hash !== undefinedSentinel.hash);
+  const undefinedLiteral = c.assign({ value: "__undefined__" });
+  assert.equal(undefinedValue.key, undefinedLiteral.key);
+  assert.equal(undefinedValue.hash, undefinedLiteral.hash);
 
   const date = new Date("2024-01-02T03:04:05.678Z");
   const dateValue = c.assign({ value: date });
-  const dateSentinel = c.assign({ value: "__date__:" + date.toISOString() });
-  assert.ok(dateValue.key !== dateSentinel.key);
-  assert.ok(dateValue.hash !== dateSentinel.hash);
+  const dateLiteral = c.assign({ value: "__date__:" + date.toISOString() });
+  assert.equal(dateValue.key, dateLiteral.key);
+  assert.equal(dateValue.hash, dateLiteral.hash);
 });
 
 test("date object property serializes with sentinel", () => {

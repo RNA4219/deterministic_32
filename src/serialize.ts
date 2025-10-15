@@ -6,7 +6,6 @@
 
 const SENTINEL_PREFIX = "\u0000cat32:";
 const SENTINEL_SUFFIX = "\u0000";
-const STRING_SENTINEL_PREFIX = `${SENTINEL_PREFIX}string:`;
 const HOLE_SENTINEL = JSON.stringify(typeSentinel("hole"));
 const UNDEFINED_SENTINEL = "__undefined__";
 const DATE_SENTINEL_PREFIX = "__date__:";
@@ -16,19 +15,7 @@ export function typeSentinel(type: string, payload = ""): string {
 }
 
 export function escapeSentinelString(value: string): string {
-  if (
-    value.startsWith(UNDEFINED_SENTINEL) ||
-    value.startsWith(DATE_SENTINEL_PREFIX)
-  ) {
-    return typeSentinel("string", value);
-  }
-  if (!value.startsWith(SENTINEL_PREFIX)) {
-    return value;
-  }
-  if (value.startsWith(STRING_SENTINEL_PREFIX) && value.endsWith(SENTINEL_SUFFIX)) {
-    return value;
-  }
-  return typeSentinel("string", value);
+  return value;
 }
 
 export function stableStringify(v: unknown): string {
@@ -40,7 +27,7 @@ function _stringify(v: unknown, stack: Set<any>): string {
   if (v === null) return "null";
   const t = typeof v;
 
-  if (t === "string") return JSON.stringify(escapeSentinelString(v as string));
+  if (t === "string") return JSON.stringify(v);
   if (t === "number") {
     const value = v as number;
     if (Number.isNaN(value) || !Number.isFinite(value)) {
