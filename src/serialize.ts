@@ -14,6 +14,12 @@ export function typeSentinel(type: string, payload = ""): string {
 }
 
 export function escapeSentinelString(value: string): string {
+  if (
+    value.startsWith("__undefined__") ||
+    value.startsWith("__date__:")
+  ) {
+    return typeSentinel("string", value);
+  }
   if (!value.startsWith(SENTINEL_PREFIX)) {
     return value;
   }
@@ -42,7 +48,7 @@ function _stringify(v: unknown, stack: Set<any>): string {
   }
   if (t === "boolean") return JSON.stringify(v);
   if (t === "bigint") return JSON.stringify(typeSentinel("bigint", (v as bigint).toString()));
-  if (t === "undefined") return JSON.stringify(typeSentinel("undefined"));
+  if (t === "undefined") return JSON.stringify("__undefined__");
   if (t === "function" || t === "symbol") return JSON.stringify(String(v));
 
   if (Array.isArray(v)) {
@@ -64,7 +70,7 @@ function _stringify(v: unknown, stack: Set<any>): string {
 
   // Date
   if (v instanceof Date) {
-    return JSON.stringify(typeSentinel("date", v.toISOString()));
+    return JSON.stringify(`__date__:${v.toISOString()}`);
   }
 
   // Map

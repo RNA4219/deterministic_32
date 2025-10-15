@@ -270,6 +270,13 @@ test("undefined sentinel string differs from undefined value", () => {
   assert.ok(undefinedAssignment.hash !== stringAssignment.hash);
 });
 
+test("undefined object property serializes with sentinel", () => {
+  const c = new Cat32();
+  const assignment = c.assign({ value: undefined });
+
+  assert.equal(assignment.key, '{"value":"__undefined__"}');
+});
+
 test("sparse arrays differ from empty arrays", () => {
   const c = new Cat32({ salt: "s", namespace: "ns" });
   const sparseAssignment = c.assign({ value: new Array(1) });
@@ -326,6 +333,17 @@ test("sentinel strings differ from actual values when nested", () => {
   const dateSentinel = c.assign({ value: "__date__:" + date.toISOString() });
   assert.ok(dateValue.key !== dateSentinel.key);
   assert.ok(dateValue.hash !== dateSentinel.hash);
+});
+
+test("date object property serializes with sentinel", () => {
+  const c = new Cat32();
+  const date = new Date("2024-01-02T03:04:05.678Z");
+  const assignment = c.assign({ value: date });
+
+  assert.equal(
+    assignment.key,
+    '{"value":"__date__:2024-01-02T03:04:05.678Z"}',
+  );
 });
 
 test("cyclic object throws", () => {
