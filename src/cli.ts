@@ -62,9 +62,13 @@ function isSpecificationViolation(error: unknown): boolean {
   if (error instanceof RangeError) {
     return true;
   }
-  if (error instanceof TypeError) {
+  if (error instanceof Error) {
     const message = String(error.message ?? "").toLowerCase();
-    if (message.includes("cyclic object")) {
+    if (
+      message.includes("cyclic object") ||
+      message.includes("override label") ||
+      message.includes("index out of range")
+    ) {
       return true;
     }
   }
