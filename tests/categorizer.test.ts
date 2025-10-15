@@ -129,6 +129,20 @@ test("tsc succeeds without duplicate identifier errors", async () => {
   }
 });
 
+test("Cat32 assigns distinct keys for primitive strings and non-strings", () => {
+  const cat = new Cat32();
+
+  const stringTrue = cat.assign("true");
+  const booleanTrue = cat.assign(true);
+  assert.ok(stringTrue.key !== booleanTrue.key);
+  assert.ok(stringTrue.hash !== booleanTrue.hash);
+
+  const stringNumber = cat.assign("123");
+  const numeric = cat.assign(123);
+  assert.ok(stringNumber.key !== numeric.key);
+  assert.ok(stringNumber.hash !== numeric.hash);
+});
+
 test("dist entry point exports Cat32", async () => {
   const sourceImportMetaUrl = import.meta.url.includes("/dist/tests/")
     ? new URL("../../tests/categorizer.test.ts", import.meta.url)
