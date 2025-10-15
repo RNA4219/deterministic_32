@@ -82,7 +82,7 @@ function _stringify(v: unknown, stack: Set<any>): string {
   if (v instanceof Map) {
     if (stack.has(v)) throw new TypeError("Cyclic object");
     stack.add(v);
-    const normalizedEntries: Record<string, { serializedKey: string; serializedValue: string }> =
+    const normalizedEntries: Record<string, Array<{ serializedKey: string; serializedValue: string }>> =
       Object.create(null);
     for (const [rawKey, rawValue] of v.entries()) {
       const serializedKey = _stringify(rawKey, stack);
@@ -90,23 +90,30 @@ function _stringify(v: unknown, stack: Set<any>): string {
       const propertyKey = toPropertyKeyString(revivedKey, serializedKey);
       const serializedValue = _stringify(rawValue, stack);
       const candidate = { serializedKey, serializedValue };
-      const existing = normalizedEntries[propertyKey];
-      if (!existing || compareSerializedEntry(candidate, existing) < 0) {
-        normalizedEntries[propertyKey] = candidate;
+      const bucket = normalizedEntries[propertyKey];
+      if (bucket) {
+        bucket.push(candidate);
+      } else {
+        normalizedEntries[propertyKey] = [candidate];
       }
     }
     const sortedKeys = Object.keys(normalizedEntries).sort();
-    let body = "";
+    const bodyParts: string[] = [];
     for (let i = 0; i < sortedKeys.length; i += 1) {
       const key = sortedKeys[i];
-      const serializedValue = normalizedEntries[key].serializedValue;
-      if (i > 0) body += ",";
-      body += JSON.stringify(key);
-      body += ":";
-      body += serializedValue;
+      const bucket = normalizedEntries[key];
+      bucket.sort(compareSerializedEntry);
+      for (const entry of bucket) {
+        if (bodyParts.length > 0) {
+          bodyParts.push(",");
+        }
+        bodyParts.push(JSON.stringify(key));
+        bodyParts.push(":");
+        bodyParts.push(entry.serializedValue);
+      }
     }
     stack.delete(v);
-    return "{" + body + "}";
+    return "{" + bodyParts.join("") + "}";
   }
 
   // Set
