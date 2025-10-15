@@ -153,6 +153,20 @@ test("Cat32 assigns distinct keys for sets with mixed primitive types", () => {
   assert.ok(mixedSet.hash !== numericSet.hash);
 });
 
+test("Cat32 normalizes Map keys with special numeric values", () => {
+  const cat = new Cat32();
+
+  const mapNaN = cat.assign(new Map([[Number.NaN, "v"]]));
+  const objectNaN = cat.assign({ NaN: "v" });
+  assert.equal(mapNaN.key, objectNaN.key);
+  assert.equal(mapNaN.hash, objectNaN.hash);
+
+  const mapInfinity = cat.assign(new Map([[Infinity, "v"]]));
+  const objectInfinity = cat.assign({ Infinity: "v" });
+  assert.equal(mapInfinity.key, objectInfinity.key);
+  assert.equal(mapInfinity.hash, objectInfinity.hash);
+});
+
 test("dist entry point exports Cat32", async () => {
   const sourceImportMetaUrl = import.meta.url.includes("/dist/tests/")
     ? new URL("../../tests/categorizer.test.ts", import.meta.url)

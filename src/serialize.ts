@@ -146,21 +146,42 @@ function stringifySentinelLiteral(value: string): string {
 
 function reviveFromSerialized(serialized: string): unknown {
   try {
-    const parsed = JSON.parse(serialized);
-    if (
-      typeof parsed === "string" &&
-      parsed.startsWith(STRING_SENTINEL_PREFIX) &&
-      parsed.endsWith(SENTINEL_SUFFIX)
-    ) {
-      return parsed.slice(STRING_SENTINEL_PREFIX.length, -SENTINEL_SUFFIX.length);
-    }
-    return parsed;
+    return reviveSentinelValue(JSON.parse(serialized));
   } catch {
-    if (serialized.startsWith(STRING_SENTINEL_PREFIX) && serialized.endsWith(SENTINEL_SUFFIX)) {
-      return serialized.slice(STRING_SENTINEL_PREFIX.length, -SENTINEL_SUFFIX.length);
-    }
-    return serialized;
+    return reviveSentinelValue(serialized);
   }
+}
+
+function reviveSentinelValue(value: unknown): unknown {
+  if (
+    typeof value === "string" &&
+    value.startsWith(SENTINEL_PREFIX) &&
+    value.endsWith(SENTINEL_SUFFIX)
+  ) {
+    const inner = value.slice(SENTINEL_PREFIX.length, -SENTINEL_SUFFIX.length);
+    const separatorIndex = inner.indexOf(":");
+    if (separatorIndex !== -1) {
+      const type = inner.slice(0, separatorIndex);
+      const payload = inner.slice(separatorIndex + 1);
+      if (type === "string") {
+        return payload;
+      }
+      if (type === "number") {
+        if (payload === "Infinity") return Number.POSITIVE_INFINITY;
+        if (payload === "-Infinity") return Number.NEGATIVE_INFINITY;
+        if (payload === "NaN") return Number.NaN;
+        return Number(payload);
+      }
+      if (type === "bigint") {
+        try {
+          return BigInt(payload);
+        } catch {
+          return value;
+        }
+      }
+    }
+  }
+  return value;
 }
 
 function toPropertyKeyString(value: unknown, fallback: string): string {
