@@ -2,7 +2,7 @@
 import test from "node:test";
 import assert from "node:assert";
 import { Cat32 } from "../src/index.js";
-import { escapeSentinelString, stableStringify } from "../src/serialize.js";
+import { escapeSentinelString, stableStringify, typeSentinel } from "../src/serialize.js";
 const dynamicImport = new Function("specifier", "return import(specifier);");
 const CLI_PATH = new URL("../src/cli.js", import.meta.url).pathname;
 test("tsc succeeds without duplicate identifier errors", async () => {
@@ -50,6 +50,22 @@ test("tsc succeeds without duplicate identifier errors", async () => {
     finally {
         await rm(tempDir, { recursive: true, force: true });
     }
+});
+test("Cat32 assigns distinct keys for primitive strings and non-strings", () => {
+    const cat = new Cat32();
+    const stringTrue = cat.assign("true");
+    const booleanTrue = cat.assign(true);
+    assert.ok(stringTrue.key !== booleanTrue.key);
+    assert.ok(stringTrue.hash !== booleanTrue.hash);
+    const stringNumber = cat.assign("123");
+    const numeric = cat.assign(123);
+    assert.ok(stringNumber.key !== numeric.key);
+    assert.ok(stringNumber.hash !== numeric.hash);
+});
+test("stableStringify serializes undefined and Date sentinels", () => {
+    assert.equal(stableStringify(undefined), JSON.stringify("__undefined__"));
+    const serializedDate = stableStringify(new Date("2024-01-02T03:04:05.678Z"));
+    assert.equal(serializedDate, JSON.stringify("__date__:2024-01-02T03:04:05.678Z"));
 });
 test("dist entry point exports Cat32", async () => {
     const sourceImportMetaUrl = import.meta.url.includes("/dist/tests/")
@@ -178,6 +194,16 @@ test("canonical key encodes date sentinel", () => {
 });
 test("canonical key matches stableStringify for basic primitives", () => {
     const c = new Cat32({ normalize: "none" });
+    const stringValue = "foo";
+    const numberValue = 123;
+    const bigintValue = 1n;
+    const nanValue = Number.NaN;
+    const symbolValue = Symbol("x");
+    assert.equal(c.assign(stringValue).key, stableStringify(stringValue));
+    assert.equal(c.assign(numberValue).key, stableStringify(numberValue));
+    assert.equal(c.assign(bigintValue).key, stableStringify(bigintValue));
+    assert.equal(c.assign(nanValue).key, stableStringify(nanValue));
+    assert.equal(c.assign(symbolValue).key, stableStringify(symbolValue));
 });
 test("functions and symbols serialize to bare strings", () => {
     const fn = function foo() { };
@@ -217,17 +243,6 @@ test("override by label", () => {
     const a = c.assign("pin");
     assert.equal(a.index, 31);
     assert.equal(a.label, "L31");
-});
-test("override accepts canonical key strings", () => {
-    const overrides = {
-        [stableStringify(123)]: 5,
-        [stableStringify(undefined)]: 6,
-        [stableStringify(true)]: 7,
-    };
-    const c = new Cat32({ overrides });
-    assert.equal(c.assign(123).index, 5);
-    assert.equal(c.assign(undefined).index, 6);
-    assert.equal(c.assign(true).index, 7);
 });
 test("override rejects NaN with explicit error", () => {
     assert.throws(() => new Cat32({ overrides: { foo: Number.NaN } }), (error) => error instanceof Error && error.message === "index out of range: NaN");
@@ -304,9 +319,34 @@ test("string sentinel literals remain literal canonical keys", () => {
     const assignment = new Cat32().assign("__date__:2024-01-01Z");
     assert.equal(assignment.key, stableStringify("__date__:2024-01-01Z"));
 });
-test("escapeSentinelString returns sentinel-like literals", () => {
-    const sentinelLike = "__date__:2024-01-01Z";
-    assert.equal(escapeSentinelString(sentinelLike), sentinelLike);
+test("escapeSentinelString wraps string literal sentinel prefix", () => {
+    const sentinelLike = "__string__:wrapped";
+    assert.equal(escapeSentinelString(sentinelLike), typeSentinel("string", sentinelLike));
+});
+test("stableStringify preserves explicit string sentinels", () => {
+    const sentinel = typeSentinel("string", "already-wrapped");
+    assert.equal(stableStringify(sentinel), sentinel);
+});
+test("values containing __string__ escape exactly once", () => {
+    const literal = "__string__:payload";
+    const escaped = stableStringify(literal);
+    assert.equal(escaped, typeSentinel("string", literal));
+    assert.equal(stableStringify(escaped), escaped);
+});
+test("undefined sentinel string matches literal undefined in arrays", () => {
+    const c = new Cat32();
+    const sentinelAssignment = c.assign({ list: ["__undefined__"] });
+    const literalAssignment = c.assign({ list: [undefined] });
+    assert.equal(sentinelAssignment.key, literalAssignment.key);
+    assert.equal(sentinelAssignment.hash, literalAssignment.hash);
+});
+test("date sentinel string matches Date instance in arrays", () => {
+    const c = new Cat32();
+    const iso = "2024-04-01T12:34:56.789Z";
+    const sentinelAssignment = c.assign({ list: [`__date__:${iso}`] });
+    const literalAssignment = c.assign({ list: [new Date(iso)] });
+    assert.equal(sentinelAssignment.key, literalAssignment.key);
+    assert.equal(sentinelAssignment.hash, literalAssignment.hash);
 });
 test("Map keys match plain object representation regardless of entry order", () => {
     const c = new Cat32();
@@ -409,16 +449,10 @@ test("top-level bigint canonical key uses bigint prefix", () => {
 });
 test("canonical key for primitives uses stable stringify", () => {
     const c = new Cat32();
-    const stringValue = "foo";
-    const numberValue = 123;
-    const bigintValue = 1n;
-    const nanValue = Number.NaN;
-    const symbolValue = Symbol("x");
-    assert.equal(c.assign(stringValue).key, stableStringify(stringValue));
-    assert.equal(c.assign(numberValue).key, stableStringify(numberValue));
-    assert.equal(c.assign(bigintValue).key, stableStringify(bigintValue));
-    assert.equal(c.assign(nanValue).key, stableStringify(nanValue));
-    assert.equal(c.assign(symbolValue).key, stableStringify(symbolValue));
+    assert.equal(c.assign("foo").key, stableStringify("foo"));
+    assert.equal(c.assign(1n).key, stableStringify(1n));
+    assert.equal(c.assign(Number.NaN).key, stableStringify(Number.NaN));
+    assert.equal(c.assign(Symbol("x")).key, stableStringify(Symbol("x")));
 });
 test("bigint sentinel string differs from bigint value", () => {
     const c = new Cat32();

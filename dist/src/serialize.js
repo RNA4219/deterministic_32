@@ -11,11 +11,15 @@ const UNDEFINED_SENTINEL = "__undefined__";
 const DATE_SENTINEL_PREFIX = "__date__:";
 const BIGINT_SENTINEL_PREFIX = "__bigint__:";
 const NUMBER_SENTINEL_PREFIX = "__number__:";
+const STRING_LITERAL_SENTINEL_PREFIX = "__string__:";
 export function typeSentinel(type, payload = "") {
     return `${SENTINEL_PREFIX}${type}:${payload}${SENTINEL_SUFFIX}`;
 }
 export function escapeSentinelString(value) {
-    if (value.startsWith(SENTINEL_PREFIX) && value.endsWith(SENTINEL_SUFFIX)) {
+    if (isSentinelWrappedString(value) && !value.startsWith(STRING_SENTINEL_PREFIX)) {
+        return typeSentinel("string", value);
+    }
+    if (value.startsWith(STRING_LITERAL_SENTINEL_PREFIX)) {
         return typeSentinel("string", value);
     }
     return value;
@@ -24,25 +28,28 @@ export function stableStringify(v) {
     const stack = new Set();
     return _stringify(v, stack);
 }
+function isSentinelWrappedString(value) {
+    return value.startsWith(SENTINEL_PREFIX) && value.endsWith(SENTINEL_SUFFIX);
+}
 function _stringify(v, stack) {
     if (v === null)
         return "null";
     const t = typeof v;
     if (t === "string")
-        return JSON.stringify(escapeSentinelString(v));
+        return stringifyStringLiteral(v);
     if (t === "number") {
         const value = v;
         if (Number.isNaN(value) || !Number.isFinite(value)) {
-            return JSON.stringify(typeSentinel("number", String(value)));
+            return stringifySentinelLiteral(typeSentinel("number", String(value)));
         }
         return JSON.stringify(value);
     }
     if (t === "boolean")
         return JSON.stringify(v);
     if (t === "bigint")
-        return JSON.stringify(typeSentinel("bigint", v.toString()));
+        return stringifySentinelLiteral(typeSentinel("bigint", v.toString()));
     if (t === "undefined")
-        return JSON.stringify(UNDEFINED_SENTINEL);
+        return stringifySentinelLiteral(UNDEFINED_SENTINEL);
     if (t === "function" || t === "symbol") {
         return String(v);
     }
@@ -66,26 +73,26 @@ function _stringify(v, stack) {
     }
     // Date
     if (v instanceof Date) {
-        return JSON.stringify(`${DATE_SENTINEL_PREFIX}${v.toISOString()}`);
+        return stringifySentinelLiteral(`${DATE_SENTINEL_PREFIX}${v.toISOString()}`);
     }
     // Map
     if (v instanceof Map) {
         if (stack.has(v))
             throw new TypeError("Cyclic object");
         stack.add(v);
-        const normalizedEntries = new Map();
+        const normalizedEntries = Object.create(null);
         for (const [rawKey, rawValue] of v.entries()) {
             const serializedKey = _stringify(rawKey, stack);
             const revivedKey = reviveFromSerialized(serializedKey);
             const propertyKey = toPropertyKeyString(revivedKey, serializedKey);
             const serializedValue = _stringify(rawValue, stack);
-            normalizedEntries.set(propertyKey, serializedValue);
+            normalizedEntries[propertyKey] = serializedValue;
         }
-        const sortedKeys = Array.from(normalizedEntries.keys()).sort();
+        const sortedKeys = Object.keys(normalizedEntries).sort();
         let body = "";
         for (let i = 0; i < sortedKeys.length; i += 1) {
             const key = sortedKeys[i];
-            const serializedValue = normalizedEntries.get(key);
+            const serializedValue = normalizedEntries[key];
             if (i > 0)
                 body += ",";
             body += JSON.stringify(key);
@@ -115,6 +122,24 @@ function _stringify(v, stack) {
     const body = keys.map((k) => JSON.stringify(k) + ":" + _stringify(o[k], stack));
     stack.delete(o);
     return "{" + body.join(",") + "}";
+}
+function stringifyStringLiteral(value) {
+    if (value.startsWith(STRING_LITERAL_SENTINEL_PREFIX)) {
+        return typeSentinel("string", value);
+    }
+    if (isSentinelWrappedString(value)) {
+        if (value.startsWith(STRING_SENTINEL_PREFIX)) {
+            return value;
+        }
+        return JSON.stringify(typeSentinel("string", value));
+    }
+    return JSON.stringify(value);
+}
+function stringifySentinelLiteral(value) {
+    if (isSentinelWrappedString(value) && !value.startsWith(STRING_SENTINEL_PREFIX)) {
+        return JSON.stringify(value);
+    }
+    return stringifyStringLiteral(value);
 }
 function reviveFromSerialized(serialized) {
     try {

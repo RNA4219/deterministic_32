@@ -143,6 +143,13 @@ test("Cat32 assigns distinct keys for primitive strings and non-strings", () => 
   assert.ok(stringNumber.hash !== numeric.hash);
 });
 
+test("stableStringify serializes undefined and Date sentinels", () => {
+  assert.equal(stableStringify(undefined), JSON.stringify("__undefined__"));
+
+  const serializedDate = stableStringify(new Date("2024-01-02T03:04:05.678Z"));
+  assert.equal(serializedDate, JSON.stringify("__date__:2024-01-02T03:04:05.678Z"));
+});
+
 test("dist entry point exports Cat32", async () => {
   const sourceImportMetaUrl = import.meta.url.includes("/dist/tests/")
     ? new URL("../../tests/categorizer.test.ts", import.meta.url)
