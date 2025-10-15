@@ -287,6 +287,18 @@ test("canonical key encodes date sentinel", () => {
 
 test("canonical key matches stableStringify for basic primitives", () => {
   const c = new Cat32({ normalize: "none" });
+
+  const stringValue = "foo";
+  const numberValue = 123;
+  const bigintValue = 1n;
+  const nanValue = Number.NaN;
+  const symbolValue = Symbol("x");
+
+  assert.equal(c.assign(stringValue).key, stableStringify(stringValue));
+  assert.equal(c.assign(numberValue).key, stableStringify(numberValue));
+  assert.equal(c.assign(bigintValue).key, stableStringify(bigintValue));
+  assert.equal(c.assign(nanValue).key, stableStringify(nanValue));
+  assert.equal(c.assign(symbolValue).key, stableStringify(symbolValue));
 });
 
 test("functions and symbols serialize to bare strings", () => {
