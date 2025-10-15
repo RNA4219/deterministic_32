@@ -2,6 +2,7 @@
 import test from "node:test";
 import assert from "node:assert";
 import { Cat32 } from "../src/index.js";
+import { stableStringify } from "../src/serialize.js";
 
 type SpawnOptions = {
   stdio?: ("pipe" | "inherit" | "ignore")[];
@@ -253,7 +254,7 @@ test("top-level bigint differs from number", () => {
   const c = new Cat32();
   const bigintAssignment = c.assign(1n);
   const numberAssignment = c.assign(1);
-  assert.equal(bigintAssignment.key, "\u0000cat32:bigint:1\u0000");
+  assert.equal(bigintAssignment.key, JSON.stringify("\u0000cat32:bigint:1\u0000"));
   assert.ok(bigintAssignment.key !== numberAssignment.key);
   assert.ok(bigintAssignment.hash !== numberAssignment.hash);
 });
@@ -263,9 +264,18 @@ test("top-level bigint canonical key uses bigint prefix", () => {
   const bigintAssignment = c.assign(1n);
   const numberAssignment = c.assign(1);
 
-  assert.equal(bigintAssignment.key, "\u0000cat32:bigint:1\u0000");
+  assert.equal(bigintAssignment.key, JSON.stringify("\u0000cat32:bigint:1\u0000"));
   assert.ok(bigintAssignment.key !== numberAssignment.key);
   assert.ok(bigintAssignment.hash !== numberAssignment.hash);
+});
+
+test("canonical key for primitives uses stable stringify", () => {
+  const c = new Cat32();
+
+  assert.equal(c.assign("foo").key, stableStringify("foo"));
+  assert.equal(c.assign(1n).key, stableStringify(1n));
+  assert.equal(c.assign(Number.NaN).key, stableStringify(Number.NaN));
+  assert.equal(c.assign(Symbol("x")).key, stableStringify(Symbol("x")));
 });
 
 test("bigint sentinel string differs from bigint value", () => {
@@ -455,7 +465,7 @@ test("CLI preserves leading whitespace from stdin", async () => {
   assert.equal(exitCode, 0);
 
   const result = JSON.parse(stdout);
-  assert.equal(result.key, "  spaced");
+  assert.equal(result.key, stableStringify("  spaced"));
 
   const expected = new Cat32().assign("  spaced");
   assert.equal(result.hash, expected.hash);
@@ -487,7 +497,7 @@ test("CLI handles empty string key from argv", async () => {
   assert.equal(exitCode, 0);
 
   const result = JSON.parse(stdout);
-  assert.equal(result.key, "");
+  assert.equal(result.key, stableStringify(""));
 
   const expected = new Cat32().assign("");
   assert.equal(result.hash, expected.hash);
@@ -533,7 +543,7 @@ test("CLI command cat32 \"\" exits successfully", async () => {
   assert.equal(exitCode, 0);
 
   const result = JSON.parse(stdout);
-  assert.equal(result.key, "");
+  assert.equal(result.key, stableStringify(""));
 
   const expected = new Cat32().assign("");
   assert.equal(result.hash, expected.hash);
