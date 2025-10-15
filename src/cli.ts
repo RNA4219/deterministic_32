@@ -5,6 +5,18 @@ function parseArgs(argv: string[]) {
   const args: Record<string, string | true> = {};
   for (let i = 2; i < argv.length; i++) {
     const a = argv[i];
+    if (a === "--") {
+      const rest = argv.slice(i + 1);
+      if (rest.length > 0) {
+        const remainder = rest.join(" ");
+        if (Object.prototype.hasOwnProperty.call(args, "_")) {
+          (args as { _: string })._ = `${(args as { _: string })._} ${remainder}`;
+        } else {
+          (args as { _: string })._ = remainder;
+        }
+      }
+      break;
+    }
     if (a.startsWith("--")) {
       const eq = a.indexOf("=");
       if (eq >= 0) {
