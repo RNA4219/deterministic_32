@@ -197,6 +197,11 @@ test("canonical key encodes date sentinel", () => {
 test("canonical key matches stableStringify for basic primitives", () => {
   const c = new Cat32({ normalize: "none" });
 
+  assert.equal(c.assign("foo").key, stableStringify("foo"));
+  assert.equal(c.assign(123).key, stableStringify(123));
+  assert.equal(c.assign(true).key, stableStringify(true));
+});
+
 test("functions and symbols serialize to bare strings", () => {
   const fn = function foo() {};
   const sym = Symbol("x");
@@ -229,14 +234,16 @@ test("deterministic mapping for bigint values", () => {
 });
 
 test("override by index", () => {
-  const c = new Cat32({ overrides: { "hello": 7 } });
+  const overrides = { [stableStringify("hello")]: 7 };
+  const c = new Cat32({ overrides });
   const a = c.assign("hello");
   assert.equal(a.index, 7);
 });
 
 test("override by label", () => {
   const labels = Array.from({ length: 32 }, (_, i) => `L${i}`);
-  const c = new Cat32({ labels, overrides: { "pin": "L31" } });
+  const overrides = { [stableStringify("pin")]: "L31" };
+  const c = new Cat32({ labels, overrides });
   const a = c.assign("pin");
   assert.equal(a.index, 31);
   assert.equal(a.label, "L31");
@@ -254,6 +261,20 @@ test("override rejects NaN", () => {
     () => new Cat32({ overrides: { foo: Number.NaN as any } }),
     (error) => error instanceof Error,
   );
+});
+
+test("override accepts canonical key strings", () => {
+  const overrides = {
+    [stableStringify(123)]: 5,
+    [stableStringify(undefined)]: 6,
+    [stableStringify(true)]: 7,
+  } satisfies Record<string, number>;
+
+  const c = new Cat32({ overrides });
+
+  assert.equal(c.assign(123).index, 5);
+  assert.equal(c.assign(undefined).index, 6);
+  assert.equal(c.assign(true).index, 7);
 });
 
 test("range 0..31 and various types", () => {
