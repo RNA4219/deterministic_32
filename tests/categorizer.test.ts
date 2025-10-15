@@ -52,6 +52,21 @@ const dynamicImport = new Function(
 ) as (specifier: string) => Promise<unknown>;
 
 const CLI_PATH = new URL("../src/cli.js", import.meta.url).pathname;
+const CLI_LITERAL_KEY_SCRIPT = [
+  "(async () => {",
+  "  const cliPath = process.argv.at(-1);",
+  "  const { pathToFileURL } = await import('node:url');",
+  "  const url = pathToFileURL(cliPath);",
+  "  process.stdin.isTTY = true;",
+  "  process.argv = [process.argv[0], cliPath, '--', '--literal-key'];",
+  "  try {",
+  "    await import(url.href);",
+  "  } catch (error) {",
+  "    console.error(error);",
+  "    process.exit(1);",
+  "  }",
+  "})();",
+].join("\n");
 
 test("dist build re-exports stableStringify", async () => {
   const sourceImportMetaUrl = import.meta.url.includes("/dist/tests/")
@@ -60,6 +75,21 @@ test("dist build re-exports stableStringify", async () => {
   const distModule = (await import(
     new URL("../dist/index.js", sourceImportMetaUrl).href,
   )) as { stableStringify?: unknown };
+  assert.equal(typeof distModule.stableStringify, "function");
+});
+
+test("direct dist import exposes stableStringify", async () => {
+  if (import.meta.url.includes("/dist/tests/")) {
+    const distModule = (await import(
+      new URL("../../dist/index.js", import.meta.url).href,
+    )) as { stableStringify?: unknown };
+    assert.equal(typeof distModule.stableStringify, "function");
+    return;
+  }
+
+  const distModule = (await import("../dist/index.js")) as {
+    stableStringify?: unknown;
+  };
   assert.equal(typeof distModule.stableStringify, "function");
 });
 
