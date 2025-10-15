@@ -82,19 +82,24 @@ function _stringify(v: unknown, stack: Set<any>): string {
   if (v instanceof Map) {
     if (stack.has(v)) throw new TypeError("Cyclic object");
     stack.add(v);
-    const normalizedEntries: Record<string, string> = Object.create(null);
+    const normalizedEntries: Record<string, { serializedKey: string; serializedValue: string }> =
+      Object.create(null);
     for (const [rawKey, rawValue] of v.entries()) {
       const serializedKey = _stringify(rawKey, stack);
       const revivedKey = reviveFromSerialized(serializedKey);
       const propertyKey = toPropertyKeyString(revivedKey, serializedKey);
       const serializedValue = _stringify(rawValue, stack);
-      normalizedEntries[propertyKey] = serializedValue;
+      const candidate = { serializedKey, serializedValue };
+      const existing = normalizedEntries[propertyKey];
+      if (!existing || compareSerializedEntry(candidate, existing) < 0) {
+        normalizedEntries[propertyKey] = candidate;
+      }
     }
     const sortedKeys = Object.keys(normalizedEntries).sort();
     let body = "";
     for (let i = 0; i < sortedKeys.length; i += 1) {
       const key = sortedKeys[i];
-      const serializedValue = normalizedEntries[key];
+      const serializedValue = normalizedEntries[key].serializedValue;
       if (i > 0) body += ",";
       body += JSON.stringify(key);
       body += ":";
@@ -160,6 +165,17 @@ function _stringify(v: unknown, stack: Set<any>): string {
   );
   stack.delete(o);
   return "{" + body.join(",") + "}";
+}
+
+function compareSerializedEntry(
+  left: { serializedKey: string; serializedValue: string },
+  right: { serializedKey: string; serializedValue: string },
+): number {
+  if (left.serializedKey < right.serializedKey) return -1;
+  if (left.serializedKey > right.serializedKey) return 1;
+  if (left.serializedValue < right.serializedValue) return -1;
+  if (left.serializedValue > right.serializedValue) return 1;
+  return 0;
 }
 
 function stringifyStringLiteral(value: string): string {
