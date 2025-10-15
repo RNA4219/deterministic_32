@@ -6,6 +6,7 @@
 
 const SENTINEL_PREFIX = "\u0000cat32:";
 const SENTINEL_SUFFIX = "\u0000";
+const STRING_SENTINEL_PREFIX = `${SENTINEL_PREFIX}string:`;
 const HOLE_SENTINEL = JSON.stringify(typeSentinel("hole"));
 const UNDEFINED_SENTINEL = "__undefined__";
 const DATE_SENTINEL_PREFIX = "__date__:";
