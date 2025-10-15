@@ -149,6 +149,21 @@ test("Cat32 normalizes Map keys with special numeric values", () => {
     assert.equal(mapBigInt.key, objectBigIntSentinel.key);
     assert.equal(mapBigInt.hash, objectBigIntSentinel.hash);
 });
+test("Cat32 assigns identical keys for Maps regardless of insertion order", () => {
+    const cat = new Cat32();
+    const map = new Map([
+        [1, "number"],
+        ["1", "string"],
+    ]);
+    const reversed = new Map([
+        ["1", "string"],
+        [1, "number"],
+    ]);
+    const original = cat.assign(map);
+    const flipped = cat.assign(reversed);
+    assert.equal(original.key, flipped.key);
+    assert.equal(original.hash, flipped.hash);
+});
 test("Cat32 treats enumerable Symbol keys consistently between objects and maps", () => {
     const cat = new Cat32();
     const symbolKey = Symbol("enumerable");
@@ -159,6 +174,21 @@ test("Cat32 treats enumerable Symbol keys consistently between objects and maps"
     const mapWithSymbol = cat.assign(new Map([[symbolKey, "value"]]));
     assert.equal(objectWithSymbol.key, mapWithSymbol.key);
     assert.equal(objectWithSymbol.hash, mapWithSymbol.hash);
+});
+test("Cat32 serializes Maps with distinct Symbols sharing descriptions", () => {
+    const cat = new Cat32();
+    const symbolA = Symbol("duplicate");
+    const symbolB = Symbol("duplicate");
+    const mapWithDuplicateSymbols = cat.assign(new Map([
+        [symbolA, "first"],
+        [symbolB, "second"],
+    ]));
+    const objectWithDuplicateSymbols = cat.assign({
+        [symbolA]: "first",
+        [symbolB]: "second",
+    });
+    assert.equal(mapWithDuplicateSymbols.key, objectWithDuplicateSymbols.key);
+    assert.equal(mapWithDuplicateSymbols.hash, objectWithDuplicateSymbols.hash);
 });
 test("dist entry point exports Cat32", async () => {
     const sourceImportMetaUrl = import.meta.url.includes("/dist/tests/")
@@ -544,22 +574,6 @@ test("Cat32 normalizes duplicate-like Map entries deterministically", () => {
     ]));
     assert.equal(forwardOrder.key, reverseOrder.key);
     assert.equal(forwardOrder.hash, reverseOrder.hash);
-});
-test("Map collisions with identical property keys produce deterministic output", () => {
-    const forward = new Map([
-        [1, "number"],
-        ["1", "string"],
-    ]);
-    const reverse = new Map([
-        ["1", "string"],
-        [1, "number"],
-    ]);
-    assert.equal(stableStringify(forward), stableStringify(reverse));
-    const c = new Cat32();
-    const forwardAssignment = c.assign(forward);
-    const reverseAssignment = c.assign(reverse);
-    assert.equal(forwardAssignment.key, reverseAssignment.key);
-    assert.equal(forwardAssignment.hash, reverseAssignment.hash);
 });
 test("Map values serialize identically to plain object values", () => {
     const c = new Cat32();

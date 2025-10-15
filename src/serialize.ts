@@ -101,14 +101,13 @@ function _stringify(v: unknown, stack: Set<any>): string {
       const key = sortedKeys[i];
       const bucket = normalizedEntries[key];
       bucket.sort(compareSerializedEntry);
-      for (const entry of bucket) {
-        if (bodyParts.length > 0) {
-          bodyParts.push(",");
-        }
-        bodyParts.push(JSON.stringify(key));
-        bodyParts.push(":");
-        bodyParts.push(entry.serializedValue);
+      const entry = bucket[0];
+      if (bodyParts.length > 0) {
+        bodyParts.push(",");
       }
+      bodyParts.push(JSON.stringify(key));
+      bodyParts.push(":");
+      bodyParts.push(entry.serializedValue);
     }
     stack.delete(v);
     return "{" + bodyParts.join("") + "}";

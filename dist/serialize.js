@@ -87,24 +87,30 @@ function _stringify(v, stack) {
             const propertyKey = toPropertyKeyString(revivedKey, serializedKey);
             const serializedValue = _stringify(rawValue, stack);
             const candidate = { serializedKey, serializedValue };
-            const existing = normalizedEntries[propertyKey];
-            if (!existing || compareSerializedEntry(candidate, existing) < 0) {
-                normalizedEntries[propertyKey] = candidate;
+            const bucket = normalizedEntries[propertyKey];
+            if (bucket) {
+                bucket.push(candidate);
+            }
+            else {
+                normalizedEntries[propertyKey] = [candidate];
             }
         }
         const sortedKeys = Object.keys(normalizedEntries).sort();
-        let body = "";
+        const bodyParts = [];
         for (let i = 0; i < sortedKeys.length; i += 1) {
             const key = sortedKeys[i];
-            const serializedValue = normalizedEntries[key].serializedValue;
-            if (i > 0)
-                body += ",";
-            body += JSON.stringify(key);
-            body += ":";
-            body += serializedValue;
+            const bucket = normalizedEntries[key];
+            bucket.sort(compareSerializedEntry);
+            const entry = bucket[0];
+            if (bodyParts.length > 0) {
+                bodyParts.push(",");
+            }
+            bodyParts.push(JSON.stringify(key));
+            bodyParts.push(":");
+            bodyParts.push(entry.serializedValue);
         }
         stack.delete(v);
-        return "{" + body + "}";
+        return "{" + bodyParts.join("") + "}";
     }
     // Set
     if (v instanceof Set) {
