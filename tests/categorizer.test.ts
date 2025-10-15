@@ -526,6 +526,17 @@ test("stableStringify serializes undefined and Date sentinels", () => {
   assert.equal(stableStringify(new Date(iso)), JSON.stringify(`__date__:${iso}`));
 });
 
+test("stableStringify serializes string literal sentinels as JSON strings", () => {
+  const literal = "__string__:payload";
+  const serialized = stableStringify(literal);
+  const expected = JSON.stringify(typeSentinel("string", literal));
+  assert.strictEqual(serialized, expected);
+
+  const cat = new Cat32();
+  const assignment = cat.assign(literal);
+  assert.strictEqual(assignment.key, expected);
+});
+
 test("Cat32 assign handles undefined and Date literals", () => {
   const cat = new Cat32();
   const iso = "2024-01-02T03:04:05.678Z";
@@ -561,16 +572,19 @@ test("escapeSentinelString wraps string literal sentinel prefix", () => {
   assert.equal(escapeSentinelString(sentinelLike), typeSentinel("string", sentinelLike));
 });
 
-test("stableStringify preserves explicit string sentinels", () => {
+test("stableStringify serializes explicit string sentinels", () => {
   const sentinel = typeSentinel("string", "already-wrapped");
-  assert.equal(stableStringify(sentinel), sentinel);
+  const expected = JSON.stringify(sentinel);
+  assert.strictEqual(stableStringify(sentinel), expected);
 });
 
 test("values containing __string__ escape exactly once", () => {
   const literal = "__string__:payload";
-  const escaped = stableStringify(literal);
-  assert.equal(escaped, typeSentinel("string", literal));
-  assert.equal(stableStringify(escaped), escaped);
+  const sentinel = typeSentinel("string", literal);
+  const serialized = stableStringify(literal);
+  const expected = JSON.stringify(sentinel);
+  assert.strictEqual(serialized, expected);
+  assert.strictEqual(stableStringify(sentinel), expected);
 });
 
 test("undefined sentinel string matches literal undefined in arrays", () => {

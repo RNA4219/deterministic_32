@@ -132,11 +132,11 @@ function _stringify(v: unknown, stack: Set<any>): string {
 
 function stringifyStringLiteral(value: string): string {
   if (value.startsWith(STRING_LITERAL_SENTINEL_PREFIX)) {
-    return typeSentinel("string", value);
+    return JSON.stringify(typeSentinel("string", value));
   }
   if (isSentinelWrappedString(value)) {
     if (value.startsWith(STRING_SENTINEL_PREFIX)) {
-      return value;
+      return JSON.stringify(value);
     }
     return JSON.stringify(typeSentinel("string", value));
   }
