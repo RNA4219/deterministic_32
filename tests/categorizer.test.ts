@@ -161,10 +161,37 @@ test("Cat32 normalizes Map keys with special numeric values", () => {
   assert.equal(mapNaN.key, objectNaN.key);
   assert.equal(mapNaN.hash, objectNaN.hash);
 
+  const sentinelNaNKey: string = typeSentinel("number", "NaN");
+  const objectNaNSentinel = cat.assign(
+    Object.fromEntries([[sentinelNaNKey, "v"]]) as Record<string, string>,
+  );
+  assert.equal(mapNaN.key, objectNaNSentinel.key);
+  assert.equal(mapNaN.hash, objectNaNSentinel.hash);
+
   const mapInfinity = cat.assign(new Map([[Infinity, "v"]]));
   const objectInfinity = cat.assign({ Infinity: "v" });
   assert.equal(mapInfinity.key, objectInfinity.key);
   assert.equal(mapInfinity.hash, objectInfinity.hash);
+
+  const sentinelInfinityKey: string = typeSentinel("number", "Infinity");
+  const objectInfinitySentinel = cat.assign(
+    Object.fromEntries([[sentinelInfinityKey, "v"]]) as Record<string, string>,
+  );
+  assert.equal(mapInfinity.key, objectInfinitySentinel.key);
+  assert.equal(mapInfinity.hash, objectInfinitySentinel.hash);
+
+  const mapBigInt = cat.assign(new Map([[1n, "v"]]));
+  const bigIntObjectKey: string = String(1n);
+  const objectBigInt = cat.assign({ [bigIntObjectKey]: "v" });
+  assert.equal(mapBigInt.key, objectBigInt.key);
+  assert.equal(mapBigInt.hash, objectBigInt.hash);
+
+  const sentinelBigIntKey: string = typeSentinel("bigint", "1");
+  const objectBigIntSentinel = cat.assign(
+    Object.fromEntries([[sentinelBigIntKey, "v"]]) as Record<string, string>,
+  );
+  assert.equal(mapBigInt.key, objectBigIntSentinel.key);
+  assert.equal(mapBigInt.hash, objectBigIntSentinel.hash);
 });
 
 test("dist entry point exports Cat32", async () => {
