@@ -159,12 +159,18 @@ test("NaN serialized distinctly from null", () => {
     assert.equal(nanAssignment.key === nullAssignment.key, false);
     assert.equal(nanAssignment.hash === nullAssignment.hash, false);
 });
-test("stableStringify leaves sentinel-like strings untouched", () => {
-    assert.equal(stableStringify("__undefined__"), JSON.stringify("__undefined__"));
+test("stableStringify uses String() for functions and symbols", () => {
+    const fn = function foo() { };
+    const sym = Symbol("x");
+    assert.equal(stableStringify(fn), String(fn));
+    assert.equal(stableStringify(sym), String(sym));
 });
-test("string sentinel literals remain literal canonical keys", () => {
-    const assignment = new Cat32().assign("__date__:2024-01-01Z");
-    assert.equal(assignment.key, "__date__:2024-01-01Z");
+test("canonical key follows String() for functions and symbols", () => {
+    const c = new Cat32();
+    const fnAssignment = c.assign(function foo() { });
+    const symAssignment = c.assign(Symbol("x"));
+    assert.equal(fnAssignment.key, stableStringify(function foo() { }));
+    assert.equal(symAssignment.key, stableStringify(Symbol("x")));
 });
 test("Map keys match plain object representation regardless of entry order", () => {
     const c = new Cat32();
