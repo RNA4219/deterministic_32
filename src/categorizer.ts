@@ -1,9 +1,5 @@
 import { fnv1a32, toHex32 } from "./hash.js";
-import {
-  escapeSentinelString,
-  stableStringify,
-  typeSentinel,
-} from "./serialize.js";
+import { stableStringify } from "./serialize.js";
 
 export type NormalizeMode = "none" | "nfc" | "nfkc";
 
@@ -89,38 +85,24 @@ export class Cat32 {
   }
 
   private canonicalKey(input: unknown): string {
-    let s: string;
+    let serialized: string;
     switch (typeof input) {
       case "string":
-        s = escapeSentinelString(input);
-        break;
       case "bigint":
-        s = typeSentinel("bigint", input.toString());
-        break;
-      case "number": {
-        const value = input as number;
-        if (Number.isNaN(value) || !Number.isFinite(value)) {
-          s = typeSentinel("number", String(value));
-        } else {
-          s = String(value);
-        }
-        break;
-      }
+      case "number":
       case "boolean":
-        s = String(input);
+      case "undefined":
+        serialized = stableStringify(input);
         break;
       case "object":
-        s = stableStringify(input);
-        break;
-      case "undefined":
-        s = stableStringify(input);
+        serialized = stableStringify(input);
         break;
       default:
-        s = String(input);
+        serialized = stableStringify(input);
     }
-    if (this.normalize === "nfc") return s.normalize("NFC");
-    if (this.normalize === "nfkc") return s.normalize("NFKC");
-    return s;
+    if (this.normalize === "nfc") return serialized.normalize("NFC");
+    if (this.normalize === "nfkc") return serialized.normalize("NFKC");
+    return serialized;
   }
 
   private normalizeIndex(i: number): number {
