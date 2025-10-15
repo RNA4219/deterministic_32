@@ -295,6 +295,27 @@ test("Cat32 treats enumerable Symbol keys consistently between objects and maps"
   assert.equal(objectWithSymbol.hash, mapWithSymbol.hash);
 });
 
+test("Cat32 serializes Maps with distinct Symbols sharing descriptions", () => {
+  const cat = new Cat32();
+  const symbolA = Symbol("duplicate");
+  const symbolB = Symbol("duplicate");
+
+  const mapWithDuplicateSymbols = cat.assign(
+    new Map<symbol, string>([
+      [symbolA, "first"],
+      [symbolB, "second"],
+    ]),
+  );
+
+  const objectWithDuplicateSymbols = cat.assign({
+    [symbolA]: "first",
+    [symbolB]: "second",
+  });
+
+  assert.equal(mapWithDuplicateSymbols.key, objectWithDuplicateSymbols.key);
+  assert.equal(mapWithDuplicateSymbols.hash, objectWithDuplicateSymbols.hash);
+});
+
 test("dist entry point exports Cat32", async () => {
   const sourceImportMetaUrl = import.meta.url.includes("/dist/tests/")
     ? new URL("../../tests/categorizer.test.ts", import.meta.url)
