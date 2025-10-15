@@ -2,7 +2,7 @@
 import test from "node:test";
 import assert from "node:assert";
 import { Cat32 } from "../src/index.js";
-import { escapeSentinelString, stableStringify } from "../src/serialize.js";
+import { escapeSentinelString, stableStringify, typeSentinel } from "../src/serialize.js";
 
 declare const Buffer: {
   from(input: string | Uint8Array): { toString(encoding: string): string };
@@ -439,9 +439,21 @@ test("string sentinel literals remain literal canonical keys", () => {
   assert.equal(assignment.key, stableStringify("__date__:2024-01-01Z"));
 });
 
-test("escapeSentinelString returns sentinel-like literals", () => {
-  const sentinelLike = "__date__:2024-01-01Z";
-  assert.equal(escapeSentinelString(sentinelLike), sentinelLike);
+test("escapeSentinelString wraps string literal sentinel prefix", () => {
+  const sentinelLike = "__string__:wrapped";
+  assert.equal(escapeSentinelString(sentinelLike), typeSentinel("string", sentinelLike));
+});
+
+test("stableStringify preserves explicit string sentinels", () => {
+  const sentinel = typeSentinel("string", "already-wrapped");
+  assert.equal(stableStringify(sentinel), sentinel);
+});
+
+test("values containing __string__ escape exactly once", () => {
+  const literal = "__string__:payload";
+  const escaped = stableStringify(literal);
+  assert.equal(escaped, typeSentinel("string", literal));
+  assert.equal(stableStringify(escaped), escaped);
 });
 
 test("Map keys match plain object representation regardless of entry order", () => {
