@@ -11,6 +11,7 @@ declare const Buffer: {
 type SpawnOptions = {
   stdio?: ("pipe" | "inherit" | "ignore")[];
   env?: Record<string, string | undefined>;
+  cwd?: string;
 };
 
 type SpawnedProcess = {
@@ -22,7 +23,21 @@ type SpawnedProcess = {
     setEncoding(encoding: "utf8"): void;
     on(event: "data", listener: (chunk: string) => void): void;
   };
+  stderr: {
+    setEncoding(encoding: "utf8"): void;
+    on(event: "data", listener: (chunk: string) => void): void;
+  };
   on(event: "close", listener: (code: number | null, signal: string | null) => void): void;
+};
+
+type FsPromisesModule = {
+  mkdtemp(prefix: string): Promise<string>;
+  writeFile(path: string, data: string, options?: string): Promise<void>;
+  rm(path: string, options: { recursive?: boolean; force?: boolean }): Promise<void>;
+};
+
+type PathModule = {
+  join(...segments: string[]): string;
 };
 
 type SpawnFunction = (
@@ -37,6 +52,82 @@ const dynamicImport = new Function(
 ) as (specifier: string) => Promise<unknown>;
 
 const CLI_PATH = new URL("../src/cli.js", import.meta.url).pathname;
+
+test("tsc succeeds without duplicate identifier errors", async () => {
+  const sourceImportMetaUrl = import.meta.url.includes("/dist/tests/")
+    ? new URL("../../tests/categorizer.test.ts", import.meta.url)
+    : import.meta.url;
+
+  const repoRoot = new URL("../", sourceImportMetaUrl).pathname;
+  const { mkdtemp, writeFile, rm } = (await dynamicImport("node:fs/promises")) as FsPromisesModule;
+  const { join } = (await dynamicImport("node:path")) as PathModule;
+  const { spawn } = (await dynamicImport("node:child_process")) as { spawn: SpawnFunction };
+
+  const tempDir = await mkdtemp(join(repoRoot, ".tmp-cat32-tsc-"));
+
+  try {
+    const entryPath = join(tempDir, "entry.ts");
+    const tsconfigPath = join(tempDir, "tsconfig.json");
+
+    await writeFile(
+      entryPath,
+      [
+        "import { Cat32 } from \"../src/index.js\";",
+        "const instance = new Cat32({ salt: \"salt\", namespace: \"namespace\" });",
+        "instance.assign(\"value\");",
+      ].join("\n"),
+      "utf8",
+    );
+
+    await writeFile(
+      tsconfigPath,
+      JSON.stringify(
+        {
+          extends: "../tsconfig.json",
+          compilerOptions: {
+            outDir: "./out",
+            noEmit: true,
+            skipLibCheck: false,
+          },
+          include: ["./entry.ts"],
+        },
+        null,
+        2,
+      ),
+      "utf8",
+    );
+
+    const child = spawn(
+      "tsc",
+      ["-p", "tsconfig.json", "--pretty", "false"],
+      { cwd: tempDir, stdio: ["ignore", "pipe", "pipe"] },
+    );
+
+    let stdout = "";
+    child.stdout.setEncoding("utf8");
+    child.stdout.on("data", (chunk: string) => {
+      stdout += chunk;
+    });
+
+    let stderr = "";
+    child.stderr.setEncoding("utf8");
+    child.stderr.on("data", (chunk: string) => {
+      stderr += chunk;
+    });
+
+    const exitCode: number | null = await new Promise((resolve) => {
+      child.on("close", (code: number | null) => resolve(code));
+    });
+
+    assert.equal(
+      exitCode,
+      0,
+      `tsc failed: exit code ${exitCode}\nstdout:\n${stdout}\nstderr:\n${stderr}`,
+    );
+  } finally {
+    await rm(tempDir, { recursive: true, force: true });
+  }
+});
 
 test("dist entry point exports Cat32", async () => {
   const sourceImportMetaUrl = import.meta.url.includes("/dist/tests/")
@@ -196,6 +287,12 @@ test("canonical key encodes date sentinel", () => {
 
 test("canonical key matches stableStringify for basic primitives", () => {
   const c = new Cat32({ normalize: "none" });
+
+  assert.equal(c.assign("foo").key, stableStringify("foo"));
+  assert.equal(c.assign(123).key, stableStringify(123));
+  assert.equal(c.assign(true).key, stableStringify(true));
+  assert.equal(c.assign(null).key, stableStringify(null));
+});
 
 test("functions and symbols serialize to bare strings", () => {
   const fn = function foo() {};
