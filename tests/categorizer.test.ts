@@ -162,6 +162,27 @@ test("canonical key encodes undefined sentinel", () => {
   assert.equal(assignment.key, "{\"value\":\"__undefined__\"}");
 });
 
+test("dist categorizer matches source sentinel encoding", async () => {
+  const sourceImportMetaUrl = import.meta.url.includes("/dist/tests/")
+    ? new URL("../../tests/categorizer.test.ts", import.meta.url)
+    : import.meta.url;
+
+  const [{ Cat32: SourceCat32 }, { Cat32: DistCat32 }] = await Promise.all([
+    import("../src/categorizer.js"),
+    import(
+      new URL("../dist/src/categorizer.js", sourceImportMetaUrl) as unknown as string,
+    ) as Promise<typeof import("../src/categorizer.js")>,
+  ]);
+
+  const source = new SourceCat32();
+  const dist = new DistCat32();
+
+  const sourceAssignment = source.assign({ value: undefined });
+  const distAssignment = dist.assign({ value: undefined });
+
+  assert.equal(distAssignment.key, sourceAssignment.key);
+});
+
 test("canonical key encodes date sentinel", () => {
   const c = new Cat32();
   const date = new Date("2024-01-02T03:04:05.000Z");
