@@ -31,10 +31,6 @@ async function main() {
   const norm = (args.normalize as string) ?? "nfkc";
 
   const cat = new Cat32({ salt, namespace, normalize: norm as any });
-  if (key === undefined && process.stdin.isTTY) {
-    console.error("Usage: cat32 <key> [--salt=... --namespace=... --normalize=nfkc|nfc|none]");
-    process.exit(1);
-  }
 
   const input = key ?? (await readStdin());
   const res = cat.assign(input);
