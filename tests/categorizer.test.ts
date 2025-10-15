@@ -193,19 +193,20 @@ test("canonical key encodes date sentinel", () => {
   );
 });
 
-test("string sentinel matches undefined value", () => {
-  const c = new Cat32();
-  const sentinelAssignment = c.assign("__undefined__");
-  const undefinedAssignment = c.assign(undefined);
-  assert.equal(sentinelAssignment.key, undefinedAssignment.key);
-});
+test("canonical key matches stableStringify for basic primitives", () => {
+  const c = new Cat32({ normalize: "none" });
 
-test("string sentinel matches date value", () => {
-  const c = new Cat32();
-  const iso = "2024-01-02T03:04:05.000Z";
-  const sentinelAssignment = c.assign(`__date__:${iso}`);
-  const dateAssignment = c.assign(new Date(iso));
-  assert.equal(sentinelAssignment.key, dateAssignment.key);
+  const stringAssignment = c.assign("foo");
+  assert.equal(stringAssignment.key, stableStringify("foo"));
+
+  const bigintAssignment = c.assign(1n);
+  assert.equal(bigintAssignment.key, stableStringify(1n));
+
+  const nanAssignment = c.assign(Number.NaN);
+  assert.equal(nanAssignment.key, stableStringify(Number.NaN));
+
+  const symbolAssignment = c.assign(Symbol("x"));
+  assert.equal(symbolAssignment.key, stableStringify(Symbol("x")));
 });
 
 test("deterministic mapping for bigint values", () => {
