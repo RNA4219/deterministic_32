@@ -799,6 +799,26 @@ test("Cat32 normalizes duplicate-like Map entries deterministically", () => {
   assert.equal(forwardOrder.hash, reverseOrder.hash);
 });
 
+test("Map collisions with identical property keys produce deterministic output", () => {
+  const forward = new Map<unknown, string>([
+    [1, "number"],
+    ["1", "string"],
+  ]);
+  const reverse = new Map<unknown, string>([
+    ["1", "string"],
+    [1, "number"],
+  ]);
+
+  assert.equal(stableStringify(forward), stableStringify(reverse));
+
+  const c = new Cat32();
+  const forwardAssignment = c.assign(forward);
+  const reverseAssignment = c.assign(reverse);
+
+  assert.equal(forwardAssignment.key, reverseAssignment.key);
+  assert.equal(forwardAssignment.hash, reverseAssignment.hash);
+});
+
 test("Map values serialize identically to plain object values", () => {
   const c = new Cat32();
   const fn = function foo() {};

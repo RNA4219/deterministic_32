@@ -82,14 +82,14 @@ function _stringify(v: unknown, stack: Set<any>): string {
   if (v instanceof Map) {
     if (stack.has(v)) throw new TypeError("Cyclic object");
     stack.add(v);
-    const normalizedEntries: Record<string, { serializedKey: string; serializedValue: string }> =
-      Object.create(null);
+    type SerializedEntry = { serializedKey: string; serializedValue: string };
+    const normalizedEntries: Record<string, SerializedEntry> = Object.create(null);
     for (const [rawKey, rawValue] of v.entries()) {
       const serializedKey = _stringify(rawKey, stack);
       const revivedKey = reviveFromSerialized(serializedKey);
       const propertyKey = toPropertyKeyString(revivedKey, serializedKey);
       const serializedValue = _stringify(rawValue, stack);
-      const candidate = { serializedKey, serializedValue };
+      const candidate: SerializedEntry = { serializedKey, serializedValue };
       const existing = normalizedEntries[propertyKey];
       if (!existing || compareSerializedEntry(candidate, existing) < 0) {
         normalizedEntries[propertyKey] = candidate;
