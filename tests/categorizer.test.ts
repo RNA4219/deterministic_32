@@ -53,6 +53,16 @@ const dynamicImport = new Function(
 
 const CLI_PATH = new URL("../src/cli.js", import.meta.url).pathname;
 
+test("dist build re-exports stableStringify", async () => {
+  const sourceImportMetaUrl = import.meta.url.includes("/dist/tests/")
+    ? new URL("../../tests/categorizer.test.ts", import.meta.url)
+    : import.meta.url;
+  const distModule = (await import(
+    new URL("../dist/index.js", sourceImportMetaUrl).href,
+  )) as { stableStringify?: unknown };
+  assert.equal(typeof distModule.stableStringify, "function");
+});
+
 test("tsc succeeds without duplicate identifier errors", async () => {
   const sourceImportMetaUrl = import.meta.url.includes("/dist/tests/")
     ? new URL("../../tests/categorizer.test.ts", import.meta.url)
@@ -528,11 +538,11 @@ test("stableStringify serializes string literal sentinels as JSON strings", () =
   const literal = "__string__:payload";
   const serialized = stableStringify(literal);
   const expected = JSON.stringify(typeSentinel("string", literal));
-  assert.strictEqual(serialized, expected);
+  assert.equal(serialized, expected);
 
   const cat = new Cat32();
   const assignment = cat.assign(literal);
-  assert.strictEqual(assignment.key, expected);
+  assert.equal(assignment.key, expected);
 });
 
 test("Cat32 assign handles undefined and Date literals", () => {
@@ -573,7 +583,7 @@ test("escapeSentinelString wraps string literal sentinel prefix", () => {
 test("stableStringify serializes explicit string sentinels", () => {
   const sentinel = typeSentinel("string", "already-wrapped");
   const expected = JSON.stringify(sentinel);
-  assert.strictEqual(stableStringify(sentinel), expected);
+  assert.equal(stableStringify(sentinel), expected);
 });
 
 test("values containing __string__ escape exactly once", () => {
@@ -581,8 +591,8 @@ test("values containing __string__ escape exactly once", () => {
   const sentinel = typeSentinel("string", literal);
   const serialized = stableStringify(literal);
   const expected = JSON.stringify(sentinel);
-  assert.strictEqual(serialized, expected);
-  assert.strictEqual(stableStringify(sentinel), expected);
+  assert.equal(serialized, expected);
+  assert.equal(stableStringify(sentinel), expected);
 });
 
 test("undefined sentinel string matches literal undefined in arrays", () => {

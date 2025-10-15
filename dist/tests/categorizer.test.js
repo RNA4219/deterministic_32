@@ -5,6 +5,13 @@ import { Cat32 } from "../src/index.js";
 import { escapeSentinelString, stableStringify, typeSentinel } from "../src/serialize.js";
 const dynamicImport = new Function("specifier", "return import(specifier);");
 const CLI_PATH = new URL("../src/cli.js", import.meta.url).pathname;
+test("dist build re-exports stableStringify", async () => {
+    const sourceImportMetaUrl = import.meta.url.includes("/dist/tests/")
+        ? new URL("../../tests/categorizer.test.ts", import.meta.url)
+        : import.meta.url;
+    const distModule = (await import(new URL("../dist/index.js", sourceImportMetaUrl).href));
+    assert.equal(typeof distModule.stableStringify, "function");
+});
 test("tsc succeeds without duplicate identifier errors", async () => {
     const sourceImportMetaUrl = import.meta.url.includes("/dist/tests/")
         ? new URL("../../tests/categorizer.test.ts", import.meta.url)
