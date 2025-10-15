@@ -162,6 +162,17 @@ test("override by label", () => {
     assert.equal(a.index, 31);
     assert.equal(a.label, "L31");
 });
+test("override accepts canonical key strings", () => {
+    const overrides = {
+        [stableStringify(123)]: 5,
+        [stableStringify(undefined)]: 6,
+        [stableStringify(true)]: 7,
+    };
+    const c = new Cat32({ overrides });
+    assert.equal(c.assign(123).index, 5);
+    assert.equal(c.assign(undefined).index, 6);
+    assert.equal(c.assign(true).index, 7);
+});
 test("override rejects NaN with explicit error", () => {
     assert.throws(() => new Cat32({ overrides: { foo: Number.NaN } }), (error) => error instanceof Error && error.message === "index out of range: NaN");
 });
