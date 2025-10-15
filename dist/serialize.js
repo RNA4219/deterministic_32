@@ -26,7 +26,7 @@ function _stringify(v, stack) {
         return "null";
     const t = typeof v;
     if (t === "string")
-        return JSON.stringify(v);
+        return escapeSentinelString(v);
     if (t === "number") {
         const value = v;
         if (Number.isNaN(value) || !Number.isFinite(value)) {
@@ -111,9 +111,18 @@ function _stringify(v, stack) {
 }
 function reviveFromSerialized(serialized) {
     try {
-        return JSON.parse(serialized);
+        const parsed = JSON.parse(serialized);
+        if (typeof parsed === "string" &&
+            parsed.startsWith(STRING_SENTINEL_PREFIX) &&
+            parsed.endsWith(SENTINEL_SUFFIX)) {
+            return parsed.slice(STRING_SENTINEL_PREFIX.length, -SENTINEL_SUFFIX.length);
+        }
+        return parsed;
     }
     catch {
+        if (serialized.startsWith(STRING_SENTINEL_PREFIX) && serialized.endsWith(SENTINEL_SUFFIX)) {
+            return serialized.slice(STRING_SENTINEL_PREFIX.length, -SENTINEL_SUFFIX.length);
+        }
         return serialized;
     }
 }
@@ -126,6 +135,11 @@ function toPropertyKeyString(value, fallback) {
     }
     if (type === "symbol") {
         return value.toString();
+    }
+    if (type === "string" &&
+        value.startsWith(STRING_SENTINEL_PREFIX) &&
+        value.endsWith(SENTINEL_SUFFIX)) {
+        return value.slice(STRING_SENTINEL_PREFIX.length, -SENTINEL_SUFFIX.length);
     }
     return String(value);
 }

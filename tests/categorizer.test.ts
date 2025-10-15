@@ -4,9 +4,14 @@ import assert from "node:assert";
 import { Cat32 } from "../src/index.js";
 import { escapeSentinelString, stableStringify } from "../src/serialize.js";
 
+declare const Buffer: {
+  from(input: string | Uint8Array): { toString(encoding: string): string };
+};
+
 type SpawnOptions = {
   stdio?: ("pipe" | "inherit" | "ignore")[];
   env?: Record<string, string | undefined>;
+  cwd?: string;
 };
 
 type SpawnedProcess = {
@@ -18,7 +23,21 @@ type SpawnedProcess = {
     setEncoding(encoding: "utf8"): void;
     on(event: "data", listener: (chunk: string) => void): void;
   };
+  stderr: {
+    setEncoding(encoding: "utf8"): void;
+    on(event: "data", listener: (chunk: string) => void): void;
+  };
   on(event: "close", listener: (code: number | null, signal: string | null) => void): void;
+};
+
+type FsPromisesModule = {
+  mkdtemp(prefix: string): Promise<string>;
+  writeFile(path: string, data: string, options?: string): Promise<void>;
+  rm(path: string, options: { recursive?: boolean; force?: boolean }): Promise<void>;
+};
+
+type PathModule = {
+  join(...segments: string[]): string;
 };
 
 type SpawnFunction = (
@@ -33,6 +52,82 @@ const dynamicImport = new Function(
 ) as (specifier: string) => Promise<unknown>;
 
 const CLI_PATH = new URL("../src/cli.js", import.meta.url).pathname;
+
+test("tsc succeeds without duplicate identifier errors", async () => {
+  const sourceImportMetaUrl = import.meta.url.includes("/dist/tests/")
+    ? new URL("../../tests/categorizer.test.ts", import.meta.url)
+    : import.meta.url;
+
+  const repoRoot = new URL("../", sourceImportMetaUrl).pathname;
+  const { mkdtemp, writeFile, rm } = (await dynamicImport("node:fs/promises")) as FsPromisesModule;
+  const { join } = (await dynamicImport("node:path")) as PathModule;
+  const { spawn } = (await dynamicImport("node:child_process")) as { spawn: SpawnFunction };
+
+  const tempDir = await mkdtemp(join(repoRoot, ".tmp-cat32-tsc-"));
+
+  try {
+    const entryPath = join(tempDir, "entry.ts");
+    const tsconfigPath = join(tempDir, "tsconfig.json");
+
+    await writeFile(
+      entryPath,
+      [
+        "import { Cat32 } from \"../src/index.js\";",
+        "const instance = new Cat32({ salt: \"salt\", namespace: \"namespace\" });",
+        "instance.assign(\"value\");",
+      ].join("\n"),
+      "utf8",
+    );
+
+    await writeFile(
+      tsconfigPath,
+      JSON.stringify(
+        {
+          extends: "../tsconfig.json",
+          compilerOptions: {
+            outDir: "./out",
+            noEmit: true,
+            skipLibCheck: false,
+          },
+          include: ["./entry.ts"],
+        },
+        null,
+        2,
+      ),
+      "utf8",
+    );
+
+    const child = spawn(
+      "tsc",
+      ["-p", "tsconfig.json", "--pretty", "false"],
+      { cwd: tempDir, stdio: ["ignore", "pipe", "pipe"] },
+    );
+
+    let stdout = "";
+    child.stdout.setEncoding("utf8");
+    child.stdout.on("data", (chunk: string) => {
+      stdout += chunk;
+    });
+
+    let stderr = "";
+    child.stderr.setEncoding("utf8");
+    child.stderr.on("data", (chunk: string) => {
+      stderr += chunk;
+    });
+
+    const exitCode: number | null = await new Promise((resolve) => {
+      child.on("close", (code: number | null) => resolve(code));
+    });
+
+    assert.equal(
+      exitCode,
+      0,
+      `tsc failed: exit code ${exitCode}\nstdout:\n${stdout}\nstderr:\n${stderr}`,
+    );
+  } finally {
+    await rm(tempDir, { recursive: true, force: true });
+  }
+});
 
 test("dist entry point exports Cat32", async () => {
   const sourceImportMetaUrl = import.meta.url.includes("/dist/tests/")
@@ -192,18 +287,27 @@ test("canonical key encodes date sentinel", () => {
 
 test("canonical key matches stableStringify for basic primitives", () => {
   const c = new Cat32({ normalize: "none" });
+});
 
-  const stringAssignment = c.assign("foo");
-  assert.equal(stringAssignment.key, stableStringify("foo"));
+test("functions and symbols serialize to bare strings", () => {
+  const fn = function foo() {};
+  const sym = Symbol("x");
 
-  const bigintAssignment = c.assign(1n);
-  assert.equal(bigintAssignment.key, stableStringify(1n));
+  assert.equal(stableStringify(fn), String(fn));
+  assert.equal(stableStringify(sym), String(sym));
 
-  const nanAssignment = c.assign(Number.NaN);
-  assert.equal(nanAssignment.key, stableStringify(Number.NaN));
+  const c = new Cat32();
 
-  const symbolAssignment = c.assign(Symbol("x"));
-  assert.equal(symbolAssignment.key, stableStringify(Symbol("x")));
+  assert.equal(c.assign(fn).key, String(fn));
+  assert.equal(c.assign(sym).key, String(sym));
+});
+
+test("string sentinel matches date value", () => {
+  const c = new Cat32();
+  const iso = "2024-01-02T03:04:05.000Z";
+  const sentinelAssignment = c.assign(`__date__:${iso}`);
+  const dateAssignment = c.assign(new Date(iso));
+  assert.equal(sentinelAssignment.key, dateAssignment.key);
 });
 
 test("deterministic mapping for bigint values", () => {
@@ -217,14 +321,16 @@ test("deterministic mapping for bigint values", () => {
 });
 
 test("override by index", () => {
-  const c = new Cat32({ overrides: { "hello": 7 } });
+  const overrides = { [stableStringify("hello")]: 7 };
+  const c = new Cat32({ overrides });
   const a = c.assign("hello");
   assert.equal(a.index, 7);
 });
 
 test("override by label", () => {
   const labels = Array.from({ length: 32 }, (_, i) => `L${i}`);
-  const c = new Cat32({ labels, overrides: { "pin": "L31" } });
+  const overrides = { [stableStringify("pin")]: "L31" };
+  const c = new Cat32({ labels, overrides });
   const a = c.assign("pin");
   assert.equal(a.index, 31);
   assert.equal(a.label, "L31");
@@ -242,6 +348,20 @@ test("override rejects NaN", () => {
     () => new Cat32({ overrides: { foo: Number.NaN as any } }),
     (error) => error instanceof Error,
   );
+});
+
+test("override accepts canonical key strings", () => {
+  const overrides = {
+    [stableStringify(123)]: 5,
+    [stableStringify(undefined)]: 6,
+    [stableStringify(true)]: 7,
+  } satisfies Record<string, number>;
+
+  const c = new Cat32({ overrides });
+
+  assert.equal(c.assign(123).index, 5);
+  assert.equal(c.assign(undefined).index, 6);
+  assert.equal(c.assign(true).index, 7);
 });
 
 test("range 0..31 and various types", () => {
@@ -307,11 +427,11 @@ test("stableStringify uses String() for functions and symbols", () => {
 
 test("canonical key follows String() for functions and symbols", () => {
   const c = new Cat32();
-  const fnAssignment = c.assign(function foo() {});
-  const symAssignment = c.assign(Symbol("x"));
+  const fn = function foo() {};
+  const sym = Symbol("x");
 
-  assert.equal(fnAssignment.key, stableStringify(function foo() {}));
-  assert.equal(symAssignment.key, stableStringify(Symbol("x")));
+  assert.equal(c.assign(fn).key, String(fn));
+  assert.equal(c.assign(sym).key, String(sym));
 });
 
 test("string sentinel literals remain literal canonical keys", () => {
@@ -378,6 +498,15 @@ test("Infinity serialized distinctly from string sentinel", () => {
 
   assert.equal(infinityAssignment.key === sentinelAssignment.key, false);
   assert.equal(infinityAssignment.hash === sentinelAssignment.hash, false);
+});
+
+test("raw number sentinel string differs from Infinity value", () => {
+  const c = new Cat32();
+  const sentinelAssignment = c.assign("\u0000cat32:number:Infinity\u0000");
+  const infinityAssignment = c.assign(Infinity);
+
+  assert.ok(sentinelAssignment.key !== infinityAssignment.key);
+  assert.ok(sentinelAssignment.hash !== infinityAssignment.hash);
 });
 
 test("top-level bigint differs from number", () => {

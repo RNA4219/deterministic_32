@@ -47,7 +47,7 @@ export class Cat32 {
 
     if (opts.overrides) {
       for (const [rawKey, v] of Object.entries(opts.overrides)) {
-        const k = this.canonicalKey(rawKey);
+        const k = this.normalizeCanonicalKey(rawKey);
         if (typeof v === "number") {
           this.overrides.set(k, this.normalizeIndex(v));
         } else {
@@ -86,13 +86,17 @@ export class Cat32 {
 
   private canonicalKey(input: unknown): string {
     const serialized = stableStringify(input);
+    return this.normalizeCanonicalKey(serialized);
+  }
+
+  private normalizeCanonicalKey(key: string): string {
     switch (this.normalize) {
       case "nfc":
-        return serialized.normalize("NFC");
+        return key.normalize("NFC");
       case "nfkc":
-        return serialized.normalize("NFKC");
+        return key.normalize("NFKC");
       default:
-        return serialized;
+        return key;
     }
   }
 
