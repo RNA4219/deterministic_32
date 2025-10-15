@@ -140,6 +140,10 @@ function stringifyStringLiteral(value: string): string {
   return JSON.stringify(value);
 }
 
+function stringifySentinelLiteral(value: string): string {
+  return JSON.stringify(value);
+}
+
 function reviveFromSerialized(serialized: string): unknown {
   try {
     const parsed = JSON.parse(serialized);
