@@ -143,6 +143,16 @@ test("Cat32 assigns distinct keys for primitive strings and non-strings", () => 
   assert.ok(stringNumber.hash !== numeric.hash);
 });
 
+test("Cat32 assigns distinct keys for sets with mixed primitive types", () => {
+  const cat = new Cat32();
+
+  const mixedSet = cat.assign(new Set([1, "1"]));
+  const numericSet = cat.assign(new Set([1]));
+
+  assert.ok(mixedSet.key !== numericSet.key);
+  assert.ok(mixedSet.hash !== numericSet.hash);
+});
+
 test("dist entry point exports Cat32", async () => {
   const sourceImportMetaUrl = import.meta.url.includes("/dist/tests/")
     ? new URL("../../tests/categorizer.test.ts", import.meta.url)
