@@ -308,10 +308,16 @@ test("top-level bigint canonical key uses bigint prefix", () => {
 });
 test("canonical key for primitives uses stable stringify", () => {
     const c = new Cat32();
-    assert.equal(c.assign("foo").key, stableStringify("foo"));
-    assert.equal(c.assign(1n).key, stableStringify(1n));
-    assert.equal(c.assign(Number.NaN).key, stableStringify(Number.NaN));
-    assert.equal(c.assign(Symbol("x")).key, stableStringify(Symbol("x")));
+    const stringValue = "foo";
+    const numberValue = 123;
+    const bigintValue = 1n;
+    const nanValue = Number.NaN;
+    const symbolValue = Symbol("x");
+    assert.equal(c.assign(stringValue).key, stableStringify(stringValue));
+    assert.equal(c.assign(numberValue).key, stableStringify(numberValue));
+    assert.equal(c.assign(bigintValue).key, stableStringify(bigintValue));
+    assert.equal(c.assign(nanValue).key, stableStringify(nanValue));
+    assert.equal(c.assign(symbolValue).key, stableStringify(symbolValue));
 });
 test("bigint sentinel string differs from bigint value", () => {
     const c = new Cat32();
