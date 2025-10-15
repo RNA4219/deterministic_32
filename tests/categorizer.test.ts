@@ -128,6 +128,22 @@ test("canonical key encodes date sentinel", () => {
   );
 });
 
+test("canonical key matches stableStringify for basic primitives", () => {
+  const c = new Cat32({ normalize: "none" });
+
+  const stringAssignment = c.assign("foo");
+  assert.equal(stringAssignment.key, stableStringify("foo"));
+
+  const bigintAssignment = c.assign(1n);
+  assert.equal(bigintAssignment.key, stableStringify(1n));
+
+  const nanAssignment = c.assign(Number.NaN);
+  assert.equal(nanAssignment.key, stableStringify(Number.NaN));
+
+  const symbolAssignment = c.assign(Symbol("x"));
+  assert.equal(symbolAssignment.key, stableStringify(Symbol("x")));
+});
+
 test("deterministic mapping for bigint values", () => {
   const c = new Cat32({ salt: "s", namespace: "ns" });
   const source = { id: 1n, nested: { value: 2n } };
