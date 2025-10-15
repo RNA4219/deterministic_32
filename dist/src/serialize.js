@@ -4,9 +4,9 @@
 // - Treats Date as ISO string.
 // - Maps/Sets are serialized as arrays in insertion order (keys sorted for Map via key string).
 const SENTINEL_PREFIX = "\u0000cat32:";
+const STRING_SENTINEL_PREFIX = `${SENTINEL_PREFIX}string:`;
 const SENTINEL_SUFFIX = "\u0000";
 const HOLE_SENTINEL = JSON.stringify(typeSentinel("hole"));
-const STRING_SENTINEL_PREFIX = `${SENTINEL_PREFIX}string:`;
 const UNDEFINED_SENTINEL = "__undefined__";
 const DATE_SENTINEL_PREFIX = "__date__:";
 const BIGINT_SENTINEL_PREFIX = "__bigint__:";
@@ -15,6 +15,11 @@ export function typeSentinel(type, payload = "") {
     return `${SENTINEL_PREFIX}${type}:${payload}${SENTINEL_SUFFIX}`;
 }
 export function escapeSentinelString(value) {
+    if (value.startsWith(SENTINEL_PREFIX) &&
+        value.endsWith(SENTINEL_SUFFIX) &&
+        !value.startsWith(STRING_SENTINEL_PREFIX)) {
+        return typeSentinel("string", value);
+    }
     return value;
 }
 export function stableStringify(v) {
@@ -26,7 +31,7 @@ function _stringify(v, stack) {
         return "null";
     const t = typeof v;
     if (t === "string")
-        return escapeSentinelString(v);
+        return JSON.stringify(escapeSentinelString(v));
     if (t === "number") {
         const value = v;
         if (Number.isNaN(value) || !Number.isFinite(value)) {
@@ -40,8 +45,9 @@ function _stringify(v, stack) {
         return JSON.stringify(typeSentinel("bigint", v.toString()));
     if (t === "undefined")
         return JSON.stringify(UNDEFINED_SENTINEL);
-    if (t === "function" || t === "symbol")
+    if (t === "function" || t === "symbol") {
         return String(v);
+    }
     if (Array.isArray(v)) {
         if (stack.has(v))
             throw new TypeError("Cyclic object");

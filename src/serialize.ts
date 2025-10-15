@@ -5,10 +5,9 @@
 // - Maps/Sets are serialized as arrays in insertion order (keys sorted for Map via key string).
 
 const SENTINEL_PREFIX = "\u0000cat32:";
+const STRING_SENTINEL_PREFIX = `${SENTINEL_PREFIX}string:`;
 const SENTINEL_SUFFIX = "\u0000";
 const HOLE_SENTINEL = JSON.stringify(typeSentinel("hole"));
-const STRING_SENTINEL_PREFIX = `${SENTINEL_PREFIX}string:`;
-const STRING_LITERAL_SENTINEL_PREFIX = "__string__:";
 const UNDEFINED_SENTINEL = "__undefined__";
 const DATE_SENTINEL_PREFIX = "__date__:";
 const BIGINT_SENTINEL_PREFIX = "__bigint__:";
@@ -19,13 +18,14 @@ export function typeSentinel(type: string, payload = ""): string {
 }
 
 export function escapeSentinelString(value: string): string {
-  if (isSentinelWrappedString(value)) {
-    return value;
+  if (
+    value.startsWith(SENTINEL_PREFIX) &&
+    value.endsWith(SENTINEL_SUFFIX) &&
+    !value.startsWith(STRING_SENTINEL_PREFIX)
+  ) {
+    return typeSentinel("string", value);
   }
-  if (!needsEscaping(value)) {
-    return JSON.stringify(value);
-  }
-  return typeSentinel("string", value);
+  return value;
 }
 
 export function stableStringify(v: unknown): string {
@@ -48,7 +48,7 @@ function _stringify(v: unknown, stack: Set<any>): string {
   if (v === null) return "null";
   const t = typeof v;
 
-  if (t === "string") return escapeSentinelString(v as string);
+  if (t === "string") return JSON.stringify(escapeSentinelString(v as string));
   if (t === "number") {
     const value = v as number;
     if (Number.isNaN(value) || !Number.isFinite(value)) {
