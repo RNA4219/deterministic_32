@@ -10,6 +10,9 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
+            const fs = require('node:fs');
+            const path = require('node:path');
+
             function resolveReviewDecision(rawDecision, reviewStates) {
               const APPROVED = "APPROVED";
               const CHANGES_REQUESTED = "CHANGES_REQUESTED";
@@ -32,35 +35,191 @@ jobs:
               if (normalizedStates.has(APPROVED)) return APPROVED;
               return REVIEW_REQUIRED;
             }
+
+            function escapeRegex(source) {
+              return source.replace(/[\\^$+?.()|[\]{}]/g, '\\$&');
+            }
+
+            function compilePattern(pattern) {
+              let working = pattern.trim();
+              if (!working) return null;
+
+              const anchored = working.startsWith('/');
+              if (anchored) working = working.slice(1);
+
+              const directoryOnly = working.endsWith('/') && working.length > 1;
+              if (directoryOnly) working = working.slice(0, -1);
+
+              let regexBody = '';
+              for (let i = 0; i < working.length; i += 1) {
+                const char = working[i];
+                if (char === '*') {
+                  if (working[i + 1] === '*') {
+                    regexBody += '.*';
+                    i += 1;
+                  } else {
+                    regexBody += '[^/]*';
+                  }
+                  continue;
+                }
+                if (char === '?') {
+                  regexBody += '[^/]';
+                  continue;
+                }
+                if (char === '/') {
+                  regexBody += '\\/';
+                  continue;
+                }
+                regexBody += escapeRegex(char);
+              }
+
+              if (directoryOnly) {
+                regexBody = `${regexBody}(?:\\/.*)?`;
+              }
+
+              const prefix = anchored ? '^' : '^(?:.*\\/)?';
+              return new RegExp(`${prefix}${regexBody}$`);
+            }
+
+            function parseCodeownersFile(contents) {
+              const entries = [];
+              const lines = contents.split(/\r?\n/);
+              for (const rawLine of lines) {
+                let line = rawLine;
+                const hashIndex = line.indexOf('#');
+                if (hashIndex === 0) continue;
+                if (hashIndex > 0) line = line.slice(0, hashIndex);
+                line = line.trim();
+                if (!line) continue;
+
+                const parts = line.split(/\s+/);
+                if (parts.length < 2) continue;
+                const pattern = parts[0];
+                const owners = parts.slice(1).filter(Boolean);
+                const matcher = compilePattern(pattern);
+                if (!matcher) continue;
+                entries.push({ pattern, owners, matcher });
+              }
+              return entries;
+            }
+
+            function findOwnersForPath(entries, filePath) {
+              let activeOwners = [];
+              for (const entry of entries) {
+                if (entry.matcher.test(filePath)) {
+                  activeOwners = entry.owners;
+                }
+              }
+              return activeOwners;
+            }
+
+            function normalizeOwner(owner) {
+              return owner.startsWith('@') ? owner.slice(1).toLowerCase() : owner.toLowerCase();
+            }
+
+            function authorIsOwnerForAll(author, files, entries) {
+              if (!author) return false;
+              if (!entries.length) return false;
+              if (!files.length) return true;
+
+              const normalizedAuthor = author.toLowerCase();
+              for (const file of files) {
+                const owners = findOwnersForPath(entries, file);
+                if (!owners.length) continue;
+                const hasMatch = owners.some((owner) => normalizeOwner(owner) === normalizedAuthor);
+                if (!hasMatch) return false;
+              }
+              return true;
+            }
+
+            function readCodeownersEntries(root) {
+              const candidates = [
+                path.join(root, 'CODEOWNERS'),
+                path.join(root, '.github', 'CODEOWNERS'),
+                path.join(root, 'docs', 'CODEOWNERS'),
+              ];
+              for (const candidate of candidates) {
+                if (fs.existsSync(candidate)) {
+                  const contents = fs.readFileSync(candidate, 'utf8');
+                  return parseCodeownersFile(contents);
+                }
+              }
+              return [];
+            }
+
             const [owner, repo] = process.env.GITHUB_REPOSITORY.split('/');
             const number = context.issue.number;
+
             const query = `
-              query ($owner: String!, $repo: String!, $number: Int!) {
+              query ($owner: String!, $repo: String!, $number: Int!, $cursor: String) {
                 repository(owner: $owner, name: $repo) {
                   pullRequest(number: $number) {
+                    author {
+                      login
+                    }
                     reviewDecision
                     latestOpinionatedReviews(first: 20) {
                       nodes {
                         state
                       }
                     }
+                    files(first: 100, after: $cursor) {
+                      nodes {
+                        path
+                      }
+                      pageInfo {
+                        hasNextPage
+                        endCursor
+                      }
+                    }
                   }
                 }
               }
             `;
-            const result = await github.graphql(query, { owner, repo, number });
-            const pullRequest = result.repository.pullRequest;
-            const reviewStates = pullRequest?.latestOpinionatedReviews?.nodes?.map(
-              (node) => node?.state,
-            ) ?? [];
-            const decision = resolveReviewDecision(
-              pullRequest?.reviewDecision,
-              reviewStates,
-            );
+
+            let cursor = null;
+            let prDetails = null;
+            const changedFiles = [];
+
+            do {
+              const variables = { owner, repo, number, cursor };
+              const result = await github.graphql(query, variables);
+              const pullRequest = result?.repository?.pullRequest;
+              if (!pullRequest) {
+                core.setFailed('Unable to locate pull request for CODEOWNERS check.');
+                return;
+              }
+              if (!prDetails) {
+                prDetails = pullRequest;
+              }
+              const fileNodes = pullRequest.files?.nodes ?? [];
+              for (const node of fileNodes) {
+                if (node?.path) {
+                  changedFiles.push(node.path);
+                }
+              }
+              const pageInfo = pullRequest.files?.pageInfo;
+              cursor = pageInfo?.hasNextPage ? pageInfo.endCursor : null;
+            } while (cursor);
+
+            const reviewStates = prDetails?.latestOpinionatedReviews?.nodes?.map((node) => node?.state) ?? [];
+            const decision = resolveReviewDecision(prDetails?.reviewDecision, reviewStates);
             core.info(`Review decision: ${decision}`);
-            if (decision !== 'APPROVED') {
-              core.setFailed('CODEOWNERS approval missing (review decision is not APPROVED).');
+
+            if (decision === 'APPROVED') {
+              return;
             }
+
+            const repoRoot = process.env.GITHUB_WORKSPACE ?? process.cwd();
+            const codeownersEntries = readCodeownersEntries(repoRoot);
+            const authorLogin = prDetails?.author?.login ?? '';
+
+            if (authorIsOwnerForAll(authorLogin, changedFiles, codeownersEntries)) {
+              core.info('Author matches CODEOWNERS for all changed files; approval bypassed.');
+              return;
+            }
+
+            core.setFailed('CODEOWNERS approval missing (review decision is not APPROVED).');
       - name: Block auto-merge
         run: |
           echo "Auto merge is disabled by policy"
