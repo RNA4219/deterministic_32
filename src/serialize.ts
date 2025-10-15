@@ -96,17 +96,22 @@ function _stringify(v: unknown, stack: Set<any>): string {
       }
     }
     const sortedKeys = Object.keys(normalizedEntries).sort();
-    let body = "";
+    const bodyParts: string[] = [];
     for (let i = 0; i < sortedKeys.length; i += 1) {
       const key = sortedKeys[i];
-      const serializedValue = normalizedEntries[key].serializedValue;
-      if (i > 0) body += ",";
-      body += JSON.stringify(key);
-      body += ":";
-      body += serializedValue;
+      const bucket = normalizedEntries[key];
+      bucket.sort(compareSerializedEntry);
+      for (const entry of bucket) {
+        if (bodyParts.length > 0) {
+          bodyParts.push(",");
+        }
+        bodyParts.push(JSON.stringify(key));
+        bodyParts.push(":");
+        bodyParts.push(entry.serializedValue);
+      }
     }
     stack.delete(v);
-    return "{" + body + "}";
+    return "{" + bodyParts.join("") + "}";
   }
 
   // Set
