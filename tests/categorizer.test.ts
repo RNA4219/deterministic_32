@@ -128,6 +128,21 @@ test("canonical key encodes date sentinel", () => {
   );
 });
 
+test("string sentinel matches undefined value", () => {
+  const c = new Cat32();
+  const sentinelAssignment = c.assign("__undefined__");
+  const undefinedAssignment = c.assign(undefined);
+  assert.equal(sentinelAssignment.key, undefinedAssignment.key);
+});
+
+test("string sentinel matches date value", () => {
+  const c = new Cat32();
+  const iso = "2024-01-02T03:04:05.000Z";
+  const sentinelAssignment = c.assign(`__date__:${iso}`);
+  const dateAssignment = c.assign(new Date(iso));
+  assert.equal(sentinelAssignment.key, dateAssignment.key);
+});
+
 test("deterministic mapping for bigint values", () => {
   const c = new Cat32({ salt: "s", namespace: "ns" });
   const source = { id: 1n, nested: { value: 2n } };
@@ -219,9 +234,9 @@ test("stableStringify leaves sentinel-like strings untouched", () => {
   assert.equal(stableStringify("__undefined__"), JSON.stringify("__undefined__"));
 });
 
-test("string sentinel literals remain literal canonical keys", () => {
+test("string sentinel canonical key is JSON string", () => {
   const assignment = new Cat32().assign("__date__:2024-01-01Z");
-  assert.equal(assignment.key, "__date__:2024-01-01Z");
+  assert.equal(assignment.key, JSON.stringify("__date__:2024-01-01Z"));
 });
 
 test("Map keys match plain object representation regardless of entry order", () => {
@@ -317,13 +332,13 @@ test("bigint sentinel string differs from bigint value", () => {
   assert.ok(bigintAssignment.hash !== stringAssignment.hash);
 });
 
-test("undefined sentinel string differs from undefined value", () => {
+test("undefined sentinel string matches undefined value", () => {
   const c = new Cat32();
   const undefinedAssignment = c.assign(undefined);
   const stringAssignment = c.assign("__undefined__");
 
-  assert.ok(undefinedAssignment.key !== stringAssignment.key);
-  assert.ok(undefinedAssignment.hash !== stringAssignment.hash);
+  assert.equal(undefinedAssignment.key, stringAssignment.key);
+  assert.equal(undefinedAssignment.hash, stringAssignment.hash);
 });
 
 test("top-level undefined serializes with sentinel string", () => {
@@ -357,7 +372,7 @@ test("top-level sparse arrays differ from empty arrays", () => {
   assert.ok(sparseAssignment.hash !== emptyAssignment.hash);
 });
 
-test("sentinel strings differ from actual values at top level", () => {
+test("sentinel strings align with actual values at top level", () => {
   const c = new Cat32();
 
   const bigintValue = c.assign(1n);
@@ -367,14 +382,14 @@ test("sentinel strings differ from actual values at top level", () => {
 
   const undefinedValue = c.assign(undefined);
   const undefinedSentinel = c.assign("__undefined__");
-  assert.ok(undefinedValue.key !== undefinedSentinel.key);
-  assert.ok(undefinedValue.hash !== undefinedSentinel.hash);
+  assert.equal(undefinedValue.key, undefinedSentinel.key);
+  assert.equal(undefinedValue.hash, undefinedSentinel.hash);
 
   const date = new Date("2024-01-02T03:04:05.678Z");
   const dateValue = c.assign(date);
   const dateSentinel = c.assign("__date__:" + date.toISOString());
-  assert.ok(dateValue.key !== dateSentinel.key);
-  assert.ok(dateValue.hash !== dateSentinel.hash);
+  assert.equal(dateValue.key, dateSentinel.key);
+  assert.equal(dateValue.hash, dateSentinel.hash);
 });
 
 test("sentinel string literals match nested undefined/date but not bigint", () => {
