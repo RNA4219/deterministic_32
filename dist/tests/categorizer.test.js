@@ -265,6 +265,18 @@ test("Map keys match plain object representation regardless of entry order", () 
     assert.equal(duplicateKeyMapAssignment.key, duplicateKeyObjectAssignment.key);
     assert.equal(duplicateKeyMapAssignment.hash, duplicateKeyObjectAssignment.hash);
 });
+test("Map values serialize identically to plain object values", () => {
+    const c = new Cat32();
+    const fn = function foo() { };
+    const sym = Symbol("x");
+    const mapAssignment = c.assign(new Map([
+        ["fn", fn],
+        ["sym", sym],
+    ]));
+    const objectAssignment = c.assign({ fn, sym });
+    assert.equal(mapAssignment.key, objectAssignment.key);
+    assert.equal(mapAssignment.hash, objectAssignment.hash);
+});
 test("Map string sentinel key matches object property", () => {
     const c = new Cat32();
     const mapAssignment = c.assign(new Map([["__undefined__", 1]]));

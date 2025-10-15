@@ -77,14 +77,13 @@ function _stringify(v, stack) {
             const revivedKey = reviveFromSerialized(serializedKey);
             const propertyKey = toPropertyKeyString(revivedKey, serializedKey);
             const serializedValue = _stringify(rawValue, stack);
-            const revivedValue = reviveFromSerialized(serializedValue);
-            normalizedEntries.set(propertyKey, revivedValue);
+            normalizedEntries.set(propertyKey, serializedValue);
         }
         const keys = Array.from(normalizedEntries.keys()).sort();
         const body = keys
             .map((key) => {
-            const revivedValue = normalizedEntries.get(key);
-            return JSON.stringify(key) + ":" + JSON.stringify(revivedValue);
+            const serializedValue = normalizedEntries.get(key);
+            return JSON.stringify(key) + ":" + serializedValue;
         })
             .join(",");
         stack.delete(v);
