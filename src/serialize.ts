@@ -7,7 +7,6 @@
 const SENTINEL_PREFIX = "\u0000cat32:";
 const SENTINEL_SUFFIX = "\u0000";
 const HOLE_SENTINEL = JSON.stringify(typeSentinel("hole"));
-const STRING_SENTINEL_PREFIX = `${SENTINEL_PREFIX}string:`;
 const UNDEFINED_SENTINEL = "__undefined__";
 const DATE_SENTINEL_PREFIX = "__date__:";
 const BIGINT_SENTINEL_PREFIX = "__bigint__:";
@@ -34,7 +33,7 @@ function _stringify(v: unknown, stack: Set<any>): string {
   if (v === null) return "null";
   const t = typeof v;
 
-  if (t === "string") return JSON.stringify(v);
+  if (t === "string") return escapeSentinelString(v as string);
   if (t === "number") {
     const value = v as number;
     if (Number.isNaN(value) || !Number.isFinite(value)) {
@@ -45,7 +44,9 @@ function _stringify(v: unknown, stack: Set<any>): string {
   if (t === "boolean") return JSON.stringify(v);
   if (t === "bigint") return JSON.stringify(typeSentinel("bigint", (v as bigint).toString()));
   if (t === "undefined") return JSON.stringify(UNDEFINED_SENTINEL);
-  if (t === "function" || t === "symbol") return String(v);
+  if (t === "function" || t === "symbol") {
+    return String(v);
+  }
 
   if (Array.isArray(v)) {
     if (stack.has(v)) throw new TypeError("Cyclic object");
@@ -118,8 +119,19 @@ function _stringify(v: unknown, stack: Set<any>): string {
 
 function reviveFromSerialized(serialized: string): unknown {
   try {
-    return JSON.parse(serialized);
+    const parsed = JSON.parse(serialized);
+    if (
+      typeof parsed === "string" &&
+      parsed.startsWith(STRING_SENTINEL_PREFIX) &&
+      parsed.endsWith(SENTINEL_SUFFIX)
+    ) {
+      return parsed.slice(STRING_SENTINEL_PREFIX.length, -SENTINEL_SUFFIX.length);
+    }
+    return parsed;
   } catch {
+    if (serialized.startsWith(STRING_SENTINEL_PREFIX) && serialized.endsWith(SENTINEL_SUFFIX)) {
+      return serialized.slice(STRING_SENTINEL_PREFIX.length, -SENTINEL_SUFFIX.length);
+    }
     return serialized;
   }
 }
@@ -132,6 +144,13 @@ function toPropertyKeyString(value: unknown, fallback: string): string {
   }
   if (type === "symbol") {
     return (value as symbol).toString();
+  }
+  if (
+    type === "string" &&
+    (value as string).startsWith(STRING_SENTINEL_PREFIX) &&
+    (value as string).endsWith(SENTINEL_SUFFIX)
+  ) {
+    return (value as string).slice(STRING_SENTINEL_PREFIX.length, -SENTINEL_SUFFIX.length);
   }
   return String(value);
 }
