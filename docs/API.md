@@ -8,7 +8,7 @@ export interface CategorizerOptions {
   namespace?: string;
   labels?: string[];            // length === 32
   normalize?: NormalizeMode;    // default "nfkc"
-  overrides?: Record<string, number | string>;
+  overrides?: Record<string, number | string>;  // use Cat32.assign(...).key or stableStringify(...) for keys
 }
 
 export interface Assignment {

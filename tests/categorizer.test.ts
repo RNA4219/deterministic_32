@@ -386,6 +386,25 @@ test("override by label", () => {
   assert.equal(a.label, "L31");
 });
 
+test("README override example uses canonical keys", () => {
+  const c = new Cat32({
+    salt: "projectX",
+    namespace: "v1",
+    overrides: {
+      [stableStringify("vip-user")]: 0,
+      [stableStringify({ audited: true })]: "A",
+    },
+  });
+
+  const vip = c.assign("vip-user");
+  assert.equal(vip.index, 0);
+  assert.equal(vip.key, stableStringify("vip-user"));
+
+  const audited = c.assign({ audited: true });
+  assert.equal(audited.label, "A");
+  assert.equal(audited.key, stableStringify({ audited: true }));
+});
+
 test("override rejects NaN with explicit error", () => {
   assert.throws(
     () => new Cat32({ overrides: { foo: Number.NaN as any } }),
@@ -478,10 +497,8 @@ test("Cat32 assign handles undefined and Date literals", () => {
   const cat = new Cat32();
   const iso = "2024-01-02T03:04:05.678Z";
 
-  assert.doesNotThrow(() => {
-    cat.assign(undefined);
-    cat.assign(new Date(iso));
-  });
+  cat.assign(undefined);
+  cat.assign(new Date(iso));
 });
 
 test("stableStringify uses String() for functions and symbols", () => {
