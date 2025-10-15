@@ -53,22 +53,6 @@ const dynamicImport = new Function(
 
 const CLI_PATH = new URL("../src/cli.js", import.meta.url).pathname;
 const CLI_LITERAL_KEY_SCRIPT = [
-  "(async () => {",
-  "  const cliPath = process.argv.at(-1);",
-  "  const { pathToFileURL } = await import('node:url');",
-  "  const url = pathToFileURL(cliPath);",
-  "  process.stdin.isTTY = true;",
-  "  process.argv = [process.argv[0], cliPath, '--', '--literal-key'];",
-  "  try {",
-  "    await import(url.href);",
-  "  } catch (error) {",
-  "    console.error(error);",
-  "    process.exit(1);",
-  "  }",
-  "})();",
-].join("\n");
-
-const CLI_LITERAL_KEY_SCRIPT = [
   "const cliPath = process.argv.at(-1);",
   "process.argv = [process.argv[0], cliPath, '--', '--literal-key'];",
   "import(cliPath).catch((error) => { console.error(error); process.exit(1); });",
@@ -97,6 +81,24 @@ test("direct dist import exposes stableStringify", async () => {
     stableStringify?: unknown;
   };
   assert.equal(typeof distModule.stableStringify, "function");
+});
+
+test("dist stableStringify wraps string literal sentinels", async () => {
+  const sourceImportMetaUrl = import.meta.url.includes("/dist/tests/")
+    ? new URL("../../tests/categorizer.test.ts", import.meta.url)
+    : import.meta.url;
+
+  const distSerializeModule = (await import(
+    new URL("../dist/serialize.js", sourceImportMetaUrl).href,
+  )) as { stableStringify?: ((value: unknown) => string) | undefined };
+
+  assert.equal(typeof distSerializeModule.stableStringify, "function");
+  const distStableStringify = distSerializeModule.stableStringify!;
+
+  assert.equal(
+    distStableStringify("__string__:payload"),
+    JSON.stringify(typeSentinel("string", "__string__:payload")),
+  );
 });
 
 test("tsc succeeds without duplicate identifier errors", async () => {
