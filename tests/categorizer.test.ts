@@ -99,6 +99,22 @@ test("deterministic mapping for object key order", () => {
   assert.equal(a1.hash, a2.hash);
 });
 
+test("canonical key encodes undefined sentinel", () => {
+  const c = new Cat32();
+  const assignment = c.assign({ value: undefined });
+  assert.equal(assignment.key, "{\"value\":\"__undefined__\"}");
+});
+
+test("canonical key encodes date sentinel", () => {
+  const c = new Cat32();
+  const date = new Date("2024-01-02T03:04:05.000Z");
+  const assignment = c.assign({ value: date });
+  assert.equal(
+    assignment.key,
+    `{"value":"__date__:${date.toISOString()}"}`,
+  );
+});
+
 test("deterministic mapping for bigint values", () => {
   const c = new Cat32({ salt: "s", namespace: "ns" });
   const source = { id: 1n, nested: { value: 2n } };
