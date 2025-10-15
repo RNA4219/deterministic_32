@@ -143,14 +143,14 @@ test("Cat32 assigns distinct keys for primitive strings and non-strings", () => 
   assert.ok(stringNumber.hash !== numeric.hash);
 });
 
-test("Cat32 assigns distinct keys for JSON strings and object literals", () => {
+test("Cat32 assigns distinct keys for sets with mixed primitive types", () => {
   const cat = new Cat32();
 
-  const stringifiedObject = cat.assign('{"a":1}');
-  const literalObject = cat.assign({ a: 1 });
+  const mixedSet = cat.assign(new Set([1, "1"]));
+  const numericSet = cat.assign(new Set([1]));
 
-  assert.ok(stringifiedObject.key !== literalObject.key);
-  assert.ok(stringifiedObject.hash !== literalObject.hash);
+  assert.ok(mixedSet.key !== numericSet.key);
+  assert.ok(mixedSet.hash !== numericSet.hash);
 });
 
 test("dist entry point exports Cat32", async () => {
