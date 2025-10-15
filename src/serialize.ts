@@ -18,11 +18,7 @@ export function typeSentinel(type: string, payload = ""): string {
 }
 
 export function escapeSentinelString(value: string): string {
-  if (
-    value.startsWith(SENTINEL_PREFIX) &&
-    value.endsWith(SENTINEL_SUFFIX) &&
-    !value.startsWith(STRING_SENTINEL_PREFIX)
-  ) {
+  if (value.startsWith(SENTINEL_PREFIX) && value.endsWith(SENTINEL_SUFFIX)) {
     return typeSentinel("string", value);
   }
   return value;
@@ -89,21 +85,24 @@ function _stringify(v: unknown, stack: Set<any>): string {
   if (v instanceof Map) {
     if (stack.has(v)) throw new TypeError("Cyclic object");
     stack.add(v);
-    const normalizedEntries = new Map<string, string>();
+    const normalizedEntries: Record<string, string> = Object.create(null);
     for (const [rawKey, rawValue] of v.entries()) {
       const serializedKey = _stringify(rawKey, stack);
       const revivedKey = reviveFromSerialized(serializedKey);
       const propertyKey = toPropertyKeyString(revivedKey, serializedKey);
       const serializedValue = _stringify(rawValue, stack);
-      normalizedEntries.set(propertyKey, serializedValue);
+      normalizedEntries[propertyKey] = serializedValue;
     }
-    const keys = Array.from(normalizedEntries.keys()).sort();
-    const body = keys
-      .map((key) => {
-        const serializedValue = normalizedEntries.get(key)!;
-        return JSON.stringify(key) + ":" + serializedValue;
-      })
-      .join(",");
+    const sortedKeys = Object.keys(normalizedEntries).sort();
+    let body = "";
+    for (let i = 0; i < sortedKeys.length; i += 1) {
+      const key = sortedKeys[i];
+      const serializedValue = normalizedEntries[key];
+      if (i > 0) body += ",";
+      body += JSON.stringify(key);
+      body += ":";
+      body += serializedValue;
+    }
     stack.delete(v);
     return "{" + body + "}";
   }

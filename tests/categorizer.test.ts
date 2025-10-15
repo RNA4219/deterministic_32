@@ -523,6 +523,28 @@ test("Map values serialize identically to plain object values", () => {
   assert.equal(mapAssignment.hash, objectAssignment.hash);
 });
 
+test("Map function value matches plain object value", () => {
+  const c = new Cat32();
+  const fn = function foo() {};
+
+  const mapAssignment = c.assign(new Map([["fn", fn]]));
+  const objectAssignment = c.assign({ fn });
+
+  assert.equal(mapAssignment.key, objectAssignment.key);
+  assert.equal(mapAssignment.hash, objectAssignment.hash);
+});
+
+test("Map symbol value matches plain object value", () => {
+  const c = new Cat32();
+  const sym = Symbol("x");
+
+  const mapAssignment = c.assign(new Map([["sym", sym]]));
+  const objectAssignment = c.assign({ sym });
+
+  assert.equal(mapAssignment.key, objectAssignment.key);
+  assert.equal(mapAssignment.hash, objectAssignment.hash);
+});
+
 test("Map string sentinel key matches object property", () => {
   const c = new Cat32();
   const mapAssignment = c.assign(new Map([["__undefined__", 1]]));
