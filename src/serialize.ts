@@ -6,6 +6,7 @@
 
 const SENTINEL_PREFIX = "\u0000cat32:";
 const SENTINEL_SUFFIX = "\u0000";
+const STRING_SENTINEL_PREFIX = `${SENTINEL_PREFIX}string:`;
 const HOLE_SENTINEL = JSON.stringify(typeSentinel("hole"));
 const STRING_SENTINEL_PREFIX = `${SENTINEL_PREFIX}string:`;
 const UNDEFINED_SENTINEL = "__undefined__";
@@ -13,10 +14,6 @@ const DATE_SENTINEL_PREFIX = "__date__:";
 
 export function typeSentinel(type: string, payload = ""): string {
   return `${SENTINEL_PREFIX}${type}:${payload}${SENTINEL_SUFFIX}`;
-}
-
-export function escapeSentinelString(value: string): string {
-  return value;
 }
 
 export function stableStringify(v: unknown): string {
@@ -71,14 +68,10 @@ function _stringify(v: unknown, stack: Set<any>): string {
     for (const [rawKey, rawValue] of v.entries()) {
       const serializedKey = _stringify(rawKey, stack);
       const revivedKey = reviveFromSerialized(serializedKey);
-      const propertyKey = toPropertyKeyString(
-        revivedKey.value,
-        serializedKey,
-        revivedKey.stringSentinel,
-      );
+      const propertyKey = toPropertyKeyString(revivedKey, serializedKey);
       const serializedValue = _stringify(rawValue, stack);
       const revivedValue = reviveFromSerialized(serializedValue);
-      normalizedEntries.set(propertyKey, revivedValue.value);
+      normalizedEntries.set(propertyKey, revivedValue);
     }
     const keys = Array.from(normalizedEntries.keys()).sort();
     const body = keys
@@ -114,34 +107,15 @@ function _stringify(v: unknown, stack: Set<any>): string {
   return "{" + body.join(",") + "}";
 }
 
-type RevivedSerialized = {
-  value: unknown;
-  stringSentinel?: string;
-};
-
-function reviveFromSerialized(serialized: string): RevivedSerialized {
+function reviveFromSerialized(serialized: string): unknown {
   try {
-    const value = JSON.parse(serialized);
-    if (typeof value === "string") {
-      const sentinelString = reviveStringSentinel(value);
-      if (sentinelString !== undefined) {
-        return { value, stringSentinel: sentinelString };
-      }
-    }
-    return { value };
+    return JSON.parse(serialized);
   } catch {
-    return { value: serialized };
+    return serialized;
   }
 }
 
-function toPropertyKeyString(
-  value: unknown,
-  fallback: string,
-  stringSentinel?: string,
-): string {
-  if (stringSentinel !== undefined) {
-    return stringSentinel;
-  }
+function toPropertyKeyString(value: unknown, fallback: string): string {
   if (value === null) return "null";
   const type = typeof value;
   if (type === "object" || type === "function") {
@@ -151,14 +125,4 @@ function toPropertyKeyString(
     return (value as symbol).toString();
   }
   return String(value);
-}
-
-function reviveStringSentinel(value: string): string | undefined {
-  if (!value.startsWith(STRING_SENTINEL_PREFIX) || !value.endsWith(SENTINEL_SUFFIX)) {
-    return undefined;
-  }
-  return value.slice(
-    STRING_SENTINEL_PREFIX.length,
-    value.length - SENTINEL_SUFFIX.length,
-  );
 }
