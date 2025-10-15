@@ -3,6 +3,25 @@ import test from "node:test";
 import assert from "node:assert";
 import { Cat32 } from "../src/index.js";
 import { stableStringify } from "../src/serialize.js";
+const utf8Decoder = typeof TextDecoder === "function" ? new TextDecoder("utf-8") : undefined;
+function toUtf8(chunk) {
+    if (typeof chunk === "string") {
+        return chunk;
+    }
+    if (utf8Decoder) {
+        return utf8Decoder.decode(chunk);
+    }
+    let result = "";
+    for (const byte of chunk) {
+        result += String.fromCharCode(byte);
+    }
+    try {
+        return decodeURIComponent(escape(result));
+    }
+    catch {
+        return result;
+    }
+}
 const dynamicImport = new Function("specifier", "return import(specifier);");
 const CLI_PATH = new URL("../src/cli.js", import.meta.url).pathname;
 test("dist entry point exports Cat32", async () => {
@@ -11,6 +30,41 @@ test("dist entry point exports Cat32", async () => {
         : import.meta.url;
     const distModule = (await import(new URL("../dist/index.js", sourceImportMetaUrl)));
     assert.equal(typeof distModule.Cat32, "function");
+});
+test("dist index and cli modules are importable", async () => {
+    const sourceImportMetaUrl = import.meta.url.includes("/dist/tests/")
+        ? new URL("../../tests/categorizer.test.ts", import.meta.url)
+        : import.meta.url;
+    await import(new URL("../dist/index.js", sourceImportMetaUrl)).catch((error) => {
+        throw new Error(`Failed to import dist/index.js: ${String(error)}`);
+    });
+    const originalArgv = process.argv.slice();
+    const originalExit = process.exit;
+    const originalStdoutWrite = process.stdout.write;
+    const stdin = process.stdin;
+    const originalIsTTY = stdin.isTTY;
+    const captured = [];
+    try {
+        const distCliPath = new URL("../dist/cli.js", sourceImportMetaUrl).pathname;
+        process.argv = [originalArgv[0], distCliPath, "__cat32_test_key__"];
+        stdin.isTTY = true;
+        process.exit = (() => undefined);
+        process.stdout.write = ((chunk) => {
+            captured.push(toUtf8(chunk));
+            return true;
+        });
+        await import(new URL("../dist/cli.js", sourceImportMetaUrl));
+    }
+    catch (error) {
+        throw new Error(`Failed to import dist/cli.js: ${String(error)}`);
+    }
+    finally {
+        process.argv = originalArgv;
+        stdin.isTTY = originalIsTTY;
+        process.exit = originalExit;
+        process.stdout.write = originalStdoutWrite;
+    }
+    assert.ok(captured.some((chunk) => chunk.includes("index")));
 });
 const CLI_SET_ASSIGN_SCRIPT = [
     "(async () => {",
@@ -53,7 +107,7 @@ async function runCliAssignWithSet(values) {
     let stdout = "";
     child.stdout.setEncoding("utf8");
     child.stdout.on("data", (chunk) => {
-        stdout += chunk;
+        stdout += toUtf8(chunk);
     });
     const exitCode = await new Promise((resolve) => {
         child.on("close", (code) => resolve(code));
@@ -93,6 +147,21 @@ test("canonical key encodes date sentinel", () => {
     const date = new Date("2024-01-02T03:04:05.000Z");
     const assignment = c.assign({ value: date });
     assert.equal(assignment.key, `{"value":"__date__:${date.toISOString()}"}`);
+});
+test("string sentinel differs from undefined value", () => {
+    const c = new Cat32();
+    const sentinelAssignment = c.assign("__undefined__");
+    const undefinedAssignment = c.assign(undefined);
+    assert.ok(sentinelAssignment.key !== undefinedAssignment.key);
+    assert.ok(sentinelAssignment.hash !== undefinedAssignment.hash);
+});
+test("string sentinel differs from date value", () => {
+    const c = new Cat32();
+    const iso = "2024-01-02T03:04:05.000Z";
+    const sentinelAssignment = c.assign(`__date__:${iso}`);
+    const dateAssignment = c.assign(new Date(iso));
+    assert.ok(sentinelAssignment.key !== dateAssignment.key);
+    assert.ok(sentinelAssignment.hash !== dateAssignment.hash);
 });
 test("deterministic mapping for bigint values", () => {
     const c = new Cat32({ salt: "s", namespace: "ns" });
@@ -162,7 +231,7 @@ test("NaN serialized distinctly from null", () => {
 test("stableStringify leaves sentinel-like strings untouched", () => {
     assert.equal(stableStringify("__undefined__"), JSON.stringify("__undefined__"));
 });
-test("string sentinel literals remain literal canonical keys", () => {
+test("string sentinel canonical key stays literal", () => {
     const assignment = new Cat32().assign("__date__:2024-01-01Z");
     assert.equal(assignment.key, "__date__:2024-01-01Z");
 });
@@ -223,9 +292,10 @@ test("top-level bigint canonical key uses bigint prefix", () => {
     assert.ok(bigintAssignment.key !== numberAssignment.key);
     assert.ok(bigintAssignment.hash !== numberAssignment.hash);
 });
-test("canonical key for primitives uses stable stringify", () => {
+test("canonical key for primitive strings stays literal", () => {
     const c = new Cat32();
-    assert.equal(c.assign("foo").key, stableStringify("foo"));
+    assert.equal(c.assign("foo").key, "foo");
+    assert.equal(c.assign("__number__:Infinity").key, "__number__:Infinity");
     assert.equal(c.assign(1n).key, stableStringify(1n));
     assert.equal(c.assign(Number.NaN).key, stableStringify(Number.NaN));
     assert.equal(c.assign(Symbol("x")).key, stableStringify(Symbol("x")));
@@ -267,7 +337,7 @@ test("top-level sparse arrays differ from empty arrays", () => {
     assert.ok(sparseAssignment.key !== emptyAssignment.key);
     assert.ok(sparseAssignment.hash !== emptyAssignment.hash);
 });
-test("sentinel strings differ from actual values at top level", () => {
+test("sentinel strings remain distinct from actual values at top level", () => {
     const c = new Cat32();
     const bigintValue = c.assign(1n);
     const bigintSentinel = c.assign("__bigint__:1");
@@ -394,15 +464,15 @@ test("CLI preserves leading whitespace from stdin", async () => {
     let stdout = "";
     child.stdout.setEncoding("utf8");
     child.stdout.on("data", (chunk) => {
-        stdout += chunk;
+        stdout += toUtf8(chunk);
     });
     const exitCode = await new Promise((resolve) => {
         child.on("close", (code) => resolve(code));
     });
     assert.equal(exitCode, 0);
     const result = JSON.parse(stdout);
-    assert.equal(result.key, stableStringify("  spaced"));
     const expected = new Cat32().assign("  spaced");
+    assert.equal(result.key, expected.key);
     assert.equal(result.hash, expected.hash);
 });
 test("CLI handles empty string key from argv", async () => {
@@ -420,15 +490,15 @@ test("CLI handles empty string key from argv", async () => {
     let stdout = "";
     child.stdout.setEncoding("utf8");
     child.stdout.on("data", (chunk) => {
-        stdout += chunk;
+        stdout += toUtf8(chunk);
     });
     const exitCode = await new Promise((resolve) => {
         child.on("close", (code) => resolve(code));
     });
     assert.equal(exitCode, 0);
     const result = JSON.parse(stdout);
-    assert.equal(result.key, stableStringify(""));
     const expected = new Cat32().assign("");
+    assert.equal(result.key, expected.key);
     assert.equal(result.hash, expected.hash);
 });
 test("CLI assign handles sets deterministically", async () => {
@@ -457,15 +527,15 @@ test("CLI command cat32 \"\" exits successfully", async () => {
     let stdout = "";
     child.stdout.setEncoding("utf8");
     child.stdout.on("data", (chunk) => {
-        stdout += chunk;
+        stdout += toUtf8(chunk);
     });
     const exitCode = await new Promise((resolve) => {
         child.on("close", (code) => resolve(code));
     });
     assert.equal(exitCode, 0);
     const result = JSON.parse(stdout);
-    assert.equal(result.key, stableStringify(""));
     const expected = new Cat32().assign("");
+    assert.equal(result.key, expected.key);
     assert.equal(result.hash, expected.hash);
 });
 test("CLI exits with code 2 for invalid normalize option using stdin", async () => {

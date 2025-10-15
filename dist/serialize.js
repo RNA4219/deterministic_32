@@ -5,12 +5,12 @@
 // - Maps/Sets are serialized as arrays in insertion order (keys sorted for Map via key string).
 const SENTINEL_PREFIX = "\u0000cat32:";
 const SENTINEL_SUFFIX = "\u0000";
+const STRING_SENTINEL_PREFIX = `${SENTINEL_PREFIX}string:`;
 const HOLE_SENTINEL = JSON.stringify(typeSentinel("hole"));
 const UNDEFINED_SENTINEL = "__undefined__";
 const DATE_SENTINEL_PREFIX = "__date__:";
 const BIGINT_SENTINEL_PREFIX = "__bigint__:";
 const NUMBER_SENTINEL_PREFIX = "__number__:";
-const STRING_SENTINEL_PREFIX = `${SENTINEL_PREFIX}string:`;
 export function typeSentinel(type, payload = "") {
     return `${SENTINEL_PREFIX}${type}:${payload}${SENTINEL_SUFFIX}`;
 }
@@ -20,15 +20,7 @@ const SENTINEL_STRING_PREFIXES = [
     NUMBER_SENTINEL_PREFIX,
 ];
 export function escapeSentinelString(value) {
-    if (value === UNDEFINED_SENTINEL) {
-        return value;
-    }
-    for (const prefix of SENTINEL_STRING_PREFIXES) {
-        if (value.startsWith(prefix)) {
-            return value;
-        }
-    }
-    return JSON.stringify(value);
+    return value;
 }
 export function stableStringify(v) {
     const stack = new Set();
@@ -86,10 +78,10 @@ function _stringify(v, stack) {
         for (const [rawKey, rawValue] of v.entries()) {
             const serializedKey = _stringify(rawKey, stack);
             const revivedKey = reviveFromSerialized(serializedKey);
-            const propertyKey = toPropertyKeyString(revivedKey.value, serializedKey, revivedKey.stringSentinel);
+            const propertyKey = toPropertyKeyString(revivedKey, serializedKey);
             const serializedValue = _stringify(rawValue, stack);
             const revivedValue = reviveFromSerialized(serializedValue);
-            normalizedEntries.set(propertyKey, revivedValue.value);
+            normalizedEntries.set(propertyKey, revivedValue);
         }
         const keys = Array.from(normalizedEntries.keys()).sort();
         const body = keys
@@ -124,23 +116,13 @@ function _stringify(v, stack) {
 }
 function reviveFromSerialized(serialized) {
     try {
-        const value = JSON.parse(serialized);
-        if (typeof value === "string") {
-            const sentinelString = reviveStringSentinel(value);
-            if (sentinelString !== undefined) {
-                return { value, stringSentinel: sentinelString };
-            }
-        }
-        return { value };
+        return JSON.parse(serialized);
     }
     catch {
-        return { value: serialized };
+        return serialized;
     }
 }
-function toPropertyKeyString(value, fallback, stringSentinel) {
-    if (stringSentinel !== undefined) {
-        return stringSentinel;
-    }
+function toPropertyKeyString(value, fallback) {
     if (value === null)
         return "null";
     const type = typeof value;
@@ -151,10 +133,4 @@ function toPropertyKeyString(value, fallback, stringSentinel) {
         return value.toString();
     }
     return String(value);
-}
-function reviveStringSentinel(value) {
-    if (!value.startsWith(STRING_SENTINEL_PREFIX) || !value.endsWith(SENTINEL_SUFFIX)) {
-        return undefined;
-    }
-    return value.slice(STRING_SENTINEL_PREFIX.length, value.length - SENTINEL_SUFFIX.length);
 }

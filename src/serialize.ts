@@ -12,7 +12,6 @@ const UNDEFINED_SENTINEL = "__undefined__";
 const DATE_SENTINEL_PREFIX = "__date__:";
 const BIGINT_SENTINEL_PREFIX = "__bigint__:";
 const NUMBER_SENTINEL_PREFIX = "__number__:";
-const STRING_SENTINEL_PREFIX = `${SENTINEL_PREFIX}string:`;
 
 export function typeSentinel(type: string, payload = ""): string {
   return `${SENTINEL_PREFIX}${type}:${payload}${SENTINEL_SUFFIX}`;
@@ -25,15 +24,7 @@ const SENTINEL_STRING_PREFIXES = [
 ];
 
 export function escapeSentinelString(value: string): string {
-  if (value === UNDEFINED_SENTINEL) {
-    return value;
-  }
-  for (const prefix of SENTINEL_STRING_PREFIXES) {
-    if (value.startsWith(prefix)) {
-      return value;
-    }
-  }
-  return JSON.stringify(value);
+  return value;
 }
 
 export function stableStringify(v: unknown): string {

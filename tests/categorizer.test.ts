@@ -4,6 +4,30 @@ import assert from "node:assert";
 import { Cat32 } from "../src/index.js";
 import { stableStringify } from "../src/serialize.js";
 
+declare const TextDecoder: undefined | {
+  new (label?: string): { decode(input?: Uint8Array): string };
+};
+
+const utf8Decoder = typeof TextDecoder === "function" ? new TextDecoder("utf-8") : undefined;
+
+function toUtf8(chunk: string | Uint8Array): string {
+  if (typeof chunk === "string") {
+    return chunk;
+  }
+  if (utf8Decoder) {
+    return utf8Decoder.decode(chunk);
+  }
+  let result = "";
+  for (const byte of chunk) {
+    result += String.fromCharCode(byte);
+  }
+  try {
+    return decodeURIComponent(escape(result));
+  } catch {
+    return result;
+  }
+}
+
 type SpawnOptions = {
   stdio?: ("pipe" | "inherit" | "ignore")[];
   env?: Record<string, string | undefined>;
@@ -16,7 +40,7 @@ type SpawnedProcess = {
   };
   stdout: {
     setEncoding(encoding: "utf8"): void;
-    on(event: "data", listener: (chunk: string) => void): void;
+    on(event: "data", listener: (chunk: string | Uint8Array) => void): void;
   };
   on(event: "close", listener: (code: number | null, signal: string | null) => void): void;
 };
@@ -70,8 +94,7 @@ test("dist index and cli modules are importable", async () => {
     stdin.isTTY = true;
     process.exit = (() => undefined) as typeof process.exit;
     process.stdout.write = ((chunk: string | Uint8Array) => {
-      const text = typeof chunk === "string" ? chunk : Buffer.from(chunk).toString("utf8");
-      captured.push(text);
+      captured.push(toUtf8(chunk));
       return true;
     }) as typeof process.stdout.write;
 
@@ -134,8 +157,8 @@ async function runCliAssignWithSet(values: unknown[]): Promise<{ key: string; ha
 
   let stdout = "";
   child.stdout.setEncoding("utf8");
-  child.stdout.on("data", (chunk: string) => {
-    stdout += chunk;
+  child.stdout.on("data", (chunk: string | Uint8Array) => {
+    stdout += toUtf8(chunk);
   });
 
   const exitCode: number | null = await new Promise((resolve) => {
@@ -193,19 +216,21 @@ test("canonical key encodes date sentinel", () => {
   );
 });
 
-test("string sentinel matches undefined value", () => {
+test("string sentinel differs from undefined value", () => {
   const c = new Cat32();
   const sentinelAssignment = c.assign("__undefined__");
   const undefinedAssignment = c.assign(undefined);
-  assert.equal(sentinelAssignment.key, undefinedAssignment.key);
+  assert.ok(sentinelAssignment.key !== undefinedAssignment.key);
+  assert.ok(sentinelAssignment.hash !== undefinedAssignment.hash);
 });
 
-test("string sentinel matches date value", () => {
+test("string sentinel differs from date value", () => {
   const c = new Cat32();
   const iso = "2024-01-02T03:04:05.000Z";
   const sentinelAssignment = c.assign(`__date__:${iso}`);
   const dateAssignment = c.assign(new Date(iso));
-  assert.equal(sentinelAssignment.key, dateAssignment.key);
+  assert.ok(sentinelAssignment.key !== dateAssignment.key);
+  assert.ok(sentinelAssignment.hash !== dateAssignment.hash);
 });
 
 test("deterministic mapping for bigint values", () => {
@@ -299,9 +324,9 @@ test("stableStringify leaves sentinel-like strings untouched", () => {
   assert.equal(stableStringify("__undefined__"), JSON.stringify("__undefined__"));
 });
 
-test("string sentinel canonical key is JSON string", () => {
+test("string sentinel canonical key stays literal", () => {
   const assignment = new Cat32().assign("__date__:2024-01-01Z");
-  assert.equal(assignment.key, JSON.stringify("__date__:2024-01-01Z"));
+  assert.equal(assignment.key, "__date__:2024-01-01Z");
 });
 
 test("Map keys match plain object representation regardless of entry order", () => {
@@ -379,10 +404,11 @@ test("top-level bigint canonical key uses bigint prefix", () => {
   assert.ok(bigintAssignment.hash !== numberAssignment.hash);
 });
 
-test("canonical key for primitives uses stable stringify", () => {
+test("canonical key for primitive strings stays literal", () => {
   const c = new Cat32();
 
-  assert.equal(c.assign("foo").key, stableStringify("foo"));
+  assert.equal(c.assign("foo").key, "foo");
+  assert.equal(c.assign("__number__:Infinity").key, "__number__:Infinity");
   assert.equal(c.assign(1n).key, stableStringify(1n));
   assert.equal(c.assign(Number.NaN).key, stableStringify(Number.NaN));
   assert.equal(c.assign(Symbol("x")).key, stableStringify(Symbol("x")));
@@ -397,13 +423,13 @@ test("bigint sentinel string differs from bigint value", () => {
   assert.ok(bigintAssignment.hash !== stringAssignment.hash);
 });
 
-test("undefined sentinel string matches undefined value", () => {
+test("undefined sentinel string differs from undefined value", () => {
   const c = new Cat32();
   const undefinedAssignment = c.assign(undefined);
   const stringAssignment = c.assign("__undefined__");
 
-  assert.equal(undefinedAssignment.key, stringAssignment.key);
-  assert.equal(undefinedAssignment.hash, stringAssignment.hash);
+  assert.ok(undefinedAssignment.key !== stringAssignment.key);
+  assert.ok(undefinedAssignment.hash !== stringAssignment.hash);
 });
 
 test("top-level undefined serializes with sentinel string", () => {
@@ -437,7 +463,7 @@ test("top-level sparse arrays differ from empty arrays", () => {
   assert.ok(sparseAssignment.hash !== emptyAssignment.hash);
 });
 
-test("sentinel strings align with actual values at top level", () => {
+test("sentinel strings remain distinct from actual values at top level", () => {
   const c = new Cat32();
 
   const bigintValue = c.assign(1n);
@@ -447,14 +473,14 @@ test("sentinel strings align with actual values at top level", () => {
 
   const undefinedValue = c.assign(undefined);
   const undefinedSentinel = c.assign("__undefined__");
-  assert.equal(undefinedValue.key, undefinedSentinel.key);
-  assert.equal(undefinedValue.hash, undefinedSentinel.hash);
+  assert.ok(undefinedValue.key !== undefinedSentinel.key);
+  assert.ok(undefinedValue.hash !== undefinedSentinel.hash);
 
   const date = new Date("2024-01-02T03:04:05.678Z");
   const dateValue = c.assign(date);
   const dateSentinel = c.assign("__date__:" + date.toISOString());
-  assert.equal(dateValue.key, dateSentinel.key);
-  assert.equal(dateValue.hash, dateSentinel.hash);
+  assert.ok(dateValue.key !== dateSentinel.key);
+  assert.ok(dateValue.hash !== dateSentinel.hash);
 });
 
 test("sentinel string literals match nested undefined/date but not bigint", () => {
@@ -594,8 +620,8 @@ test("CLI preserves leading whitespace from stdin", async () => {
 
   let stdout = "";
   child.stdout.setEncoding("utf8");
-  child.stdout.on("data", (chunk: string) => {
-    stdout += chunk;
+  child.stdout.on("data", (chunk: string | Uint8Array) => {
+    stdout += toUtf8(chunk);
   });
 
   const exitCode: number | null = await new Promise((resolve) => {
@@ -604,9 +630,8 @@ test("CLI preserves leading whitespace from stdin", async () => {
   assert.equal(exitCode, 0);
 
   const result = JSON.parse(stdout);
-  assert.equal(result.key, stableStringify("  spaced"));
-
   const expected = new Cat32().assign("  spaced");
+  assert.equal(result.key, expected.key);
   assert.equal(result.hash, expected.hash);
 });
 
@@ -626,8 +651,8 @@ test("CLI handles empty string key from argv", async () => {
 
   let stdout = "";
   child.stdout.setEncoding("utf8");
-  child.stdout.on("data", (chunk: string) => {
-    stdout += chunk;
+  child.stdout.on("data", (chunk: string | Uint8Array) => {
+    stdout += toUtf8(chunk);
   });
 
   const exitCode: number | null = await new Promise((resolve) => {
@@ -636,9 +661,8 @@ test("CLI handles empty string key from argv", async () => {
   assert.equal(exitCode, 0);
 
   const result = JSON.parse(stdout);
-  assert.equal(result.key, stableStringify(""));
-
   const expected = new Cat32().assign("");
+  assert.equal(result.key, expected.key);
   assert.equal(result.hash, expected.hash);
 });
 
@@ -672,8 +696,8 @@ test("CLI command cat32 \"\" exits successfully", async () => {
 
   let stdout = "";
   child.stdout.setEncoding("utf8");
-  child.stdout.on("data", (chunk: string) => {
-    stdout += chunk;
+  child.stdout.on("data", (chunk: string | Uint8Array) => {
+    stdout += toUtf8(chunk);
   });
 
   const exitCode: number | null = await new Promise((resolve) => {
@@ -682,9 +706,8 @@ test("CLI command cat32 \"\" exits successfully", async () => {
   assert.equal(exitCode, 0);
 
   const result = JSON.parse(stdout);
-  assert.equal(result.key, stableStringify(""));
-
   const expected = new Cat32().assign("");
+  assert.equal(result.key, expected.key);
   assert.equal(result.hash, expected.hash);
 });
 
