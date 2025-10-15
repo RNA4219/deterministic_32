@@ -31,7 +31,7 @@ test("dist index and cli modules are importable", async () => {
         stdin.isTTY = true;
         process.exit = (() => undefined);
         process.stdout.write = ((chunk) => {
-            const text = typeof chunk === "string" ? chunk : String(chunk);
+            const text = typeof chunk === "string" ? chunk : Buffer.from(chunk).toString("utf8");
             captured.push(text);
             return true;
         });
@@ -135,6 +135,15 @@ test("string sentinel matches undefined value", () => {
     const sentinelAssignment = c.assign("__undefined__");
     const undefinedAssignment = c.assign(undefined);
     assert.equal(sentinelAssignment.key, undefinedAssignment.key);
+});
+test("functions and symbols serialize to bare strings", () => {
+    const fn = function foo() { };
+    const sym = Symbol("x");
+    assert.equal(stableStringify(fn), String(fn));
+    assert.equal(stableStringify(sym), String(sym));
+    const c = new Cat32();
+    assert.equal(c.assign(fn).key, stableStringify(fn));
+    assert.equal(c.assign(sym).key, stableStringify(sym));
 });
 test("string sentinel matches date value", () => {
     const c = new Cat32();

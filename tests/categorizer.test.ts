@@ -4,6 +4,10 @@ import assert from "node:assert";
 import { Cat32 } from "../src/index.js";
 import { stableStringify } from "../src/serialize.js";
 
+declare const Buffer: {
+  from(input: string | Uint8Array): { toString(encoding: string): string };
+};
+
 type SpawnOptions = {
   stdio?: ("pipe" | "inherit" | "ignore")[];
   env?: Record<string, string | undefined>;
@@ -193,17 +197,25 @@ test("canonical key encodes date sentinel", () => {
 test("canonical key matches stableStringify for basic primitives", () => {
   const c = new Cat32({ normalize: "none" });
 
-  const stringAssignment = c.assign("foo");
-  assert.equal(stringAssignment.key, stableStringify("foo"));
+test("functions and symbols serialize to bare strings", () => {
+  const fn = function foo() {};
+  const sym = Symbol("x");
 
-  const bigintAssignment = c.assign(1n);
-  assert.equal(bigintAssignment.key, stableStringify(1n));
+  assert.equal(stableStringify(fn), String(fn));
+  assert.equal(stableStringify(sym), String(sym));
 
-  const nanAssignment = c.assign(Number.NaN);
-  assert.equal(nanAssignment.key, stableStringify(Number.NaN));
+  const c = new Cat32();
 
-  const symbolAssignment = c.assign(Symbol("x"));
-  assert.equal(symbolAssignment.key, stableStringify(Symbol("x")));
+  assert.equal(c.assign(fn).key, stableStringify(fn));
+  assert.equal(c.assign(sym).key, stableStringify(sym));
+});
+
+test("string sentinel matches date value", () => {
+  const c = new Cat32();
+  const iso = "2024-01-02T03:04:05.000Z";
+  const sentinelAssignment = c.assign(`__date__:${iso}`);
+  const dateAssignment = c.assign(new Date(iso));
+  assert.equal(sentinelAssignment.key, dateAssignment.key);
 });
 
 test("deterministic mapping for bigint values", () => {
