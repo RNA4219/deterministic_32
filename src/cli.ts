@@ -22,7 +22,14 @@ function parseArgs(argv: string[]) {
       if (eq >= 0) {
         args[a.slice(2, eq)] = a.slice(eq + 1);
       } else {
-        args[a.slice(2)] = true;
+        const key = a.slice(2);
+        const next = argv[i + 1];
+        if (next !== undefined && next !== "--" && !next.startsWith("--")) {
+          args[key] = next;
+          i += 1;
+        } else {
+          args[key] = true;
+        }
       }
     } else if (!("_" in args)) {
       (args as any)._ = a;

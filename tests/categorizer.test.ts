@@ -407,6 +407,43 @@ test("CLI treats values after double dash as literal key", async () => {
   assert.equal(parsed.key, stableStringify("--literal-key"));
 });
 
+test("CLI accepts flag values separated by whitespace", async () => {
+  const { spawn } = (await dynamicImport("node:child_process")) as { spawn: SpawnFunction };
+
+  const child = spawn(process.argv[0], [CLI_PATH, "--salt", "foo", "bar"], {
+    stdio: ["pipe", "pipe", "pipe"],
+  });
+
+  child.stdin.end();
+
+  let stdout = "";
+  child.stdout.setEncoding("utf8");
+  child.stdout.on("data", (chunk: string) => {
+    stdout += chunk;
+  });
+
+  let stderr = "";
+  child.stderr.setEncoding("utf8");
+  child.stderr.on("data", (chunk: string) => {
+    stderr += chunk;
+  });
+
+  const exitCode: number | null = await new Promise((resolve) => {
+    child.on("close", (code: number | null) => resolve(code));
+  });
+
+  assert.equal(
+    exitCode,
+    0,
+    `cat32 failed: exit code ${exitCode}\nstdout:\n${stdout}\nstderr:\n${stderr}`,
+  );
+
+  const parsed = JSON.parse(stdout) as { hash: string; key: string };
+  const expected = new Cat32({ salt: "foo" }).assign("bar");
+  assert.equal(parsed.hash, expected.hash);
+  assert.equal(parsed.key, expected.key);
+});
+
 const CLI_SET_ASSIGN_SCRIPT = [
   "(async () => {",
   "  const cliPath = process.argv.at(-1);",
