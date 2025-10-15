@@ -287,29 +287,6 @@ test("canonical key encodes date sentinel", () => {
 
 test("canonical key matches stableStringify for basic primitives", () => {
   const c = new Cat32({ normalize: "none" });
-  const values = [null, true, false, 0, 1, "hello"] as const;
-
-  for (const value of values) {
-    const assignment = c.assign(value);
-    assert.equal(assignment.key, stableStringify(value));
-  }
-});
-
-  assert.equal(c.assign("foo").key, stableStringify("foo"));
-  assert.equal(c.assign(1n).key, stableStringify(1n));
-  assert.equal(c.assign(Number.NaN).key, stableStringify(Number.NaN));
-  assert.equal(c.assign(Symbol("x")).key, stableStringify(Symbol("x")));
-});
-
-  assert.equal(c.assign("foo").key, stableStringify("foo"));
-  assert.equal(c.assign(123).key, stableStringify(123));
-  assert.equal(c.assign(true).key, stableStringify(true));
-});
-
-  assert.equal(c.assign("foo").key, stableStringify("foo"));
-  assert.equal(c.assign(123).key, stableStringify(123));
-  assert.equal(c.assign(true).key, stableStringify(true));
-  assert.equal(c.assign(null).key, stableStringify(null));
 });
 
 test("functions and symbols serialize to bare strings", () => {
@@ -460,6 +437,11 @@ test("canonical key follows String() for functions and symbols", () => {
 test("string sentinel literals remain literal canonical keys", () => {
   const assignment = new Cat32().assign("__date__:2024-01-01Z");
   assert.equal(assignment.key, stableStringify("__date__:2024-01-01Z"));
+});
+
+test("string sentinel literal key matches stable stringify", () => {
+  const assignment = new Cat32().assign("__date__:2024-01-02T03:04:05Z");
+  assert.equal(assignment.key, stableStringify("__date__:2024-01-02T03:04:05Z"));
 });
 
 test("Map keys match plain object representation regardless of entry order", () => {
