@@ -70,7 +70,7 @@ test("dist index and cli modules are importable", async () => {
     stdin.isTTY = true;
     process.exit = (() => undefined) as typeof process.exit;
     process.stdout.write = ((chunk: string | Uint8Array) => {
-      const text = typeof chunk === "string" ? chunk : Buffer.from(chunk).toString("utf8");
+      const text = typeof chunk === "string" ? chunk : String(chunk);
       captured.push(text);
       return true;
     }) as typeof process.stdout.write;
