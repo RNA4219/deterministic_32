@@ -5,6 +5,13 @@ import { Cat32 } from "../src/index.js";
 import { stableStringify } from "../src/serialize.js";
 const dynamicImport = new Function("specifier", "return import(specifier);");
 const CLI_PATH = new URL("../src/cli.js", import.meta.url).pathname;
+test("dist entry point exports Cat32", async () => {
+    const sourceImportMetaUrl = import.meta.url.includes("/dist/tests/")
+        ? new URL("../../tests/categorizer.test.ts", import.meta.url)
+        : import.meta.url;
+    const distModule = (await import(new URL("../dist/index.js", sourceImportMetaUrl)));
+    assert.equal(typeof distModule.Cat32, "function");
+});
 const CLI_SET_ASSIGN_SCRIPT = [
     "(async () => {",
     "  const cliPath = process.argv.at(-1);",
@@ -66,6 +73,20 @@ test("canonical key encodes undefined sentinel", () => {
     const c = new Cat32();
     const assignment = c.assign({ value: undefined });
     assert.equal(assignment.key, "{\"value\":\"__undefined__\"}");
+});
+test("dist categorizer matches source sentinel encoding", async () => {
+    const sourceImportMetaUrl = import.meta.url.includes("/dist/tests/")
+        ? new URL("../../tests/categorizer.test.ts", import.meta.url)
+        : import.meta.url;
+    const [{ Cat32: SourceCat32 }, { Cat32: DistCat32 }] = await Promise.all([
+        import("../src/categorizer.js"),
+        import(new URL("../dist/src/categorizer.js", sourceImportMetaUrl)),
+    ]);
+    const source = new SourceCat32();
+    const dist = new DistCat32();
+    const sourceAssignment = source.assign({ value: undefined });
+    const distAssignment = dist.assign({ value: undefined });
+    assert.equal(distAssignment.key, sourceAssignment.key);
 });
 test("canonical key encodes date sentinel", () => {
     const c = new Cat32();
@@ -178,6 +199,13 @@ test("Map keys match plain object representation regardless of entry order", () 
     assert.equal(duplicateKeyMapAssignment.key, duplicateKeyObjectAssignment.key);
     assert.equal(duplicateKeyMapAssignment.hash, duplicateKeyObjectAssignment.hash);
 });
+test("Map string sentinel key matches object property", () => {
+    const c = new Cat32();
+    const mapAssignment = c.assign(new Map([["__undefined__", 1]]));
+    const objectAssignment = c.assign({ "__undefined__": 1 });
+    assert.equal(mapAssignment.key, objectAssignment.key);
+    assert.equal(mapAssignment.hash, objectAssignment.hash);
+});
 test("Infinity serialized distinctly from string sentinel", () => {
     const c = new Cat32({ salt: "s", namespace: "ns" });
     const infinityAssignment = c.assign({ value: Infinity });
@@ -189,7 +217,7 @@ test("top-level bigint differs from number", () => {
     const c = new Cat32();
     const bigintAssignment = c.assign(1n);
     const numberAssignment = c.assign(1);
-    assert.equal(bigintAssignment.key, "\u0000cat32:bigint:1\u0000");
+    assert.equal(bigintAssignment.key, JSON.stringify("\u0000cat32:bigint:1\u0000"));
     assert.ok(bigintAssignment.key !== numberAssignment.key);
     assert.ok(bigintAssignment.hash !== numberAssignment.hash);
 });
@@ -197,9 +225,16 @@ test("top-level bigint canonical key uses bigint prefix", () => {
     const c = new Cat32();
     const bigintAssignment = c.assign(1n);
     const numberAssignment = c.assign(1);
-    assert.equal(bigintAssignment.key, "\u0000cat32:bigint:1\u0000");
+    assert.equal(bigintAssignment.key, JSON.stringify("\u0000cat32:bigint:1\u0000"));
     assert.ok(bigintAssignment.key !== numberAssignment.key);
     assert.ok(bigintAssignment.hash !== numberAssignment.hash);
+});
+test("canonical key for primitives uses stable stringify", () => {
+    const c = new Cat32();
+    assert.equal(c.assign("foo").key, stableStringify("foo"));
+    assert.equal(c.assign(1n).key, stableStringify(1n));
+    assert.equal(c.assign(Number.NaN).key, stableStringify(Number.NaN));
+    assert.equal(c.assign(Symbol("x")).key, stableStringify(Symbol("x")));
 });
 test("bigint sentinel string differs from bigint value", () => {
     const c = new Cat32();
@@ -254,21 +289,21 @@ test("sentinel strings differ from actual values at top level", () => {
     assert.ok(dateValue.key !== dateSentinel.key);
     assert.ok(dateValue.hash !== dateSentinel.hash);
 });
-test("sentinel strings differ from actual values when nested", () => {
+test("sentinel string literals match nested undefined/date but not bigint", () => {
     const c = new Cat32();
     const bigintValue = c.assign({ value: 1n });
     const bigintSentinel = c.assign({ value: "__bigint__:1" });
     assert.ok(bigintValue.key !== bigintSentinel.key);
     assert.ok(bigintValue.hash !== bigintSentinel.hash);
     const undefinedValue = c.assign({ value: undefined });
-    const undefinedSentinel = c.assign({ value: "__undefined__" });
-    assert.ok(undefinedValue.key !== undefinedSentinel.key);
-    assert.ok(undefinedValue.hash !== undefinedSentinel.hash);
+    const undefinedLiteral = c.assign({ value: "__undefined__" });
+    assert.equal(undefinedValue.key, undefinedLiteral.key);
+    assert.equal(undefinedValue.hash, undefinedLiteral.hash);
     const date = new Date("2024-01-02T03:04:05.678Z");
     const dateValue = c.assign({ value: date });
-    const dateSentinel = c.assign({ value: "__date__:" + date.toISOString() });
-    assert.ok(dateValue.key !== dateSentinel.key);
-    assert.ok(dateValue.hash !== dateSentinel.hash);
+    const dateLiteral = c.assign({ value: "__date__:" + date.toISOString() });
+    assert.equal(dateValue.key, dateLiteral.key);
+    assert.equal(dateValue.hash, dateLiteral.hash);
 });
 test("date object property serializes with sentinel", () => {
     const c = new Cat32();
@@ -372,7 +407,7 @@ test("CLI preserves leading whitespace from stdin", async () => {
     });
     assert.equal(exitCode, 0);
     const result = JSON.parse(stdout);
-    assert.equal(result.key, "  spaced");
+    assert.equal(result.key, stableStringify("  spaced"));
     const expected = new Cat32().assign("  spaced");
     assert.equal(result.hash, expected.hash);
 });
@@ -398,7 +433,7 @@ test("CLI handles empty string key from argv", async () => {
     });
     assert.equal(exitCode, 0);
     const result = JSON.parse(stdout);
-    assert.equal(result.key, "");
+    assert.equal(result.key, stableStringify(""));
     const expected = new Cat32().assign("");
     assert.equal(result.hash, expected.hash);
 });
@@ -435,7 +470,7 @@ test("CLI command cat32 \"\" exits successfully", async () => {
     });
     assert.equal(exitCode, 0);
     const result = JSON.parse(stdout);
-    assert.equal(result.key, "");
+    assert.equal(result.key, stableStringify(""));
     const expected = new Cat32().assign("");
     assert.equal(result.hash, expected.hash);
 });

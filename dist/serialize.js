@@ -54,7 +54,7 @@ function _stringify(v, stack) {
     if (t === "undefined")
         return JSON.stringify(UNDEFINED_SENTINEL);
     if (t === "function" || t === "symbol")
-        return String(v);
+        return JSON.stringify(String(v));
     if (Array.isArray(v)) {
         if (stack.has(v))
             throw new TypeError("Cyclic object");
