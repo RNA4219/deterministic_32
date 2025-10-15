@@ -45,13 +45,13 @@ function _stringify(v: unknown, stack: Set<any>): string {
   if (t === "number") {
     const value = v as number;
     if (Number.isNaN(value) || !Number.isFinite(value)) {
-      return JSON.stringify(typeSentinel("number", String(value)));
+      return stringifySentinelLiteral(typeSentinel("number", String(value)));
     }
     return JSON.stringify(value);
   }
   if (t === "boolean") return JSON.stringify(v);
-  if (t === "bigint") return JSON.stringify(typeSentinel("bigint", (v as bigint).toString()));
-  if (t === "undefined") return JSON.stringify(UNDEFINED_SENTINEL);
+  if (t === "bigint") return stringifySentinelLiteral(typeSentinel("bigint", (v as bigint).toString()));
+  if (t === "undefined") return stringifySentinelLiteral(UNDEFINED_SENTINEL);
   if (t === "function" || t === "symbol") {
     return String(v);
   }
@@ -75,28 +75,31 @@ function _stringify(v: unknown, stack: Set<any>): string {
 
   // Date
   if (v instanceof Date) {
-    return JSON.stringify(`${DATE_SENTINEL_PREFIX}${v.toISOString()}`);
+    return stringifySentinelLiteral(`${DATE_SENTINEL_PREFIX}${v.toISOString()}`);
   }
 
   // Map
   if (v instanceof Map) {
     if (stack.has(v)) throw new TypeError("Cyclic object");
     stack.add(v);
-    const normalizedEntries = new Map<string, string>();
+    const normalizedEntries: Record<string, string> = Object.create(null);
     for (const [rawKey, rawValue] of v.entries()) {
       const serializedKey = _stringify(rawKey, stack);
       const revivedKey = reviveFromSerialized(serializedKey);
       const propertyKey = toPropertyKeyString(revivedKey, serializedKey);
       const serializedValue = _stringify(rawValue, stack);
-      normalizedEntries.set(propertyKey, serializedValue);
+      normalizedEntries[propertyKey] = serializedValue;
     }
-    const keys = Array.from(normalizedEntries.keys()).sort();
-    const body = keys
-      .map((key) => {
-        const serializedValue = normalizedEntries.get(key)!;
-        return JSON.stringify(key) + ":" + serializedValue;
-      })
-      .join(",");
+    const sortedKeys = Object.keys(normalizedEntries).sort();
+    let body = "";
+    for (let i = 0; i < sortedKeys.length; i += 1) {
+      const key = sortedKeys[i];
+      const serializedValue = normalizedEntries[key];
+      if (i > 0) body += ",";
+      body += JSON.stringify(key);
+      body += ":";
+      body += serializedValue;
+    }
     stack.delete(v);
     return "{" + body + "}";
   }

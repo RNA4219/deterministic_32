@@ -15,9 +15,7 @@ export function typeSentinel(type, payload = "") {
     return `${SENTINEL_PREFIX}${type}:${payload}${SENTINEL_SUFFIX}`;
 }
 export function escapeSentinelString(value) {
-    if (value.startsWith(SENTINEL_PREFIX) &&
-        value.endsWith(SENTINEL_SUFFIX) &&
-        !value.startsWith(STRING_SENTINEL_PREFIX)) {
+    if (value.startsWith(SENTINEL_PREFIX) && value.endsWith(SENTINEL_SUFFIX)) {
         return typeSentinel("string", value);
     }
     return value;
@@ -83,13 +81,17 @@ function _stringify(v, stack) {
             const serializedValue = _stringify(rawValue, stack);
             normalizedEntries.set(propertyKey, serializedValue);
         }
-        const keys = Array.from(normalizedEntries.keys()).sort();
-        const body = keys
-            .map((key) => {
+        const sortedKeys = Array.from(normalizedEntries.keys()).sort();
+        let body = "";
+        for (let i = 0; i < sortedKeys.length; i += 1) {
+            const key = sortedKeys[i];
             const serializedValue = normalizedEntries.get(key);
-            return JSON.stringify(key) + ":" + serializedValue;
-        })
-            .join(",");
+            if (i > 0)
+                body += ",";
+            body += JSON.stringify(key);
+            body += ":";
+            body += serializedValue;
+        }
         stack.delete(v);
         return "{" + body + "}";
     }

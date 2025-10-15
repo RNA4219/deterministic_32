@@ -482,6 +482,25 @@ test("values containing __string__ escape exactly once", () => {
   assert.equal(stableStringify(escaped), escaped);
 });
 
+test("undefined sentinel string matches literal undefined in arrays", () => {
+  const c = new Cat32();
+  const sentinelAssignment = c.assign({ list: ["__undefined__"] });
+  const literalAssignment = c.assign({ list: [undefined] });
+
+  assert.equal(sentinelAssignment.key, literalAssignment.key);
+  assert.equal(sentinelAssignment.hash, literalAssignment.hash);
+});
+
+test("date sentinel string matches Date instance in arrays", () => {
+  const c = new Cat32();
+  const iso = "2024-04-01T12:34:56.789Z";
+  const sentinelAssignment = c.assign({ list: [`__date__:${iso}`] });
+  const literalAssignment = c.assign({ list: [new Date(iso)] });
+
+  assert.equal(sentinelAssignment.key, literalAssignment.key);
+  assert.equal(sentinelAssignment.hash, literalAssignment.hash);
+});
+
 test("Map keys match plain object representation regardless of entry order", () => {
   const c = new Cat32();
   const map = new Map<string, number>([
@@ -532,6 +551,28 @@ test("Map values serialize identically to plain object values", () => {
     ]),
   );
   const objectAssignment = c.assign({ fn, sym });
+
+  assert.equal(mapAssignment.key, objectAssignment.key);
+  assert.equal(mapAssignment.hash, objectAssignment.hash);
+});
+
+test("Map function value matches plain object value", () => {
+  const c = new Cat32();
+  const fn = function foo() {};
+
+  const mapAssignment = c.assign(new Map([["fn", fn]]));
+  const objectAssignment = c.assign({ fn });
+
+  assert.equal(mapAssignment.key, objectAssignment.key);
+  assert.equal(mapAssignment.hash, objectAssignment.hash);
+});
+
+test("Map symbol value matches plain object value", () => {
+  const c = new Cat32();
+  const sym = Symbol("x");
+
+  const mapAssignment = c.assign(new Map([["sym", sym]]));
+  const objectAssignment = c.assign({ sym });
 
   assert.equal(mapAssignment.key, objectAssignment.key);
   assert.equal(mapAssignment.hash, objectAssignment.hash);
