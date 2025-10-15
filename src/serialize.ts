@@ -121,11 +121,43 @@ function _stringify(v: unknown, stack: Set<any>): string {
   const o = v as Record<string, unknown>;
   if (stack.has(o)) throw new TypeError("Cyclic object");
   stack.add(o);
-  const keys = Object.keys(o).sort();
-  const body = keys.map((k) => {
-    const normalizedKey = normalizePlainObjectKey(k);
-    return JSON.stringify(normalizedKey) + ":" + _stringify(o[k], stack);
+  const target = o as Record<PropertyKey, unknown>;
+  const enumerableSymbols = Object.getOwnPropertySymbols(o).filter((symbol) =>
+    Object.prototype.propertyIsEnumerable.call(o, symbol),
+  );
+
+  const entries: Array<{
+    sortKey: string;
+    normalizedKey: string;
+    property: PropertyKey;
+  }> = [];
+
+  for (const key of Object.keys(o)) {
+    entries.push({
+      sortKey: key,
+      normalizedKey: normalizePlainObjectKey(key),
+      property: key,
+    });
+  }
+
+  for (const symbol of enumerableSymbols) {
+    const symbolString = toPropertyKeyString(symbol, symbol.toString());
+    entries.push({
+      sortKey: symbolString,
+      normalizedKey: symbolString,
+      property: symbol,
+    });
+  }
+
+  entries.sort((a, b) => {
+    if (a.sortKey < b.sortKey) return -1;
+    if (a.sortKey > b.sortKey) return 1;
+    return 0;
   });
+
+  const body = entries.map(({ normalizedKey, property }) =>
+    JSON.stringify(normalizedKey) + ":" + _stringify(target[property], stack),
+  );
   stack.delete(o);
   return "{" + body.join(",") + "}";
 }
