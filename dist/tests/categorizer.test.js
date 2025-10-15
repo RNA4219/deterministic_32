@@ -75,10 +75,27 @@ test("Cat32 normalizes Map keys with special numeric values", () => {
     const objectNaN = cat.assign({ NaN: "v" });
     assert.equal(mapNaN.key, objectNaN.key);
     assert.equal(mapNaN.hash, objectNaN.hash);
+    const sentinelNaNKey = typeSentinel("number", "NaN");
+    const objectNaNSentinel = cat.assign(Object.fromEntries([[sentinelNaNKey, "v"]]));
+    assert.equal(mapNaN.key, objectNaNSentinel.key);
+    assert.equal(mapNaN.hash, objectNaNSentinel.hash);
     const mapInfinity = cat.assign(new Map([[Infinity, "v"]]));
     const objectInfinity = cat.assign({ Infinity: "v" });
     assert.equal(mapInfinity.key, objectInfinity.key);
     assert.equal(mapInfinity.hash, objectInfinity.hash);
+    const sentinelInfinityKey = typeSentinel("number", "Infinity");
+    const objectInfinitySentinel = cat.assign(Object.fromEntries([[sentinelInfinityKey, "v"]]));
+    assert.equal(mapInfinity.key, objectInfinitySentinel.key);
+    assert.equal(mapInfinity.hash, objectInfinitySentinel.hash);
+    const mapBigInt = cat.assign(new Map([[1n, "v"]]));
+    const bigIntObjectKey = String(1n);
+    const objectBigInt = cat.assign({ [bigIntObjectKey]: "v" });
+    assert.equal(mapBigInt.key, objectBigInt.key);
+    assert.equal(mapBigInt.hash, objectBigInt.hash);
+    const sentinelBigIntKey = typeSentinel("bigint", "1");
+    const objectBigIntSentinel = cat.assign(Object.fromEntries([[sentinelBigIntKey, "v"]]));
+    assert.equal(mapBigInt.key, objectBigIntSentinel.key);
+    assert.equal(mapBigInt.hash, objectBigIntSentinel.hash);
 });
 test("dist entry point exports Cat32", async () => {
     const sourceImportMetaUrl = import.meta.url.includes("/dist/tests/")
@@ -314,6 +331,19 @@ test("NaN serialized distinctly from null", () => {
 });
 test("stableStringify leaves sentinel-like strings untouched", () => {
     assert.equal(stableStringify("__undefined__"), JSON.stringify("__undefined__"));
+});
+test("stableStringify serializes undefined and Date sentinels", () => {
+    const iso = "2024-01-02T03:04:05.678Z";
+    assert.equal(stableStringify(undefined), JSON.stringify("__undefined__"));
+    assert.equal(stableStringify(new Date(iso)), JSON.stringify(`__date__:${iso}`));
+});
+test("Cat32 assign handles undefined and Date literals", () => {
+    const cat = new Cat32();
+    const iso = "2024-01-02T03:04:05.678Z";
+    assert.doesNotThrow(() => {
+        cat.assign(undefined);
+        cat.assign(new Date(iso));
+    });
 });
 test("stableStringify uses String() for functions and symbols", () => {
     const fn = function foo() { };

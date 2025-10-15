@@ -122,7 +122,10 @@ function _stringify(v: unknown, stack: Set<any>): string {
   if (stack.has(o)) throw new TypeError("Cyclic object");
   stack.add(o);
   const keys = Object.keys(o).sort();
-  const body = keys.map((k) => JSON.stringify(k) + ":" + _stringify(o[k], stack));
+  const body = keys.map((k) => {
+    const normalizedKey = normalizePlainObjectKey(k);
+    return JSON.stringify(normalizedKey) + ":" + _stringify(o[k], stack);
+  });
   stack.delete(o);
   return "{" + body.join(",") + "}";
 }
@@ -148,11 +151,21 @@ function stringifySentinelLiteral(value: string): string {
 }
 
 function reviveFromSerialized(serialized: string): unknown {
+  let revived: unknown;
   try {
-    return reviveSentinelValue(JSON.parse(serialized));
+    revived = reviveSentinelValue(JSON.parse(serialized));
   } catch {
-    return reviveSentinelValue(serialized);
+    revived = reviveSentinelValue(serialized);
   }
+  const numeric = reviveNumericSentinel(revived);
+  if (numeric !== undefined) {
+    return numeric;
+  }
+  const fallbackNumeric = reviveNumericSentinel(serialized);
+  if (fallbackNumeric !== undefined) {
+    return fallbackNumeric;
+  }
+  return revived;
 }
 
 function reviveSentinelValue(value: unknown): unknown {
@@ -189,8 +202,16 @@ function reviveSentinelValue(value: unknown): unknown {
 
 function toPropertyKeyString(value: unknown, fallback: string): string {
   if (value === null) return "null";
+  const numeric = reviveNumericSentinel(value);
+  if (numeric !== undefined) {
+    return String(numeric);
+  }
   const type = typeof value;
   if (type === "object" || type === "function") {
+    const fallbackNumeric = reviveNumericSentinel(fallback);
+    if (fallbackNumeric !== undefined) {
+      return String(fallbackNumeric);
+    }
     return fallback;
   }
   if (type === "symbol") {
@@ -204,4 +225,29 @@ function toPropertyKeyString(value: unknown, fallback: string): string {
     return (value as string).slice(STRING_SENTINEL_PREFIX.length, -SENTINEL_SUFFIX.length);
   }
   return String(value);
+}
+
+function reviveNumericSentinel(value: unknown): number | bigint | undefined {
+  if (typeof value === "number" || typeof value === "bigint") {
+    return value;
+  }
+  if (
+    typeof value === "string" &&
+    value.startsWith(SENTINEL_PREFIX) &&
+    value.endsWith(SENTINEL_SUFFIX)
+  ) {
+    const revived = reviveSentinelValue(value);
+    if (typeof revived === "number" || typeof revived === "bigint") {
+      return revived;
+    }
+  }
+  return undefined;
+}
+
+function normalizePlainObjectKey(key: string): string {
+  const numeric = reviveNumericSentinel(key);
+  if (numeric !== undefined) {
+    return String(numeric);
+  }
+  return key;
 }
