@@ -18,6 +18,9 @@ export function typeSentinel(type: string, payload = ""): string {
 }
 
 export function escapeSentinelString(value: string): string {
+  if (value.startsWith(SENTINEL_PREFIX) && value.endsWith(SENTINEL_SUFFIX)) {
+    return typeSentinel("string", value);
+  }
   return value;
 }
 
@@ -30,7 +33,7 @@ function _stringify(v: unknown, stack: Set<any>): string {
   if (v === null) return "null";
   const t = typeof v;
 
-  if (t === "string") return escapeSentinelString(v as string);
+  if (t === "string") return JSON.stringify(escapeSentinelString(v as string));
   if (t === "number") {
     const value = v as number;
     if (Number.isNaN(value) || !Number.isFinite(value)) {
@@ -79,13 +82,16 @@ function _stringify(v: unknown, stack: Set<any>): string {
       const serializedValue = _stringify(rawValue, stack);
       normalizedEntries.set(propertyKey, serializedValue);
     }
-    const keys = Array.from(normalizedEntries.keys()).sort();
-    const body = keys
-      .map((key) => {
-        const serializedValue = normalizedEntries.get(key)!;
-        return JSON.stringify(key) + ":" + serializedValue;
-      })
-      .join(",");
+    const sortedKeys = Array.from(normalizedEntries.keys()).sort();
+    let body = "";
+    for (let i = 0; i < sortedKeys.length; i += 1) {
+      const key = sortedKeys[i];
+      const serializedValue = normalizedEntries.get(key)!;
+      if (i > 0) body += ",";
+      body += JSON.stringify(key);
+      body += ":";
+      body += serializedValue;
+    }
     stack.delete(v);
     return "{" + body + "}";
   }

@@ -15,6 +15,9 @@ export function typeSentinel(type, payload = "") {
     return `${SENTINEL_PREFIX}${type}:${payload}${SENTINEL_SUFFIX}`;
 }
 export function escapeSentinelString(value) {
+    if (value.startsWith(SENTINEL_PREFIX) && value.endsWith(SENTINEL_SUFFIX)) {
+        return typeSentinel("string", value);
+    }
     return value;
 }
 export function stableStringify(v) {
@@ -26,7 +29,7 @@ function _stringify(v, stack) {
         return "null";
     const t = typeof v;
     if (t === "string")
-        return escapeSentinelString(v);
+        return JSON.stringify(escapeSentinelString(v));
     if (t === "number") {
         const value = v;
         if (Number.isNaN(value) || !Number.isFinite(value)) {
@@ -40,8 +43,9 @@ function _stringify(v, stack) {
         return JSON.stringify(typeSentinel("bigint", v.toString()));
     if (t === "undefined")
         return JSON.stringify(UNDEFINED_SENTINEL);
-    if (t === "function" || t === "symbol")
+    if (t === "function" || t === "symbol") {
         return String(v);
+    }
     if (Array.isArray(v)) {
         if (stack.has(v))
             throw new TypeError("Cyclic object");
@@ -77,13 +81,17 @@ function _stringify(v, stack) {
             const serializedValue = _stringify(rawValue, stack);
             normalizedEntries.set(propertyKey, serializedValue);
         }
-        const keys = Array.from(normalizedEntries.keys()).sort();
-        const body = keys
-            .map((key) => {
+        const sortedKeys = Array.from(normalizedEntries.keys()).sort();
+        let body = "";
+        for (let i = 0; i < sortedKeys.length; i += 1) {
+            const key = sortedKeys[i];
             const serializedValue = normalizedEntries.get(key);
-            return JSON.stringify(key) + ":" + serializedValue;
-        })
-            .join(",");
+            if (i > 0)
+                body += ",";
+            body += JSON.stringify(key);
+            body += ":";
+            body += serializedValue;
+        }
         stack.delete(v);
         return "{" + body + "}";
     }
