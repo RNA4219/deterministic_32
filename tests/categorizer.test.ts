@@ -52,7 +52,7 @@ const dynamicImport = new Function(
 ) as (specifier: string) => Promise<unknown>;
 
 const CLI_PATH = new URL("../src/cli.js", import.meta.url).pathname;
-const CLI_LITERAL_KEY_SCRIPT = [
+const CLI_EVAL_LITERAL_KEY_SCRIPT = [
   "const cliPath = process.argv.at(-1);",
   "process.argv = [process.argv[0], cliPath, '--', '--literal-key'];",
   "import(cliPath).catch((error) => { console.error(error); process.exit(1); });",
@@ -175,6 +175,43 @@ test("tsc succeeds without duplicate identifier errors", async () => {
   } finally {
     await rm(tempDir, { recursive: true, force: true });
   }
+});
+
+test("tsc project build succeeds", async () => {
+  const sourceImportMetaUrl = import.meta.url.includes("/dist/tests/")
+    ? new URL("../../tests/categorizer.test.ts", import.meta.url)
+    : import.meta.url;
+
+  const repoRoot = new URL("../", sourceImportMetaUrl).pathname;
+  const { spawn } = (await dynamicImport("node:child_process")) as { spawn: SpawnFunction };
+
+  const child = spawn(
+    "tsc",
+    ["-p", "tsconfig.json", "--pretty", "false"],
+    { cwd: repoRoot, stdio: ["ignore", "pipe", "pipe"] },
+  );
+
+  let stdout = "";
+  child.stdout.setEncoding("utf8");
+  child.stdout.on("data", (chunk: string) => {
+    stdout += chunk;
+  });
+
+  let stderr = "";
+  child.stderr.setEncoding("utf8");
+  child.stderr.on("data", (chunk: string) => {
+    stderr += chunk;
+  });
+
+  const exitCode: number | null = await new Promise((resolve) => {
+    child.on("close", (code: number | null) => resolve(code));
+  });
+
+  assert.equal(
+    exitCode,
+    0,
+    `tsc failed: exit code ${exitCode}\nstdout:\n${stdout}\nstderr:\n${stderr}`,
+  );
 });
 
 test("Cat32 assigns distinct keys for primitive strings and non-strings", () => {
@@ -317,7 +354,7 @@ test("dist index and cli modules are importable", async () => {
 test("CLI treats values after double dash as literal key", async () => {
   const { spawn } = (await dynamicImport("node:child_process")) as { spawn: SpawnFunction };
 
-  const child = spawn(process.argv[0], ["-e", CLI_LITERAL_KEY_SCRIPT, CLI_PATH], {
+  const child = spawn(process.argv[0], ["-e", CLI_EVAL_LITERAL_KEY_SCRIPT, CLI_PATH], {
     stdio: ["pipe", "pipe", "pipe"],
   });
 
