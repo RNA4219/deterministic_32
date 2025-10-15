@@ -186,19 +186,42 @@ test("NaN serialized distinctly from null", () => {
   assert.equal(nanAssignment.hash === nullAssignment.hash, false);
 });
 
-test("Map keys normalize to sorted object representation", () => {
+test("Map keys match plain object representation regardless of entry order", () => {
   const c = new Cat32();
   const map = new Map<string, number>([
-    ["b", 2],
-    ["a", 1],
+    ["10", 10],
+    ["2", 2],
   ]);
 
   const mapAssignment = c.assign(map);
-  const objectAssignment = c.assign({ a: 1, b: 2 });
+  const objectAssignment = c.assign({ 2: 2, 10: 10 });
 
-  assert.equal(mapAssignment.key, "{\"a\":1,\"b\":2}");
   assert.equal(mapAssignment.key, objectAssignment.key);
   assert.equal(mapAssignment.hash, objectAssignment.hash);
+
+  const reorderedMapAssignment = c.assign(
+    new Map<string, number>([
+      ["2", 2],
+      ["10", 10],
+    ]),
+  );
+  const reorderedObjectAssignment = c.assign({ 10: 10, 2: 2 });
+
+  assert.equal(reorderedMapAssignment.key, objectAssignment.key);
+  assert.equal(reorderedMapAssignment.hash, objectAssignment.hash);
+  assert.equal(reorderedObjectAssignment.key, objectAssignment.key);
+  assert.equal(reorderedObjectAssignment.hash, objectAssignment.hash);
+
+  const duplicateKeyMapAssignment = c.assign(
+    new Map<unknown, string>([
+      [0, "same"],
+      ["0", "same"],
+    ]),
+  );
+  const duplicateKeyObjectAssignment = c.assign({ 0: "same" });
+
+  assert.equal(duplicateKeyMapAssignment.key, duplicateKeyObjectAssignment.key);
+  assert.equal(duplicateKeyMapAssignment.hash, duplicateKeyObjectAssignment.hash);
 });
 
 test("Infinity serialized distinctly from string sentinel", () => {

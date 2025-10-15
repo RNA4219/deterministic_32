@@ -71,29 +71,21 @@ function _stringify(v: unknown, stack: Set<any>): string {
   if (v instanceof Map) {
     if (stack.has(v)) throw new TypeError("Cyclic object");
     stack.add(v);
-    const entries = Array.from(v.entries()).map(([k, val], idx) => {
-      const serializedKey = _stringify(k, stack);
-      let normalizedKey = serializedKey;
-      if (serializedKey.length >= 2 && serializedKey.startsWith("\"") && serializedKey.endsWith("\"")) {
-        try {
-          normalizedKey = JSON.parse(serializedKey) as string;
-        } catch {
-          normalizedKey = serializedKey;
-        }
-      }
-      return {
-        key: normalizedKey,
-        value: _stringify(val, stack),
-        order: idx,
-      };
-    });
-    entries.sort((a, b) => {
-      if (a.key < b.key) return -1;
-      if (a.key > b.key) return 1;
-      return a.order - b.order;
-    });
-    const body = entries
-      .map(({ key, value }) => JSON.stringify(key) + ":" + value)
+    const normalizedEntries = new Map<string, unknown>();
+    for (const [rawKey, rawValue] of v.entries()) {
+      const serializedKey = _stringify(rawKey, stack);
+      const revivedKey = reviveFromSerialized(serializedKey);
+      const propertyKey = toPropertyKeyString(revivedKey, serializedKey);
+      const serializedValue = _stringify(rawValue, stack);
+      const revivedValue = reviveFromSerialized(serializedValue);
+      normalizedEntries.set(propertyKey, revivedValue);
+    }
+    const keys = Array.from(normalizedEntries.keys()).sort();
+    const body = keys
+      .map((key) => {
+        const revivedValue = normalizedEntries.get(key)!;
+        return JSON.stringify(key) + ":" + JSON.stringify(revivedValue);
+      })
       .join(",");
     stack.delete(v);
     return "{" + body + "}";
@@ -123,4 +115,24 @@ function _stringify(v: unknown, stack: Set<any>): string {
   const body = keys.map((k) => JSON.stringify(k) + ":" + _stringify(o[k], stack));
   stack.delete(o);
   return "{" + body.join(",") + "}";
+}
+
+function reviveFromSerialized(serialized: string): unknown {
+  try {
+    return JSON.parse(serialized);
+  } catch {
+    return serialized;
+  }
+}
+
+function toPropertyKeyString(value: unknown, fallback: string): string {
+  if (value === null) return "null";
+  const type = typeof value;
+  if (type === "object" || type === "function") {
+    return fallback;
+  }
+  if (type === "symbol") {
+    return (value as symbol).toString();
+  }
+  return String(value);
 }
