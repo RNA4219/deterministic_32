@@ -83,10 +83,14 @@ function _stringify(v: unknown, stack: Set<any>): string {
     for (const [rawKey, rawValue] of v.entries()) {
       const serializedKey = _stringify(rawKey, stack);
       const revivedKey = reviveFromSerialized(serializedKey);
-      const propertyKey = toPropertyKeyString(revivedKey, serializedKey);
+      const propertyKey = toPropertyKeyString(
+        revivedKey.value,
+        serializedKey,
+        revivedKey.stringSentinel,
+      );
       const serializedValue = _stringify(rawValue, stack);
       const revivedValue = reviveFromSerialized(serializedValue);
-      normalizedEntries.set(propertyKey, revivedValue);
+      normalizedEntries.set(propertyKey, revivedValue.value);
     }
     const keys = Array.from(normalizedEntries.keys()).sort();
     const body = keys
@@ -122,15 +126,34 @@ function _stringify(v: unknown, stack: Set<any>): string {
   return "{" + body.join(",") + "}";
 }
 
-function reviveFromSerialized(serialized: string): unknown {
+type RevivedSerialized = {
+  value: unknown;
+  stringSentinel?: string;
+};
+
+function reviveFromSerialized(serialized: string): RevivedSerialized {
   try {
-    return JSON.parse(serialized);
+    const value = JSON.parse(serialized);
+    if (typeof value === "string") {
+      const sentinelString = reviveStringSentinel(value);
+      if (sentinelString !== undefined) {
+        return { value, stringSentinel: sentinelString };
+      }
+    }
+    return { value };
   } catch {
-    return serialized;
+    return { value: serialized };
   }
 }
 
-function toPropertyKeyString(value: unknown, fallback: string): string {
+function toPropertyKeyString(
+  value: unknown,
+  fallback: string,
+  stringSentinel?: string,
+): string {
+  if (stringSentinel !== undefined) {
+    return stringSentinel;
+  }
   if (value === null) return "null";
   const type = typeof value;
   if (type === "object" || type === "function") {
@@ -140,4 +163,14 @@ function toPropertyKeyString(value: unknown, fallback: string): string {
     return (value as symbol).toString();
   }
   return String(value);
+}
+
+function reviveStringSentinel(value: string): string | undefined {
+  if (!value.startsWith(STRING_SENTINEL_PREFIX) || !value.endsWith(SENTINEL_SUFFIX)) {
+    return undefined;
+  }
+  return value.slice(
+    STRING_SENTINEL_PREFIX.length,
+    value.length - SENTINEL_SUFFIX.length,
+  );
 }

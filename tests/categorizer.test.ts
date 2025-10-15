@@ -240,6 +240,15 @@ test("Map keys match plain object representation regardless of entry order", () 
   assert.equal(duplicateKeyMapAssignment.hash, duplicateKeyObjectAssignment.hash);
 });
 
+test("Map string sentinel key matches object property", () => {
+  const c = new Cat32();
+  const mapAssignment = c.assign(new Map([["__undefined__", 1]]));
+  const objectAssignment = c.assign({ "__undefined__": 1 });
+
+  assert.equal(mapAssignment.key, objectAssignment.key);
+  assert.equal(mapAssignment.hash, objectAssignment.hash);
+});
+
 test("Infinity serialized distinctly from string sentinel", () => {
   const c = new Cat32({ salt: "s", namespace: "ns" });
   const infinityAssignment = c.assign({ value: Infinity });
