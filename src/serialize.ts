@@ -12,17 +12,17 @@ const UNDEFINED_SENTINEL = "__undefined__";
 const DATE_SENTINEL_PREFIX = "__date__:";
 const BIGINT_SENTINEL_PREFIX = "__bigint__:";
 const NUMBER_SENTINEL_PREFIX = "__number__:";
+const STRING_LITERAL_SENTINEL_PREFIX = "__string__:";
 
 export function typeSentinel(type: string, payload = ""): string {
   return `${SENTINEL_PREFIX}${type}:${payload}${SENTINEL_SUFFIX}`;
 }
 
 export function escapeSentinelString(value: string): string {
-  if (
-    value.startsWith(SENTINEL_PREFIX) &&
-    value.endsWith(SENTINEL_SUFFIX) &&
-    !value.startsWith(STRING_SENTINEL_PREFIX)
-  ) {
+  if (isSentinelWrappedString(value) && !value.startsWith(STRING_SENTINEL_PREFIX)) {
+    return typeSentinel("string", value);
+  }
+  if (value.startsWith(STRING_LITERAL_SENTINEL_PREFIX)) {
     return typeSentinel("string", value);
   }
   return value;
@@ -37,18 +37,11 @@ function isSentinelWrappedString(value: string): boolean {
   return value.startsWith(SENTINEL_PREFIX) && value.endsWith(SENTINEL_SUFFIX);
 }
 
-function needsEscaping(value: string): boolean {
-  if (isSentinelWrappedString(value)) {
-    return false;
-  }
-  return value.startsWith(STRING_LITERAL_SENTINEL_PREFIX);
-}
-
 function _stringify(v: unknown, stack: Set<any>): string {
   if (v === null) return "null";
   const t = typeof v;
 
-  if (t === "string") return JSON.stringify(escapeSentinelString(v as string));
+  if (t === "string") return stringifyStringLiteral(v as string);
   if (t === "number") {
     const value = v as number;
     if (Number.isNaN(value) || !Number.isFinite(value)) {
@@ -129,6 +122,19 @@ function _stringify(v: unknown, stack: Set<any>): string {
   const body = keys.map((k) => JSON.stringify(k) + ":" + _stringify(o[k], stack));
   stack.delete(o);
   return "{" + body.join(",") + "}";
+}
+
+function stringifyStringLiteral(value: string): string {
+  if (value.startsWith(STRING_LITERAL_SENTINEL_PREFIX)) {
+    return typeSentinel("string", value);
+  }
+  if (isSentinelWrappedString(value)) {
+    if (value.startsWith(STRING_SENTINEL_PREFIX)) {
+      return value;
+    }
+    return JSON.stringify(typeSentinel("string", value));
+  }
+  return JSON.stringify(value);
 }
 
 function reviveFromSerialized(serialized: string): unknown {
