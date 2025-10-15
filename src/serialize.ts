@@ -12,6 +12,7 @@ const UNDEFINED_SENTINEL = "__undefined__";
 const DATE_SENTINEL_PREFIX = "__date__:";
 const BIGINT_SENTINEL_PREFIX = "__bigint__:";
 const NUMBER_SENTINEL_PREFIX = "__number__:";
+const STRING_LITERAL_SENTINEL_PREFIX = "__string__:";
 
 export function typeSentinel(type: string, payload = ""): string {
   return `${SENTINEL_PREFIX}${type}:${payload}${SENTINEL_SUFFIX}`;
@@ -44,21 +45,29 @@ function needsEscaping(value: string): boolean {
   return value.startsWith(STRING_LITERAL_SENTINEL_PREFIX);
 }
 
+function stringifyUserString(value: string): string {
+  return JSON.stringify(escapeSentinelString(value));
+}
+
+function stringifySentinelLiteral(value: string): string {
+  return JSON.stringify(value);
+}
+
 function _stringify(v: unknown, stack: Set<any>): string {
   if (v === null) return "null";
   const t = typeof v;
 
-  if (t === "string") return JSON.stringify(escapeSentinelString(v as string));
+  if (t === "string") return stringifyUserString(v as string);
   if (t === "number") {
     const value = v as number;
     if (Number.isNaN(value) || !Number.isFinite(value)) {
-      return JSON.stringify(typeSentinel("number", String(value)));
+      return stringifySentinelLiteral(typeSentinel("number", String(value)));
     }
     return JSON.stringify(value);
   }
   if (t === "boolean") return JSON.stringify(v);
-  if (t === "bigint") return JSON.stringify(typeSentinel("bigint", (v as bigint).toString()));
-  if (t === "undefined") return JSON.stringify(UNDEFINED_SENTINEL);
+  if (t === "bigint") return stringifySentinelLiteral(typeSentinel("bigint", (v as bigint).toString()));
+  if (t === "undefined") return stringifySentinelLiteral(UNDEFINED_SENTINEL);
   if (t === "function" || t === "symbol") {
     return String(v);
   }
@@ -82,7 +91,7 @@ function _stringify(v: unknown, stack: Set<any>): string {
 
   // Date
   if (v instanceof Date) {
-    return JSON.stringify(`${DATE_SENTINEL_PREFIX}${v.toISOString()}`);
+    return stringifySentinelLiteral(`${DATE_SENTINEL_PREFIX}${v.toISOString()}`);
   }
 
   // Map
