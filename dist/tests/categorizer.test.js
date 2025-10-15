@@ -274,6 +274,22 @@ test("override by label", () => {
     assert.equal(a.index, 31);
     assert.equal(a.label, "L31");
 });
+test("README override example uses canonical keys", () => {
+    const c = new Cat32({
+        salt: "projectX",
+        namespace: "v1",
+        overrides: {
+            [stableStringify("vip-user")]: 0,
+            [stableStringify({ audited: true })]: "A",
+        },
+    });
+    const vip = c.assign("vip-user");
+    assert.equal(vip.index, 0);
+    assert.equal(vip.key, stableStringify("vip-user"));
+    const audited = c.assign({ audited: true });
+    assert.equal(audited.label, "A");
+    assert.equal(audited.key, stableStringify({ audited: true }));
+});
 test("override rejects NaN with explicit error", () => {
     assert.throws(() => new Cat32({ overrides: { foo: Number.NaN } }), (error) => error instanceof Error && error.message === "index out of range: NaN");
 });

@@ -413,6 +413,25 @@ test("override by label", () => {
   assert.equal(a.label, "L31");
 });
 
+test("README override example uses canonical keys", () => {
+  const c = new Cat32({
+    salt: "projectX",
+    namespace: "v1",
+    overrides: {
+      [stableStringify("vip-user")]: 0,
+      [stableStringify({ audited: true })]: "A",
+    },
+  });
+
+  const vip = c.assign("vip-user");
+  assert.equal(vip.index, 0);
+  assert.equal(vip.key, stableStringify("vip-user"));
+
+  const audited = c.assign({ audited: true });
+  assert.equal(audited.label, "A");
+  assert.equal(audited.key, stableStringify({ audited: true }));
+});
+
 test("override rejects NaN with explicit error", () => {
   assert.throws(
     () => new Cat32({ overrides: { foo: Number.NaN as any } }),
@@ -505,10 +524,8 @@ test("Cat32 assign handles undefined and Date literals", () => {
   const cat = new Cat32();
   const iso = "2024-01-02T03:04:05.678Z";
 
-  assert.doesNotThrow(() => {
-    cat.assign(undefined);
-    cat.assign(new Date(iso));
-  });
+  cat.assign(undefined);
+  cat.assign(new Date(iso));
 });
 
 test("stableStringify uses String() for functions and symbols", () => {
@@ -927,6 +944,38 @@ test("CLI preserves leading whitespace from stdin", async () => {
   assert.equal(result.key, stableStringify("  spaced"));
 
   const expected = new Cat32().assign("  spaced");
+  assert.equal(result.hash, expected.hash);
+});
+
+test("CLI reads stdin even when TTY without argv key", async () => {
+  const { spawn } = (await dynamicImport("node:child_process")) as { spawn: SpawnFunction };
+  const script = [
+    "const path = process.argv.at(-1);",
+    "process.stdin.isTTY = true;",
+    "process.argv = [process.argv[0], path];",
+    "import(path).catch((err) => { console.error(err); process.exit(1); });",
+  ].join(" ");
+  const child = spawn(process.argv[0], ["-e", script, CLI_PATH], {
+    stdio: ["pipe", "pipe", "inherit"],
+  });
+
+  child.stdin.write("tty-stdin\n");
+  child.stdin.end();
+
+  let stdout = "";
+  child.stdout.setEncoding("utf8");
+  child.stdout.on("data", (chunk: string) => {
+    stdout += chunk;
+  });
+
+  const exitCode: number | null = await new Promise((resolve) => {
+    child.on("close", (code: number | null) => resolve(code));
+  });
+  assert.equal(exitCode, 0);
+
+  const result = JSON.parse(stdout);
+  const expected = new Cat32().assign("tty-stdin");
+  assert.equal(result.key, expected.key);
   assert.equal(result.hash, expected.hash);
 });
 

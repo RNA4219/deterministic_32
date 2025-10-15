@@ -12,18 +12,22 @@ npm i deterministic-32
 ## Usage (Library)
 ```ts
 import { Cat32 } from "deterministic-32";
+import { stableStringify } from "deterministic-32/dist/serialize.js";
 
 const cat = new Cat32({
   salt: "projectX",
   namespace: "v1",
-  // labels: Array(32).fill(0).map((_,i)=>`B${i}`),  // optional
-  // overrides: { "vip-user": 0, "audited": "A" },   // pin by index or label
+  // labels: Array(32).fill(0).map((_, i) => `B${i}`),  // optional
+  overrides: {
+    [stableStringify("vip-user")]: 0,                // pin by index
+    [stableStringify({ audited: true })]: "A",       // or by label
+  },
 });
 
 cat.index("ユーザーID:123");     // -> 0..31
 cat.labelOf({ id: 1 });          // -> "A".."Z","0".."5"
 cat.assign("hello");
-// -> { index: 5, label: "F", hash: "a1b2c3d4", key: "<canonicalized>" }
+// -> { index: 5, label: "F", hash: "a1b2c3d4", key: stableStringify("hello") }
 ```
 
 ## CLI
