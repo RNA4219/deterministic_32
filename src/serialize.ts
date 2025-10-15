@@ -18,7 +18,11 @@ export function typeSentinel(type: string, payload = ""): string {
 }
 
 export function escapeSentinelString(value: string): string {
-  return JSON.stringify(value);
+  const encoded = JSON.stringify(value);
+  if (value.startsWith(SENTINEL_PREFIX) && value.endsWith(SENTINEL_SUFFIX)) {
+    return JSON.stringify(`${STRING_SENTINEL_PREFIX}${value}`);
+  }
+  return encoded;
 }
 
 export function stableStringify(v: unknown): string {
