@@ -18,6 +18,7 @@ jobs:
         with:
           name: test-logs
           path: logs
+          run-id: ${{ github.event.workflow_run.id }}
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
