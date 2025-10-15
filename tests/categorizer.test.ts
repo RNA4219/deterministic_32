@@ -46,6 +46,50 @@ test("dist entry point exports Cat32", async () => {
   assert.equal(typeof distModule.Cat32, "function");
 });
 
+test("dist index and cli modules are importable", async () => {
+  const sourceImportMetaUrl = import.meta.url.includes("/dist/tests/")
+    ? new URL("../../tests/categorizer.test.ts", import.meta.url)
+    : import.meta.url;
+
+  await import(
+    new URL("../dist/index.js", sourceImportMetaUrl) as unknown as string,
+  ).catch((error) => {
+    throw new Error(`Failed to import dist/index.js: ${String(error)}`);
+  });
+
+  const originalArgv = process.argv.slice();
+  const originalExit = process.exit;
+  const originalStdoutWrite = process.stdout.write;
+  const stdin = process.stdin as unknown as { isTTY?: boolean };
+  const originalIsTTY = stdin.isTTY;
+  const captured: string[] = [];
+
+  try {
+    const distCliPath = new URL("../dist/cli.js", sourceImportMetaUrl).pathname;
+    process.argv = [originalArgv[0], distCliPath, "__cat32_test_key__"];
+    stdin.isTTY = true;
+    process.exit = (() => undefined) as typeof process.exit;
+    process.stdout.write = ((chunk: string | Uint8Array) => {
+      const text = typeof chunk === "string" ? chunk : Buffer.from(chunk).toString("utf8");
+      captured.push(text);
+      return true;
+    }) as typeof process.stdout.write;
+
+    await import(
+      new URL("../dist/cli.js", sourceImportMetaUrl) as unknown as string,
+    );
+  } catch (error) {
+    throw new Error(`Failed to import dist/cli.js: ${String(error)}`);
+  } finally {
+    process.argv = originalArgv;
+    stdin.isTTY = originalIsTTY;
+    process.exit = originalExit;
+    process.stdout.write = originalStdoutWrite;
+  }
+
+  assert.ok(captured.some((chunk) => chunk.includes("index")));
+});
+
 const CLI_SET_ASSIGN_SCRIPT = [
   "(async () => {",
   "  const cliPath = process.argv.at(-1);",
