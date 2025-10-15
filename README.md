@@ -13,20 +13,15 @@ npm i deterministic-32
 ```ts
 import { Cat32, stableStringify } from "deterministic-32";
 
-const base = new Cat32({
-  salt: "projectX",
-  namespace: "v1",
-  // labels: Array(32).fill(0).map((_, i) => `B${i}`),  // optional
-});
-
 const overrides = {
   [stableStringify("vip-user")]: 0,              // canonical key via stable stringify
-  [base.assign({ id: "audited" }).key]: "A",    // canonical key via assign().key
+  [stableStringify({ id: "audited" })]: "A",    // canonical key via stable stringify
 };
 
 const cat = new Cat32({
   salt: "projectX",
   namespace: "v1",
+  // labels: Array(32).fill(0).map((_, i) => `B${i}`),  // optional
   overrides,
 });
 
