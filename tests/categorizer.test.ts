@@ -193,19 +193,20 @@ test("canonical key encodes date sentinel", () => {
   );
 });
 
-test("string sentinel matches undefined value", () => {
-  const c = new Cat32();
-  const sentinelAssignment = c.assign("__undefined__");
-  const undefinedAssignment = c.assign(undefined);
-  assert.equal(sentinelAssignment.key, undefinedAssignment.key);
-});
+test("canonical key matches stableStringify for basic primitives", () => {
+  const c = new Cat32({ normalize: "none" });
 
-test("string sentinel matches date value", () => {
-  const c = new Cat32();
-  const iso = "2024-01-02T03:04:05.000Z";
-  const sentinelAssignment = c.assign(`__date__:${iso}`);
-  const dateAssignment = c.assign(new Date(iso));
-  assert.equal(sentinelAssignment.key, dateAssignment.key);
+  const stringAssignment = c.assign("foo");
+  assert.equal(stringAssignment.key, stableStringify("foo"));
+
+  const bigintAssignment = c.assign(1n);
+  assert.equal(bigintAssignment.key, stableStringify(1n));
+
+  const nanAssignment = c.assign(Number.NaN);
+  assert.equal(nanAssignment.key, stableStringify(Number.NaN));
+
+  const symbolAssignment = c.assign(Symbol("x"));
+  assert.equal(symbolAssignment.key, stableStringify(Symbol("x")));
 });
 
 test("deterministic mapping for bigint values", () => {
@@ -299,7 +300,24 @@ test("stableStringify leaves sentinel-like strings untouched", () => {
   assert.equal(stableStringify("__undefined__"), JSON.stringify("__undefined__"));
 });
 
-test("string sentinel canonical key is JSON string", () => {
+test("stableStringify uses String() for functions and symbols", () => {
+  const fn = function foo() {};
+  const sym = Symbol("x");
+
+  assert.equal(stableStringify(fn), String(fn));
+  assert.equal(stableStringify(sym), String(sym));
+});
+
+test("canonical key follows String() for functions and symbols", () => {
+  const c = new Cat32();
+  const fnAssignment = c.assign(function foo() {});
+  const symAssignment = c.assign(Symbol("x"));
+
+  assert.equal(fnAssignment.key, stableStringify(function foo() {}));
+  assert.equal(symAssignment.key, stableStringify(Symbol("x")));
+});
+
+test("string sentinel literals remain literal canonical keys", () => {
   const assignment = new Cat32().assign("__date__:2024-01-01Z");
   assert.equal(assignment.key, JSON.stringify("__date__:2024-01-01Z"));
 });

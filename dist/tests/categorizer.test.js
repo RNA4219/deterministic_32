@@ -208,8 +208,11 @@ test("NaN serialized distinctly from null", () => {
     assert.equal(nanAssignment.key === nullAssignment.key, false);
     assert.equal(nanAssignment.hash === nullAssignment.hash, false);
 });
-test("stableStringify leaves sentinel-like strings untouched", () => {
-    assert.equal(stableStringify("__undefined__"), JSON.stringify("__undefined__"));
+test("stableStringify uses String() for functions and symbols", () => {
+    const fn = function foo() { };
+    const sym = Symbol("x");
+    assert.equal(stableStringify(fn), String(fn));
+    assert.equal(stableStringify(sym), String(sym));
 });
 test("string sentinel canonical key is JSON string", () => {
     const assignment = new Cat32().assign("__date__:2024-01-01Z");
