@@ -4,6 +4,19 @@ function parseArgs(argv) {
     const args = {};
     for (let i = 2; i < argv.length; i++) {
         const a = argv[i];
+        if (a === "--") {
+            const rest = argv.slice(i + 1);
+            if (rest.length > 0) {
+                const remainder = rest.join(" ");
+                if (Object.prototype.hasOwnProperty.call(args, "_")) {
+                    args._ = `${args._} ${remainder}`;
+                }
+                else {
+                    args._ = remainder;
+                }
+            }
+            break;
+        }
         if (a.startsWith("--")) {
             const eq = a.indexOf("=");
             if (eq >= 0) {
