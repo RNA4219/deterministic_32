@@ -6,20 +6,10 @@ import { escapeSentinelString, stableStringify, typeSentinel } from "../src/seri
 const dynamicImport = new Function("specifier", "return import(specifier);");
 const CLI_PATH = new URL("../src/cli.js", import.meta.url).pathname;
 const CLI_LITERAL_KEY_SCRIPT = [
-    "(async () => {",
-    "  const cliPath = process.argv.at(-1);",
-    "  const { pathToFileURL } = await import('node:url');",
-    "  const url = pathToFileURL(cliPath);",
-    "  process.stdin.isTTY = true;",
-    "  process.argv = [process.argv[0], cliPath, '--', '--literal-key'];",
-    "  try {",
-    "    await import(url.href);",
-    "  } catch (error) {",
-    "    console.error(error);",
-    "    process.exit(1);",
-    "  }",
-    "})();",
-].join("\n");
+    "const cliPath = process.argv.at(-1);",
+    "process.argv = [process.argv[0], cliPath, '--', '--literal-key'];",
+    "import(cliPath).catch((error) => { console.error(error); process.exit(1); });",
+].join(" ");
 test("dist build re-exports stableStringify", async () => {
     const sourceImportMetaUrl = import.meta.url.includes("/dist/tests/")
         ? new URL("../../tests/categorizer.test.ts", import.meta.url)
@@ -35,6 +25,15 @@ test("direct dist import exposes stableStringify", async () => {
     }
     const distModule = (await import("../dist/index.js"));
     assert.equal(typeof distModule.stableStringify, "function");
+});
+test("dist stableStringify wraps string literal sentinels", async () => {
+    const sourceImportMetaUrl = import.meta.url.includes("/dist/tests/")
+        ? new URL("../../tests/categorizer.test.ts", import.meta.url)
+        : import.meta.url;
+    const distSerializeModule = (await import(new URL("../dist/serialize.js", sourceImportMetaUrl).href));
+    assert.equal(typeof distSerializeModule.stableStringify, "function");
+    const distStableStringify = distSerializeModule.stableStringify;
+    assert.equal(distStableStringify("__string__:payload"), JSON.stringify(typeSentinel("string", "__string__:payload")));
 });
 test("tsc succeeds without duplicate identifier errors", async () => {
     const sourceImportMetaUrl = import.meta.url.includes("/dist/tests/")
@@ -127,6 +126,17 @@ test("Cat32 normalizes Map keys with special numeric values", () => {
     const objectBigIntSentinel = cat.assign(Object.fromEntries([[sentinelBigIntKey, "v"]]));
     assert.equal(mapBigInt.key, objectBigIntSentinel.key);
     assert.equal(mapBigInt.hash, objectBigIntSentinel.hash);
+});
+test("Cat32 treats enumerable Symbol keys consistently between objects and maps", () => {
+    const cat = new Cat32();
+    const symbolKey = Symbol("enumerable");
+    const emptyObject = cat.assign({});
+    const objectWithSymbol = cat.assign({ [symbolKey]: "value" });
+    assert.ok(objectWithSymbol.key !== emptyObject.key);
+    assert.ok(objectWithSymbol.hash !== emptyObject.hash);
+    const mapWithSymbol = cat.assign(new Map([[symbolKey, "value"]]));
+    assert.equal(objectWithSymbol.key, mapWithSymbol.key);
+    assert.equal(objectWithSymbol.hash, mapWithSymbol.hash);
 });
 test("dist entry point exports Cat32", async () => {
     const sourceImportMetaUrl = import.meta.url.includes("/dist/tests/")
@@ -328,21 +338,23 @@ test("override by label", () => {
     assert.equal(a.index, 31);
     assert.equal(a.label, "L31");
 });
-test("README override example uses canonical keys", () => {
-    const c = new Cat32({
+test("README library example overrides use canonical keys", () => {
+    const overrides = {
+        [stableStringify("vip-user")]: 0,
+        [stableStringify({ id: "audited" })]: "A",
+    };
+    const cat = new Cat32({
         salt: "projectX",
         namespace: "v1",
-        overrides: {
-            [stableStringify("vip-user")]: 0,
-            [stableStringify({ audited: true })]: "A",
-        },
+        overrides,
     });
-    const vip = c.assign("vip-user");
-    assert.equal(vip.index, 0);
-    assert.equal(vip.key, stableStringify("vip-user"));
-    const audited = c.assign({ audited: true });
+    assert.equal(cat.index("vip-user"), 0);
+    const audited = cat.assign({ id: "audited" });
     assert.equal(audited.label, "A");
-    assert.equal(audited.key, stableStringify({ audited: true }));
+    assert.equal(cat.labelOf({ id: "audited" }), "A");
+    const assignment = cat.assign("hello");
+    assert.equal(typeof assignment.hash, "string");
+    assert.equal(assignment.key, stableStringify("hello"));
 });
 test("override rejects NaN with explicit error", () => {
     assert.throws(() => new Cat32({ overrides: { foo: Number.NaN } }), (error) => error instanceof Error && error.message === "index out of range: NaN");
@@ -407,13 +419,20 @@ test("stableStringify serializes undefined and Date sentinels", () => {
     assert.equal(stableStringify(undefined), JSON.stringify("__undefined__"));
     assert.equal(stableStringify(new Date(iso)), JSON.stringify(`__date__:${iso}`));
 });
+test("stableStringify serializes string literal sentinels as JSON strings", () => {
+    const literal = "__string__:payload";
+    const serialized = stableStringify(literal);
+    const expected = JSON.stringify(typeSentinel("string", literal));
+    assert.equal(serialized, expected);
+    const cat = new Cat32();
+    const assignment = cat.assign(literal);
+    assert.equal(assignment.key, expected);
+});
 test("Cat32 assign handles undefined and Date literals", () => {
     const cat = new Cat32();
     const iso = "2024-01-02T03:04:05.678Z";
-    assert.doesNotThrow(() => {
-        cat.assign(undefined);
-        cat.assign(new Date(iso));
-    });
+    cat.assign(undefined);
+    cat.assign(new Date(iso));
 });
 test("stableStringify uses String() for functions and symbols", () => {
     const fn = function foo() { };
@@ -436,15 +455,18 @@ test("escapeSentinelString wraps string literal sentinel prefix", () => {
     const sentinelLike = "__string__:wrapped";
     assert.equal(escapeSentinelString(sentinelLike), typeSentinel("string", sentinelLike));
 });
-test("stableStringify preserves explicit string sentinels", () => {
+test("stableStringify serializes explicit string sentinels", () => {
     const sentinel = typeSentinel("string", "already-wrapped");
-    assert.equal(stableStringify(sentinel), sentinel);
+    const expected = JSON.stringify(sentinel);
+    assert.equal(stableStringify(sentinel), expected);
 });
 test("values containing __string__ escape exactly once", () => {
     const literal = "__string__:payload";
-    const escaped = stableStringify(literal);
-    assert.equal(escaped, typeSentinel("string", literal));
-    assert.equal(stableStringify(escaped), escaped);
+    const sentinel = typeSentinel("string", literal);
+    const serialized = stableStringify(literal);
+    const expected = JSON.stringify(sentinel);
+    assert.equal(serialized, expected);
+    assert.equal(stableStringify(sentinel), expected);
 });
 test("undefined sentinel string matches literal undefined in arrays", () => {
     const c = new Cat32();
@@ -740,6 +762,62 @@ test("CLI preserves leading whitespace from stdin", async () => {
     const result = JSON.parse(stdout);
     assert.equal(result.key, stableStringify("  spaced"));
     const expected = new Cat32().assign("  spaced");
+    assert.equal(result.hash, expected.hash);
+});
+test("CLI spawn reads piped stdin when TTY without argv key", async () => {
+    const { spawn } = (await dynamicImport("node:child_process"));
+    const distCliPath = new URL("../cli.js", import.meta.url).pathname;
+    const script = [
+        "const path = process.argv.at(-1);",
+        "Object.defineProperty(process.stdin, 'isTTY', { configurable: true, writable: true, value: true });",
+        "process.stdin.isTTY = true;",
+        "process.argv = [process.argv[0], path];",
+        "import(path).catch((err) => { console.error(err); process.exit(1); });",
+    ].join(" ");
+    const child = spawn(process.argv[0], ["-e", script, distCliPath], {
+        stdio: ["pipe", "pipe", "inherit"],
+    });
+    child.stdin.write("tty-spawn\n");
+    child.stdin.end();
+    let stdout = "";
+    child.stdout.setEncoding("utf8");
+    child.stdout.on("data", (chunk) => {
+        stdout += chunk;
+    });
+    const exitCode = await new Promise((resolve) => {
+        child.on("close", (code) => resolve(code));
+    });
+    assert.equal(exitCode, 0);
+    const result = JSON.parse(stdout);
+    const expected = new Cat32().assign("tty-spawn");
+    assert.equal(result.key, expected.key);
+    assert.equal(result.hash, expected.hash);
+});
+test("CLI reads stdin even when TTY without argv key", async () => {
+    const { spawn } = (await dynamicImport("node:child_process"));
+    const script = [
+        "const path = process.argv.at(-1);",
+        "process.stdin.isTTY = true;",
+        "process.argv = [process.argv[0], path];",
+        "import(path).catch((err) => { console.error(err); process.exit(1); });",
+    ].join(" ");
+    const child = spawn(process.argv[0], ["-e", script, CLI_PATH], {
+        stdio: ["pipe", "pipe", "inherit"],
+    });
+    child.stdin.write("tty-stdin\n");
+    child.stdin.end();
+    let stdout = "";
+    child.stdout.setEncoding("utf8");
+    child.stdout.on("data", (chunk) => {
+        stdout += chunk;
+    });
+    const exitCode = await new Promise((resolve) => {
+        child.on("close", (code) => resolve(code));
+    });
+    assert.equal(exitCode, 0);
+    const result = JSON.parse(stdout);
+    const expected = new Cat32().assign("tty-stdin");
+    assert.equal(result.key, expected.key);
     assert.equal(result.hash, expected.hash);
 });
 test("CLI handles empty string key from argv", async () => {
