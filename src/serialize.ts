@@ -7,6 +7,7 @@
 const SENTINEL_PREFIX = "\u0000cat32:";
 const SENTINEL_SUFFIX = "\u0000";
 const HOLE_SENTINEL = JSON.stringify(typeSentinel("hole"));
+const STRING_SENTINEL_PREFIX = `${SENTINEL_PREFIX}string:`;
 const UNDEFINED_SENTINEL = "__undefined__";
 const DATE_SENTINEL_PREFIX = "__date__:";
 const BIGINT_SENTINEL_PREFIX = "__bigint__:";
@@ -70,20 +71,19 @@ function _stringify(v: unknown, stack: Set<any>): string {
   if (v instanceof Map) {
     if (stack.has(v)) throw new TypeError("Cyclic object");
     stack.add(v);
-    const normalizedEntries = new Map<string, unknown>();
+    const normalizedEntries = new Map<string, string>();
     for (const [rawKey, rawValue] of v.entries()) {
       const serializedKey = _stringify(rawKey, stack);
       const revivedKey = reviveFromSerialized(serializedKey);
       const propertyKey = toPropertyKeyString(revivedKey, serializedKey);
       const serializedValue = _stringify(rawValue, stack);
-      const revivedValue = reviveFromSerialized(serializedValue);
-      normalizedEntries.set(propertyKey, revivedValue);
+      normalizedEntries.set(propertyKey, serializedValue);
     }
     const keys = Array.from(normalizedEntries.keys()).sort();
     const body = keys
       .map((key) => {
-        const revivedValue = normalizedEntries.get(key)!;
-        return JSON.stringify(key) + ":" + JSON.stringify(revivedValue);
+        const serializedValue = normalizedEntries.get(key)!;
+        return JSON.stringify(key) + ":" + serializedValue;
       })
       .join(",");
     stack.delete(v);
