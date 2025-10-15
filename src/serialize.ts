@@ -8,6 +8,7 @@ const SENTINEL_PREFIX = "\u0000cat32:";
 const SENTINEL_SUFFIX = "\u0000";
 const HOLE_SENTINEL = JSON.stringify(typeSentinel("hole"));
 const STRING_SENTINEL_PREFIX = `${SENTINEL_PREFIX}string:`;
+const STRING_LITERAL_SENTINEL_PREFIX = "__string__:";
 const UNDEFINED_SENTINEL = "__undefined__";
 const DATE_SENTINEL_PREFIX = "__date__:";
 const BIGINT_SENTINEL_PREFIX = "__bigint__:";
@@ -18,12 +19,29 @@ export function typeSentinel(type: string, payload = ""): string {
 }
 
 export function escapeSentinelString(value: string): string {
-  return value;
+  if (isSentinelWrappedString(value)) {
+    return value;
+  }
+  if (!needsEscaping(value)) {
+    return JSON.stringify(value);
+  }
+  return typeSentinel("string", value);
 }
 
 export function stableStringify(v: unknown): string {
   const stack = new Set<any>();
   return _stringify(v, stack);
+}
+
+function isSentinelWrappedString(value: string): boolean {
+  return value.startsWith(SENTINEL_PREFIX) && value.endsWith(SENTINEL_SUFFIX);
+}
+
+function needsEscaping(value: string): boolean {
+  if (isSentinelWrappedString(value)) {
+    return false;
+  }
+  return value.startsWith(STRING_LITERAL_SENTINEL_PREFIX);
 }
 
 function _stringify(v: unknown, stack: Set<any>): string {
