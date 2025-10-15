@@ -58,17 +58,19 @@ function readStdin(): Promise<string> {
   });
 }
 
+const SPEC_VIOLATION_MESSAGE_FRAGMENTS = [
+  "cyclic object",
+  "override label",
+  "index out of range",
+] as const;
+
 function isSpecificationViolation(error: unknown): boolean {
   if (error instanceof RangeError) {
     return true;
   }
   if (error instanceof Error) {
     const message = String(error.message ?? "").toLowerCase();
-    if (
-      message.includes("cyclic object") ||
-      message.includes("override label") ||
-      message.includes("index out of range")
-    ) {
+    if (SPEC_VIOLATION_MESSAGE_FRAGMENTS.some((fragment) => message.includes(fragment))) {
       return true;
     }
   }
