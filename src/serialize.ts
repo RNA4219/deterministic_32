@@ -33,6 +33,17 @@ export function stableStringify(v: unknown): string {
   return _stringify(v, stack);
 }
 
+function isSentinelWrappedString(value: string): boolean {
+  return value.startsWith(SENTINEL_PREFIX) && value.endsWith(SENTINEL_SUFFIX);
+}
+
+function needsEscaping(value: string): boolean {
+  if (isSentinelWrappedString(value)) {
+    return false;
+  }
+  return value.startsWith(STRING_LITERAL_SENTINEL_PREFIX);
+}
+
 function _stringify(v: unknown, stack: Set<any>): string {
   if (v === null) return "null";
   const t = typeof v;
