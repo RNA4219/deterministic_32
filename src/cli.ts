@@ -32,7 +32,8 @@ async function main() {
 
   const cat = new Cat32({ salt, namespace, normalize: norm as any });
 
-  const input = key ?? (await readStdin());
+  const shouldReadFromStdin = key === undefined;
+  const input = shouldReadFromStdin ? await readStdin() : key;
   const res = cat.assign(input);
   process.stdout.write(JSON.stringify(res) + "\n");
 }
