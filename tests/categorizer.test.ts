@@ -196,6 +196,13 @@ test("canonical key encodes date sentinel", () => {
 
 test("canonical key matches stableStringify for basic primitives", () => {
   const c = new Cat32({ normalize: "none" });
+  const values = [null, true, false, 0, 1, "hello"] as const;
+
+  for (const value of values) {
+    const assignment = c.assign(value);
+    assert.equal(assignment.key, stableStringify(value));
+  }
+});
 
 test("functions and symbols serialize to bare strings", () => {
   const fn = function foo() {};
@@ -206,8 +213,8 @@ test("functions and symbols serialize to bare strings", () => {
 
   const c = new Cat32();
 
-  assert.equal(c.assign(fn).key, stableStringify(fn));
-  assert.equal(c.assign(sym).key, stableStringify(sym));
+  assert.equal(c.assign(fn).key, String(fn));
+  assert.equal(c.assign(sym).key, String(sym));
 });
 
 test("string sentinel matches date value", () => {
@@ -319,11 +326,11 @@ test("stableStringify uses String() for functions and symbols", () => {
 
 test("canonical key follows String() for functions and symbols", () => {
   const c = new Cat32();
-  const fnAssignment = c.assign(function foo() {});
-  const symAssignment = c.assign(Symbol("x"));
+  const fn = function foo() {};
+  const sym = Symbol("x");
 
-  assert.equal(fnAssignment.key, stableStringify(function foo() {}));
-  assert.equal(symAssignment.key, stableStringify(Symbol("x")));
+  assert.equal(c.assign(fn).key, String(fn));
+  assert.equal(c.assign(sym).key, String(sym));
 });
 
 test("string sentinel literals remain literal canonical keys", () => {
