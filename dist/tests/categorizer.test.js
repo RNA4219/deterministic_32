@@ -147,6 +147,29 @@ test("dist index and cli modules are importable", async () => {
     }
     assert.ok(captured.some((chunk) => chunk.includes("index")));
 });
+test("CLI treats values after double dash as literal key", async () => {
+    const { spawn } = (await dynamicImport("node:child_process"));
+    const child = spawn(process.argv[0], ["-e", CLI_LITERAL_KEY_SCRIPT, CLI_PATH], {
+        stdio: ["pipe", "pipe", "pipe"],
+    });
+    child.stdin.end();
+    let stdout = "";
+    child.stdout.setEncoding("utf8");
+    child.stdout.on("data", (chunk) => {
+        stdout += chunk;
+    });
+    let stderr = "";
+    child.stderr.setEncoding("utf8");
+    child.stderr.on("data", (chunk) => {
+        stderr += chunk;
+    });
+    const exitCode = await new Promise((resolve) => {
+        child.on("close", (code) => resolve(code));
+    });
+    assert.equal(exitCode, 0, `cat32 failed: exit code ${exitCode}\nstdout:\n${stdout}\nstderr:\n${stderr}`);
+    const parsed = JSON.parse(stdout);
+    assert.equal(parsed.key, stableStringify("--literal-key"));
+});
 const CLI_SET_ASSIGN_SCRIPT = [
     "(async () => {",
     "  const cliPath = process.argv.at(-1);",

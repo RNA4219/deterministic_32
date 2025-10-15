@@ -260,6 +260,41 @@ test("dist index and cli modules are importable", async () => {
   assert.ok(captured.some((chunk) => chunk.includes("index")));
 });
 
+test("CLI treats values after double dash as literal key", async () => {
+  const { spawn } = (await dynamicImport("node:child_process")) as { spawn: SpawnFunction };
+
+  const child = spawn(process.argv[0], ["-e", CLI_LITERAL_KEY_SCRIPT, CLI_PATH], {
+    stdio: ["pipe", "pipe", "pipe"],
+  });
+
+  child.stdin.end();
+
+  let stdout = "";
+  child.stdout.setEncoding("utf8");
+  child.stdout.on("data", (chunk: string) => {
+    stdout += chunk;
+  });
+
+  let stderr = "";
+  child.stderr.setEncoding("utf8");
+  child.stderr.on("data", (chunk: string) => {
+    stderr += chunk;
+  });
+
+  const exitCode: number | null = await new Promise((resolve) => {
+    child.on("close", (code: number | null) => resolve(code));
+  });
+
+  assert.equal(
+    exitCode,
+    0,
+    `cat32 failed: exit code ${exitCode}\nstdout:\n${stdout}\nstderr:\n${stderr}`,
+  );
+
+  const parsed = JSON.parse(stdout) as { key: string };
+  assert.equal(parsed.key, stableStringify("--literal-key"));
+});
+
 const CLI_SET_ASSIGN_SCRIPT = [
   "(async () => {",
   "  const cliPath = process.argv.at(-1);",
@@ -972,6 +1007,40 @@ test("CLI preserves leading whitespace from stdin", async () => {
   assert.equal(result.key, stableStringify("  spaced"));
 
   const expected = new Cat32().assign("  spaced");
+  assert.equal(result.hash, expected.hash);
+});
+
+test("CLI spawn reads piped stdin when TTY without argv key", async () => {
+  const { spawn } = (await dynamicImport("node:child_process")) as { spawn: SpawnFunction };
+  const distCliPath = new URL("../cli.js", import.meta.url).pathname;
+  const script = [
+    "const path = process.argv.at(-1);",
+    "Object.defineProperty(process.stdin, 'isTTY', { configurable: true, writable: true, value: true });",
+    "process.stdin.isTTY = true;",
+    "process.argv = [process.argv[0], path];",
+    "import(path).catch((err) => { console.error(err); process.exit(1); });",
+  ].join(" ");
+  const child = spawn(process.argv[0], ["-e", script, distCliPath], {
+    stdio: ["pipe", "pipe", "inherit"],
+  });
+
+  child.stdin.write("tty-spawn\n");
+  child.stdin.end();
+
+  let stdout = "";
+  child.stdout.setEncoding("utf8");
+  child.stdout.on("data", (chunk: string) => {
+    stdout += chunk;
+  });
+
+  const exitCode: number | null = await new Promise((resolve) => {
+    child.on("close", (code: number | null) => resolve(code));
+  });
+  assert.equal(exitCode, 0);
+
+  const result = JSON.parse(stdout) as { key: string; hash: string };
+  const expected = new Cat32().assign("tty-spawn");
+  assert.equal(result.key, expected.key);
   assert.equal(result.hash, expected.hash);
 });
 

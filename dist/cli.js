@@ -4,6 +4,19 @@ function parseArgs(argv) {
     const args = {};
     for (let i = 2; i < argv.length; i++) {
         const a = argv[i];
+        if (a === "--") {
+            const rest = argv.slice(i + 1);
+            if (rest.length > 0) {
+                const remainder = rest.join(" ");
+                if (Object.prototype.hasOwnProperty.call(args, "_")) {
+                    args._ = `${args._} ${remainder}`;
+                }
+                else {
+                    args._ = remainder;
+                }
+            }
+            break;
+        }
         if (a.startsWith("--")) {
             const eq = a.indexOf("=");
             if (eq >= 0) {
@@ -31,11 +44,8 @@ async function main() {
     const namespace = args.namespace ?? "";
     const norm = args.normalize ?? "nfkc";
     const cat = new Cat32({ salt, namespace, normalize: norm });
-    if (key === undefined && process.stdin.isTTY) {
-        console.error("Usage: cat32 <key> [--salt=... --namespace=... --normalize=nfkc|nfc|none]");
-        process.exit(1);
-    }
-    const input = key ?? (await readStdin());
+    const shouldReadFromStdin = key === undefined;
+    const input = shouldReadFromStdin ? await readStdin() : key;
     const res = cat.assign(input);
     process.stdout.write(JSON.stringify(res) + "\n");
 }
