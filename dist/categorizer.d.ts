@@ -23,5 +23,6 @@ export declare class Cat32 {
     labelOf(input: unknown): string;
     private salted;
     private canonicalKey;
+    private normalizeCanonicalKey;
     private normalizeIndex;
 }

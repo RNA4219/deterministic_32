@@ -508,6 +508,16 @@ test("Map string sentinel key matches object property", () => {
   assert.equal(mapAssignment.hash, objectAssignment.hash);
 });
 
+test("stableStringify accepts Map with sentinel-style string key", () => {
+  const sentinelKey = "\u0000cat32:string:value\u0000";
+  const map = new Map([[sentinelKey, 1]]);
+
+  const serialized = stableStringify(map);
+  const assignment = new Cat32().assign(map);
+
+  assert.equal(assignment.key, serialized);
+});
+
 test("Infinity serialized distinctly from string sentinel", () => {
   const c = new Cat32({ salt: "s", namespace: "ns" });
   const infinityAssignment = c.assign({ value: Infinity });
