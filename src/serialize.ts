@@ -14,6 +14,11 @@ const BIGINT_SENTINEL_PREFIX = "__bigint__:";
 const NUMBER_SENTINEL_PREFIX = "__number__:";
 const STRING_LITERAL_SENTINEL_PREFIX = "__string__:";
 
+type NormalizedMapEntry = {
+  serializedKey: string;
+  serializedValue: string;
+};
+
 export function typeSentinel(type: string, payload = ""): string {
   return `${SENTINEL_PREFIX}${type}:${payload}${SENTINEL_SUFFIX}`;
 }
@@ -82,19 +87,23 @@ function _stringify(v: unknown, stack: Set<any>): string {
   if (v instanceof Map) {
     if (stack.has(v)) throw new TypeError("Cyclic object");
     stack.add(v);
-    const normalizedEntries: Record<string, string> = Object.create(null);
+    const normalizedEntries: Record<string, NormalizedMapEntry> = Object.create(null);
     for (const [rawKey, rawValue] of v.entries()) {
       const serializedKey = _stringify(rawKey, stack);
       const revivedKey = reviveFromSerialized(serializedKey);
       const propertyKey = toPropertyKeyString(revivedKey, serializedKey);
       const serializedValue = _stringify(rawValue, stack);
-      normalizedEntries[propertyKey] = serializedValue;
+      const candidate: NormalizedMapEntry = { serializedKey, serializedValue };
+      const existing = normalizedEntries[propertyKey];
+      if (existing === undefined || compareNormalizedMapEntry(candidate, existing) < 0) {
+        normalizedEntries[propertyKey] = candidate;
+      }
     }
     const sortedKeys = Object.keys(normalizedEntries).sort();
     let body = "";
     for (let i = 0; i < sortedKeys.length; i += 1) {
       const key = sortedKeys[i];
-      const serializedValue = normalizedEntries[key];
+      const { serializedValue } = normalizedEntries[key];
       if (i > 0) body += ",";
       body += JSON.stringify(key);
       body += ":";
@@ -160,6 +169,17 @@ function _stringify(v: unknown, stack: Set<any>): string {
   );
   stack.delete(o);
   return "{" + body.join(",") + "}";
+}
+
+function compareNormalizedMapEntry(
+  a: NormalizedMapEntry,
+  b: NormalizedMapEntry,
+): number {
+  if (a.serializedKey < b.serializedKey) return -1;
+  if (a.serializedKey > b.serializedKey) return 1;
+  if (a.serializedValue < b.serializedValue) return -1;
+  if (a.serializedValue > b.serializedValue) return 1;
+  return 0;
 }
 
 function stringifyStringLiteral(value: string): string {

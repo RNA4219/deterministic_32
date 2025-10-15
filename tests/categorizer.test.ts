@@ -242,6 +242,27 @@ test("Cat32 normalizes Map keys with special numeric values", () => {
   assert.equal(mapBigInt.hash, objectBigIntSentinel.hash);
 });
 
+test("Cat32 assigns consistent keys for Maps with equivalent entries", () => {
+  const cat = new Cat32();
+
+  const originalOrder = cat.assign(
+    new Map<unknown, string>([
+      [1, "number"],
+      ["1", "string"],
+    ]),
+  );
+
+  const reversedOrder = cat.assign(
+    new Map<unknown, string>([
+      ["1", "string"],
+      [1, "number"],
+    ]),
+  );
+
+  assert.equal(originalOrder.key, reversedOrder.key);
+  assert.equal(originalOrder.hash, reversedOrder.hash);
+});
+
 test("Cat32 treats enumerable Symbol keys consistently between objects and maps", () => {
   const cat = new Cat32();
   const symbolKey = Symbol("enumerable");
