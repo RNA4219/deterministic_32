@@ -74,19 +74,19 @@ function _stringify(v: unknown, stack: Set<any>): string {
   if (v instanceof Map) {
     if (stack.has(v)) throw new TypeError("Cyclic object");
     stack.add(v);
-    const normalizedEntries = new Map<string, string>();
+    const normalizedEntries: Record<string, string> = Object.create(null);
     for (const [rawKey, rawValue] of v.entries()) {
       const serializedKey = _stringify(rawKey, stack);
       const revivedKey = reviveFromSerialized(serializedKey);
       const propertyKey = toPropertyKeyString(revivedKey, serializedKey);
       const serializedValue = _stringify(rawValue, stack);
-      normalizedEntries.set(propertyKey, serializedValue);
+      normalizedEntries[propertyKey] = serializedValue;
     }
-    const sortedKeys = Array.from(normalizedEntries.keys()).sort();
+    const sortedKeys = Object.keys(normalizedEntries).sort();
     let body = "";
     for (let i = 0; i < sortedKeys.length; i += 1) {
       const key = sortedKeys[i];
-      const serializedValue = normalizedEntries.get(key)!;
+      const serializedValue = normalizedEntries[key];
       if (i > 0) body += ",";
       body += JSON.stringify(key);
       body += ":";
