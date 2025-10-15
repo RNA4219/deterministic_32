@@ -503,10 +503,8 @@ test("Cat32 assign handles undefined and Date literals", () => {
   const cat = new Cat32();
   const iso = "2024-01-02T03:04:05.678Z";
 
-  assert.doesNotThrow(() => {
-    cat.assign(undefined);
-    cat.assign(new Date(iso));
-  });
+  cat.assign(undefined);
+  cat.assign(new Date(iso));
 });
 
 test("stableStringify uses String() for functions and symbols", () => {
