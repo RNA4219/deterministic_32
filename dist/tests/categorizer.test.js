@@ -5,7 +5,7 @@ import { Cat32 } from "../src/index.js";
 import { escapeSentinelString, stableStringify, typeSentinel } from "../src/serialize.js";
 const dynamicImport = new Function("specifier", "return import(specifier);");
 const CLI_PATH = new URL("../src/cli.js", import.meta.url).pathname;
-const CLI_LITERAL_KEY_SCRIPT = [
+const CLI_LITERAL_KEY_EVAL_SCRIPT = [
     "const cliPath = process.argv.at(-1);",
     "process.argv = [process.argv[0], cliPath, '--', '--literal-key'];",
     "import(cliPath).catch((error) => { console.error(error); process.exit(1); });",
@@ -80,6 +80,28 @@ test("tsc succeeds without duplicate identifier errors", async () => {
     finally {
         await rm(tempDir, { recursive: true, force: true });
     }
+});
+test("repository tsc build succeeds", async () => {
+    const sourceImportMetaUrl = import.meta.url.includes("/dist/tests/")
+        ? new URL("../../tests/categorizer.test.ts", import.meta.url)
+        : import.meta.url;
+    const repoRoot = new URL("../", sourceImportMetaUrl).pathname;
+    const { spawn } = (await dynamicImport("node:child_process"));
+    const child = spawn("tsc", ["-p", "tsconfig.json", "--pretty", "false"], { cwd: repoRoot, stdio: ["ignore", "pipe", "pipe"] });
+    let stdout = "";
+    child.stdout.setEncoding("utf8");
+    child.stdout.on("data", (chunk) => {
+        stdout += chunk;
+    });
+    let stderr = "";
+    child.stderr.setEncoding("utf8");
+    child.stderr.on("data", (chunk) => {
+        stderr += chunk;
+    });
+    const exitCode = await new Promise((resolve) => {
+        child.on("close", (code) => resolve(code));
+    });
+    assert.equal(exitCode, 0, `tsc failed: exit code ${exitCode}\nstdout:\n${stdout}\nstderr:\n${stderr}`);
 });
 test("Cat32 assigns distinct keys for primitive strings and non-strings", () => {
     const cat = new Cat32();
@@ -183,7 +205,7 @@ test("dist index and cli modules are importable", async () => {
 });
 test("CLI treats values after double dash as literal key", async () => {
     const { spawn } = (await dynamicImport("node:child_process"));
-    const child = spawn(process.argv[0], ["-e", CLI_LITERAL_KEY_SCRIPT, CLI_PATH], {
+    const child = spawn(process.argv[0], ["-e", CLI_LITERAL_KEY_EVAL_SCRIPT, CLI_PATH], {
         stdio: ["pipe", "pipe", "pipe"],
     });
     child.stdin.end();
@@ -509,6 +531,35 @@ test("Map keys match plain object representation regardless of entry order", () 
     const duplicateKeyObjectAssignment = c.assign({ 0: "same" });
     assert.equal(duplicateKeyMapAssignment.key, duplicateKeyObjectAssignment.key);
     assert.equal(duplicateKeyMapAssignment.hash, duplicateKeyObjectAssignment.hash);
+});
+test("Cat32 normalizes duplicate-like Map entries deterministically", () => {
+    const c = new Cat32();
+    const forwardOrder = c.assign(new Map([
+        [1, "number"],
+        ["1", "string"],
+    ]));
+    const reverseOrder = c.assign(new Map([
+        ["1", "string"],
+        [1, "number"],
+    ]));
+    assert.equal(forwardOrder.key, reverseOrder.key);
+    assert.equal(forwardOrder.hash, reverseOrder.hash);
+});
+test("Map collisions with identical property keys produce deterministic output", () => {
+    const forward = new Map([
+        [1, "number"],
+        ["1", "string"],
+    ]);
+    const reverse = new Map([
+        ["1", "string"],
+        [1, "number"],
+    ]);
+    assert.equal(stableStringify(forward), stableStringify(reverse));
+    const c = new Cat32();
+    const forwardAssignment = c.assign(forward);
+    const reverseAssignment = c.assign(reverse);
+    assert.equal(forwardAssignment.key, reverseAssignment.key);
+    assert.equal(forwardAssignment.hash, reverseAssignment.hash);
 });
 test("Map values serialize identically to plain object values", () => {
     const c = new Cat32();

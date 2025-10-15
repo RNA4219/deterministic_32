@@ -86,13 +86,17 @@ function _stringify(v, stack) {
             const revivedKey = reviveFromSerialized(serializedKey);
             const propertyKey = toPropertyKeyString(revivedKey, serializedKey);
             const serializedValue = _stringify(rawValue, stack);
-            normalizedEntries[propertyKey] = serializedValue;
+            const candidate = { serializedKey, serializedValue };
+            const existing = normalizedEntries[propertyKey];
+            if (!existing || compareSerializedEntry(candidate, existing) < 0) {
+                normalizedEntries[propertyKey] = candidate;
+            }
         }
         const sortedKeys = Object.keys(normalizedEntries).sort();
         let body = "";
         for (let i = 0; i < sortedKeys.length; i += 1) {
             const key = sortedKeys[i];
-            const serializedValue = normalizedEntries[key];
+            const serializedValue = normalizedEntries[key].serializedValue;
             if (i > 0)
                 body += ",";
             body += JSON.stringify(key);
@@ -146,6 +150,17 @@ function _stringify(v, stack) {
     const body = entries.map(({ normalizedKey, property }) => JSON.stringify(normalizedKey) + ":" + _stringify(target[property], stack));
     stack.delete(o);
     return "{" + body.join(",") + "}";
+}
+function compareSerializedEntry(left, right) {
+    if (left.serializedKey < right.serializedKey)
+        return -1;
+    if (left.serializedKey > right.serializedKey)
+        return 1;
+    if (left.serializedValue < right.serializedValue)
+        return -1;
+    if (left.serializedValue > right.serializedValue)
+        return 1;
+    return 0;
 }
 function stringifyStringLiteral(value) {
     if (value.startsWith(STRING_LITERAL_SENTINEL_PREFIX)) {
