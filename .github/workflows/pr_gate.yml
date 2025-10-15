@@ -10,6 +10,28 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
+            function resolveReviewDecision(rawDecision, reviewStates) {
+              const APPROVED = "APPROVED";
+              const CHANGES_REQUESTED = "CHANGES_REQUESTED";
+              const REVIEW_REQUIRED = "REVIEW_REQUIRED";
+
+              if (typeof rawDecision === "string") {
+                const normalized = rawDecision.toUpperCase();
+                if (normalized === APPROVED || normalized === CHANGES_REQUESTED) return normalized;
+                if (normalized === REVIEW_REQUIRED) return REVIEW_REQUIRED;
+              }
+
+              const normalizedStates = new Set();
+              for (const state of reviewStates ?? []) {
+                if (typeof state !== "string") continue;
+                const normalized = state.toUpperCase();
+                if (normalized) normalizedStates.add(normalized);
+              }
+
+              if (normalizedStates.has(CHANGES_REQUESTED)) return CHANGES_REQUESTED;
+              if (normalizedStates.has(APPROVED)) return APPROVED;
+              return REVIEW_REQUIRED;
+            }
             const [owner, repo] = process.env.GITHUB_REPOSITORY.split('/');
             const number = context.issue.number;
             const query = `
@@ -17,13 +39,25 @@ jobs:
                 repository(owner: $owner, name: $repo) {
                   pullRequest(number: $number) {
                     reviewDecision
+                    latestOpinionatedReviews(first: 20) {
+                      nodes {
+                        state
+                      }
+                    }
                   }
                 }
               }
             `;
             const result = await github.graphql(query, { owner, repo, number });
-            const decision = result.repository.pullRequest?.reviewDecision;
-            core.info(`Review decision: ${decision ?? 'UNKNOWN'}`);
+            const pullRequest = result.repository.pullRequest;
+            const reviewStates = pullRequest?.latestOpinionatedReviews?.nodes?.map(
+              (node) => node?.state,
+            ) ?? [];
+            const decision = resolveReviewDecision(
+              pullRequest?.reviewDecision,
+              reviewStates,
+            );
+            core.info(`Review decision: ${decision}`);
             if (decision !== 'APPROVED') {
               core.setFailed('CODEOWNERS approval missing (review decision is not APPROVED).');
             }
