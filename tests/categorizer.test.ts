@@ -386,23 +386,29 @@ test("override by label", () => {
   assert.equal(a.label, "L31");
 });
 
-test("README override example uses canonical keys", () => {
-  const c = new Cat32({
+test("README library example overrides use canonical keys", () => {
+  const base = new Cat32({ salt: "projectX", namespace: "v1" });
+
+  const overrides = {
+    [stableStringify("vip-user")]: 0,
+    [base.assign({ id: "audited" }).key]: "A",
+  } as const;
+
+  const cat = new Cat32({
     salt: "projectX",
     namespace: "v1",
-    overrides: {
-      [stableStringify("vip-user")]: 0,
-      [stableStringify({ audited: true })]: "A",
-    },
+    overrides,
   });
 
-  const vip = c.assign("vip-user");
-  assert.equal(vip.index, 0);
-  assert.equal(vip.key, stableStringify("vip-user"));
+  assert.equal(cat.index("vip-user"), 0);
 
-  const audited = c.assign({ audited: true });
+  const audited = cat.assign({ id: "audited" });
   assert.equal(audited.label, "A");
-  assert.equal(audited.key, stableStringify({ audited: true }));
+  assert.equal(cat.labelOf({ id: "audited" }), "A");
+
+  const assignment = cat.assign("hello");
+  assert.equal(typeof assignment.hash, "string");
+  assert.equal(assignment.key, stableStringify("hello"));
 });
 
 test("override rejects NaN with explicit error", () => {
