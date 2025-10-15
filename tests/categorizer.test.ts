@@ -414,11 +414,9 @@ test("override by label", () => {
 });
 
 test("README library example overrides use canonical keys", () => {
-  const base = new Cat32({ salt: "projectX", namespace: "v1" });
-
   const overrides = {
     [stableStringify("vip-user")]: 0,
-    [base.assign({ id: "audited" }).key]: "A",
+    [stableStringify({ id: "audited" })]: "A",
   } as const;
 
   const cat = new Cat32({

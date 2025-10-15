@@ -37,3 +37,7 @@ const cat = new Cat32({ salt: "projX", namespace: "v1" });
 const a = cat.assign({ id: 1, tags: ["a", "b"] });
 // a = { index, label, hash, key }
 ```
+
+### overrides の canonical key 取得
+
+`overrides` のキーには `stableStringify(value)` で得た canonical key を渡してください。`Cat32.assign(value).key` でも同じ結果を得られますが、`overrides` 用に事前計算する場合は `stableStringify` のみで十分です（constructor 側で `normalize` が再適用されます）。
