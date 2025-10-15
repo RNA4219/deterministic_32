@@ -2,6 +2,7 @@
 import test from "node:test";
 import assert from "node:assert";
 import { Cat32 } from "../src/index.js";
+import { stableStringify } from "../src/serialize.js";
 const dynamicImport = new Function("specifier", "return import(specifier);");
 const CLI_PATH = new URL("../src/cli.js", import.meta.url).pathname;
 const CLI_SET_ASSIGN_SCRIPT = [
@@ -136,6 +137,19 @@ test("NaN serialized distinctly from null", () => {
     const nullAssignment = c.assign({ value: null });
     assert.equal(nanAssignment.key === nullAssignment.key, false);
     assert.equal(nanAssignment.hash === nullAssignment.hash, false);
+});
+test("stableStringify uses String() for functions and symbols", () => {
+    const fn = function foo() { };
+    const sym = Symbol("x");
+    assert.equal(stableStringify(fn), String(fn));
+    assert.equal(stableStringify(sym), String(sym));
+});
+test("canonical key follows String() for functions and symbols", () => {
+    const c = new Cat32();
+    const fnAssignment = c.assign(function foo() { });
+    const symAssignment = c.assign(Symbol("x"));
+    assert.equal(fnAssignment.key, stableStringify(function foo() { }));
+    assert.equal(symAssignment.key, stableStringify(Symbol("x")));
 });
 test("Map keys match plain object representation regardless of entry order", () => {
     const c = new Cat32();
