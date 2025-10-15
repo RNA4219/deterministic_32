@@ -33,6 +33,18 @@ const dynamicImport = new Function(
 
 const CLI_PATH = new URL("../src/cli.js", import.meta.url).pathname;
 
+test("dist entry point exports Cat32", async () => {
+  const sourceImportMetaUrl = import.meta.url.includes("/dist/tests/")
+    ? new URL("../../tests/categorizer.test.ts", import.meta.url)
+    : import.meta.url;
+
+  const distModule = (await import(
+    new URL("../dist/index.js", sourceImportMetaUrl) as unknown as string
+  )) as { Cat32?: unknown };
+
+  assert.equal(typeof distModule.Cat32, "function");
+});
+
 const CLI_SET_ASSIGN_SCRIPT = [
   "(async () => {",
   "  const cliPath = process.argv.at(-1);",
