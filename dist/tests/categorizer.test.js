@@ -5,19 +5,13 @@ import { Cat32 } from "../src/index.js";
 import { escapeSentinelString, stableStringify, typeSentinel } from "../src/serialize.js";
 const dynamicImport = new Function("specifier", "return import(specifier);");
 const CLI_PATH = new URL("../src/cli.js", import.meta.url).pathname;
-const CLI_LITERAL_KEY_SCRIPT = [
-    "(async () => {",
-    "  const cliPath = process.argv.at(-1);",
-    "  process.stdin.isTTY = false;",
-    "  process.argv = [process.argv[0], 'cat32', '--', '--literal-key'];",
-    "  try {",
-    "    await import(cliPath);",
-    "  } catch (error) {",
-    "    console.error(error);",
-    "    process.exit(1);",
-    "  }",
-    "})();",
-].join("\n");
+test("dist build re-exports stableStringify", async () => {
+    const sourceImportMetaUrl = import.meta.url.includes("/dist/tests/")
+        ? new URL("../../tests/categorizer.test.ts", import.meta.url)
+        : import.meta.url;
+    const distModule = (await import(new URL("../dist/index.js", sourceImportMetaUrl).href));
+    assert.equal(typeof distModule.stableStringify, "function");
+});
 test("tsc succeeds without duplicate identifier errors", async () => {
     const sourceImportMetaUrl = import.meta.url.includes("/dist/tests/")
         ? new URL("../../tests/categorizer.test.ts", import.meta.url)
