@@ -86,21 +86,31 @@ function _stringify(v, stack) {
             const revivedKey = reviveFromSerialized(serializedKey);
             const propertyKey = toPropertyKeyString(revivedKey, serializedKey);
             const serializedValue = _stringify(rawValue, stack);
-            normalizedEntries[propertyKey] = serializedValue;
+            const candidate = { serializedKey, serializedValue };
+            const bucket = normalizedEntries[propertyKey];
+            if (bucket) {
+                bucket.push(candidate);
+            }
+            else {
+                normalizedEntries[propertyKey] = [candidate];
+            }
         }
         const sortedKeys = Object.keys(normalizedEntries).sort();
-        let body = "";
+        const bodyParts = [];
         for (let i = 0; i < sortedKeys.length; i += 1) {
             const key = sortedKeys[i];
-            const serializedValue = normalizedEntries[key];
-            if (i > 0)
-                body += ",";
-            body += JSON.stringify(key);
-            body += ":";
-            body += serializedValue;
+            const bucket = normalizedEntries[key];
+            bucket.sort(compareSerializedEntry);
+            const entry = bucket[0];
+            if (bodyParts.length > 0) {
+                bodyParts.push(",");
+            }
+            bodyParts.push(JSON.stringify(key));
+            bodyParts.push(":");
+            bodyParts.push(entry.serializedValue);
         }
         stack.delete(v);
-        return "{" + body + "}";
+        return "{" + bodyParts.join("") + "}";
     }
     // Set
     if (v instanceof Set) {
@@ -146,6 +156,17 @@ function _stringify(v, stack) {
     const body = entries.map(({ normalizedKey, property }) => JSON.stringify(normalizedKey) + ":" + _stringify(target[property], stack));
     stack.delete(o);
     return "{" + body.join(",") + "}";
+}
+function compareSerializedEntry(left, right) {
+    if (left.serializedKey < right.serializedKey)
+        return -1;
+    if (left.serializedKey > right.serializedKey)
+        return 1;
+    if (left.serializedValue < right.serializedValue)
+        return -1;
+    if (left.serializedValue > right.serializedValue)
+        return 1;
+    return 0;
 }
 function stringifyStringLiteral(value) {
     if (value.startsWith(STRING_LITERAL_SENTINEL_PREFIX)) {
