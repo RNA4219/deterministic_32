@@ -636,3 +636,61 @@ test("CLI exits with code 2 when override label is missing", async () => {
 
   assert.equal(exitCode, 2);
 });
+
+test("CODEOWNERS gate resolves review decision fallback", async () => {
+  const { readFile } = (await dynamicImport("node:fs/promises")) as {
+    readFile(path: URL, encoding: string): Promise<string>;
+  };
+  const yaml = await readFile(
+    new URL("../../.github/workflows/pr_gate.yml", import.meta.url),
+    "utf8",
+  );
+
+  const lines = yaml.split("\n");
+  const scriptIndex = lines.findIndex((line) => line.includes("script: |"));
+  assert.ok(scriptIndex >= 0, "workflow script block not found");
+
+  const trimmedLines: string[] = [];
+  for (let i = scriptIndex + 1; i < lines.length; i += 1) {
+    const line = lines[i];
+    if (line.startsWith("          ")) {
+      trimmedLines.push(line.slice(10).replace(/^\s+/u, ""));
+      continue;
+    }
+    if (line.trim().length === 0) {
+      continue;
+    }
+    break;
+  }
+  const startIndex = trimmedLines.findIndex((line) =>
+    line.startsWith("function resolveReviewDecision"),
+  );
+  assert.ok(startIndex >= 0, "resolveReviewDecision not defined in workflow script");
+
+  const functionLines: string[] = [];
+  for (let i = startIndex, depth = 0; i < trimmedLines.length; i += 1) {
+    const line = trimmedLines[i];
+    if (line.length === 0) continue;
+    functionLines.push(line);
+    for (const char of line) {
+      if (char === "{") depth += 1;
+      else if (char === "}") depth -= 1;
+    }
+    if (depth <= 0 && i > startIndex) break;
+  }
+  assert.ok(functionLines.at(-1)?.trim() === "}", "resolveReviewDecision not defined in workflow script");
+  const functionSource = functionLines.join("\n");
+
+  const resolver = new Function(`${functionSource}\nreturn resolveReviewDecision;`)() as (
+    decision: string | null | undefined,
+    reviewStates: readonly unknown[],
+  ) => string;
+
+  assert.equal(resolver(undefined, ["APPROVED"]), "APPROVED");
+  assert.equal(
+    resolver(null, ["APPROVED", "CHANGES_REQUESTED"]),
+    "CHANGES_REQUESTED",
+  );
+  assert.equal(resolver("review_required", []), "REVIEW_REQUIRED");
+  assert.equal(resolver(undefined, []), "REVIEW_REQUIRED");
+});
