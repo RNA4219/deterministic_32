@@ -386,6 +386,31 @@ test("override by label", () => {
   assert.equal(a.label, "L31");
 });
 
+test("README library example overrides use canonical keys", () => {
+  const base = new Cat32({ salt: "projectX", namespace: "v1" });
+
+  const overrides = {
+    [stableStringify("vip-user")]: 0,
+    [base.assign({ id: "audited" }).key]: "A",
+  } as const;
+
+  const cat = new Cat32({
+    salt: "projectX",
+    namespace: "v1",
+    overrides,
+  });
+
+  assert.equal(cat.index("vip-user"), 0);
+
+  const audited = cat.assign({ id: "audited" });
+  assert.equal(audited.label, "A");
+  assert.equal(cat.labelOf({ id: "audited" }), "A");
+
+  const assignment = cat.assign("hello");
+  assert.equal(typeof assignment.hash, "string");
+  assert.equal(assignment.key, stableStringify("hello"));
+});
+
 test("override rejects NaN with explicit error", () => {
   assert.throws(
     () => new Cat32({ overrides: { foo: Number.NaN as any } }),
