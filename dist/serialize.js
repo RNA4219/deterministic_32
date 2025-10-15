@@ -15,9 +15,7 @@ export function typeSentinel(type, payload = "") {
     return `${SENTINEL_PREFIX}${type}:${payload}${SENTINEL_SUFFIX}`;
 }
 export function escapeSentinelString(value) {
-    const needsEscaping = value.startsWith(SENTINEL_PREFIX) && !value.startsWith(STRING_SENTINEL_PREFIX);
-    const escaped = needsEscaping ? typeSentinel("string", value) : value;
-    return JSON.stringify(escaped);
+    return value;
 }
 export function stableStringify(v) {
     const stack = new Set();

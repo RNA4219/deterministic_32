@@ -2,7 +2,7 @@
 import test from "node:test";
 import assert from "node:assert";
 import { Cat32 } from "../src/index.js";
-import { stableStringify } from "../src/serialize.js";
+import { escapeSentinelString, stableStringify } from "../src/serialize.js";
 const dynamicImport = new Function("specifier", "return import(specifier);");
 const CLI_PATH = new URL("../src/cli.js", import.meta.url).pathname;
 test("dist entry point exports Cat32", async () => {
@@ -132,26 +132,14 @@ test("canonical key encodes date sentinel", () => {
 });
 test("canonical key matches stableStringify for basic primitives", () => {
     const c = new Cat32({ normalize: "none" });
-    assert.equal(c.assign("foo").key, stableStringify("foo"));
-    assert.equal(c.assign(1n).key, stableStringify(1n));
-    assert.equal(c.assign(Number.NaN).key, stableStringify(Number.NaN));
-    assert.equal(c.assign(Symbol("x")).key, stableStringify(Symbol("x")));
-});
-test("functions and symbols serialize to bare strings", () => {
-    const fn = function foo() { };
-    const sym = Symbol("x");
-    assert.equal(stableStringify(fn), String(fn));
-    assert.equal(stableStringify(sym), String(sym));
-    const c = new Cat32();
-    assert.equal(c.assign(fn).key, stableStringify(fn));
-    assert.equal(c.assign(sym).key, stableStringify(sym));
-});
-test("string sentinel matches date value", () => {
-    const c = new Cat32();
-    const iso = "2024-01-02T03:04:05.000Z";
-    const sentinelAssignment = c.assign(`__date__:${iso}`);
-    const dateAssignment = c.assign(new Date(iso));
-    assert.equal(sentinelAssignment.key, dateAssignment.key);
+    const stringAssignment = c.assign("foo");
+    assert.equal(stringAssignment.key, stableStringify("foo"));
+    const bigintAssignment = c.assign(1n);
+    assert.equal(bigintAssignment.key, stableStringify(1n));
+    const nanAssignment = c.assign(Number.NaN);
+    assert.equal(nanAssignment.key, stableStringify(Number.NaN));
+    const symbolAssignment = c.assign(Symbol("x"));
+    assert.equal(symbolAssignment.key, stableStringify(Symbol("x")));
 });
 test("deterministic mapping for bigint values", () => {
     const c = new Cat32({ salt: "s", namespace: "ns" });
@@ -237,6 +225,10 @@ test("canonical key follows String() for functions and symbols", () => {
 test("string sentinel literals remain literal canonical keys", () => {
     const assignment = new Cat32().assign("__date__:2024-01-01Z");
     assert.equal(assignment.key, stableStringify("__date__:2024-01-01Z"));
+});
+test("escapeSentinelString returns sentinel-like literals", () => {
+    const sentinelLike = "__date__:2024-01-01Z";
+    assert.equal(escapeSentinelString(sentinelLike), sentinelLike);
 });
 test("Map keys match plain object representation regardless of entry order", () => {
     const c = new Cat32();
