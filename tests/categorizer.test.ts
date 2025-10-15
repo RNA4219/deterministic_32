@@ -396,13 +396,20 @@ test("map payload matches plain object with same entries", () => {
   assert.equal(mapAssignment.hash, objectAssignment.hash);
 });
 
-test("set differs from array with same entries", () => {
+test("set serialization matches array entries regardless of insertion order", () => {
   const c = new Cat32();
-  const setAssignment = c.assign(new Set([1, 2]));
-  const arrayAssignment = c.assign([1, 2]);
+  const values = [1, 2, 3];
 
-  assert.ok(setAssignment.key !== arrayAssignment.key);
-  assert.ok(setAssignment.hash !== arrayAssignment.hash);
+  const setAssignment = c.assign(new Set(values));
+  const arrayAssignment = c.assign([...values]);
+
+  assert.equal(setAssignment.key, arrayAssignment.key);
+  assert.equal(setAssignment.hash, arrayAssignment.hash);
+
+  const reorderedSetAssignment = c.assign(new Set([...values].reverse()));
+
+  assert.equal(reorderedSetAssignment.key, setAssignment.key);
+  assert.equal(reorderedSetAssignment.hash, setAssignment.hash);
 });
 
 test("CLI preserves leading whitespace from stdin", async () => {

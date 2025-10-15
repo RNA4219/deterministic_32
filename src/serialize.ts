@@ -105,10 +105,7 @@ function _stringify(v: unknown, stack: Set<any>): string {
       _stringify(value, stack),
     );
     serializedValues.sort();
-    const out =
-      "[\"__set__\"" +
-      (serializedValues.length > 0 ? "," + serializedValues.join(",") : "") +
-      "]";
+    const out = "[" + serializedValues.join(",") + "]";
     stack.delete(v);
     return out;
   }
