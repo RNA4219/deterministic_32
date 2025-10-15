@@ -6,7 +6,6 @@
 
 const SENTINEL_PREFIX = "\u0000cat32:";
 const SENTINEL_SUFFIX = "\u0000";
-const STRING_SENTINEL_PREFIX = `${SENTINEL_PREFIX}string:`;
 const HOLE_SENTINEL = JSON.stringify(typeSentinel("hole"));
 const STRING_SENTINEL_PREFIX = `${SENTINEL_PREFIX}string:`;
 const UNDEFINED_SENTINEL = "__undefined__";
@@ -18,21 +17,7 @@ export function typeSentinel(type: string, payload = ""): string {
   return `${SENTINEL_PREFIX}${type}:${payload}${SENTINEL_SUFFIX}`;
 }
 
-const SENTINEL_STRING_PREFIXES = [
-  DATE_SENTINEL_PREFIX,
-  BIGINT_SENTINEL_PREFIX,
-  NUMBER_SENTINEL_PREFIX,
-];
-
 export function escapeSentinelString(value: string): string {
-  if (value === UNDEFINED_SENTINEL) {
-    return value;
-  }
-  for (const prefix of SENTINEL_STRING_PREFIXES) {
-    if (value.startsWith(prefix)) {
-      return value;
-    }
-  }
   return JSON.stringify(value);
 }
 
