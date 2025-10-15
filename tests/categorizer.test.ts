@@ -920,6 +920,38 @@ test("CLI preserves leading whitespace from stdin", async () => {
   assert.equal(result.hash, expected.hash);
 });
 
+test("CLI reads stdin even when TTY without argv key", async () => {
+  const { spawn } = (await dynamicImport("node:child_process")) as { spawn: SpawnFunction };
+  const script = [
+    "const path = process.argv.at(-1);",
+    "process.stdin.isTTY = true;",
+    "process.argv = [process.argv[0], path];",
+    "import(path).catch((err) => { console.error(err); process.exit(1); });",
+  ].join(" ");
+  const child = spawn(process.argv[0], ["-e", script, CLI_PATH], {
+    stdio: ["pipe", "pipe", "inherit"],
+  });
+
+  child.stdin.write("tty-stdin\n");
+  child.stdin.end();
+
+  let stdout = "";
+  child.stdout.setEncoding("utf8");
+  child.stdout.on("data", (chunk: string) => {
+    stdout += chunk;
+  });
+
+  const exitCode: number | null = await new Promise((resolve) => {
+    child.on("close", (code: number | null) => resolve(code));
+  });
+  assert.equal(exitCode, 0);
+
+  const result = JSON.parse(stdout);
+  const expected = new Cat32().assign("tty-stdin");
+  assert.equal(result.key, expected.key);
+  assert.equal(result.hash, expected.hash);
+});
+
 test("CLI handles empty string key from argv", async () => {
   const { spawn } = (await dynamicImport("node:child_process")) as { spawn: SpawnFunction };
   const script = [
