@@ -54,6 +54,7 @@ Changing `labels/salt/namespace/normalize` changes results intentionally.
 - Not cryptographic. Do **not** use for secrecy or collision-critical workloads.
 - For compatibility flips, bump `namespace` (consumer side).
 - Overrides compare against **post-normalized keys**.
+- Birdseye map refresh: if `docs/birdseye/index.json.generated_at` is stale, run `codemap.update` (or regenerate manually) and commit the updated capsules.
 
 ## License
 MIT

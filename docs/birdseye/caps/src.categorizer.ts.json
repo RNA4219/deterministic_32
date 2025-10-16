@@ -1,0 +1,8 @@
+{
+  "id": "src/categorizer.ts",
+  "role": "domain",
+  "summary": "Cat32 core: stable key normalization, 32-slot hashing, and override handling.",
+  "deps_out": ["src/hash.ts", "src/serialize.ts"],
+  "deps_in": ["src/index.ts", "src/cli.ts"],
+  "tests": ["tests/categorizer.test.ts"]
+}

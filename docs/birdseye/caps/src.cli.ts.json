@@ -1,0 +1,8 @@
+{
+  "id": "src/cli.ts",
+  "role": "cli",
+  "summary": "Node CLI wrapping Cat32 to hash stdin or argv input with salt/namespace flags.",
+  "deps_out": ["src/categorizer.ts"],
+  "deps_in": [],
+  "tests": ["tests/categorizer.test.ts"]
+}
