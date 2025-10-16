@@ -203,13 +203,6 @@ function normalizeStringLiteral(value: string): string {
     return value;
   }
 
-  if (
-    value.startsWith(STRING_LITERAL_SENTINEL_PREFIX) &&
-    isSentinelWrappedString(value.slice(STRING_LITERAL_SENTINEL_PREFIX.length))
-  ) {
-    return value.slice(STRING_LITERAL_SENTINEL_PREFIX.length);
-  }
-
   return value;
 }
 
