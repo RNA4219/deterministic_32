@@ -5,6 +5,7 @@ import { Cat32 } from "../src/index.js";
 import { escapeSentinelString, stableStringify, typeSentinel } from "../src/serialize.js";
 const dynamicImport = new Function("specifier", "return import(specifier);");
 const CLI_PATH = new URL("../src/cli.js", import.meta.url).pathname;
+const CLI_BIN_PATH = new URL("../cli.js", import.meta.url).pathname;
 const CLI_LITERAL_KEY_EVAL_SCRIPT = [
     "const cliPath = process.argv.at(-1);",
     "process.argv = [process.argv[0], cliPath, '--', '--literal-key'];",
@@ -276,6 +277,31 @@ test("CLI treats values after double dash as literal key", async () => {
 test("CLI accepts flag values separated by whitespace", async () => {
     const { spawn } = (await dynamicImport("node:child_process"));
     const child = spawn(process.argv[0], [CLI_PATH, "--salt", "foo", "bar"], {
+        stdio: ["pipe", "pipe", "pipe"],
+    });
+    child.stdin.end();
+    let stdout = "";
+    child.stdout.setEncoding("utf8");
+    child.stdout.on("data", (chunk) => {
+        stdout += chunk;
+    });
+    let stderr = "";
+    child.stderr.setEncoding("utf8");
+    child.stderr.on("data", (chunk) => {
+        stderr += chunk;
+    });
+    const exitCode = await new Promise((resolve) => {
+        child.on("close", (code) => resolve(code));
+    });
+    assert.equal(exitCode, 0, `cat32 failed: exit code ${exitCode}\nstdout:\n${stdout}\nstderr:\n${stderr}`);
+    const parsed = JSON.parse(stdout);
+    const expected = new Cat32({ salt: "foo" }).assign("bar");
+    assert.equal(parsed.hash, expected.hash);
+    assert.equal(parsed.key, expected.key);
+});
+test("cat32 binary accepts flag values separated by whitespace", async () => {
+    const { spawn } = (await dynamicImport("node:child_process"));
+    const child = spawn(process.argv[0], [CLI_BIN_PATH, "--salt", "foo", "bar"], {
         stdio: ["pipe", "pipe", "pipe"],
     });
     child.stdin.end();
