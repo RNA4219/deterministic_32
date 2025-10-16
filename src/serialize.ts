@@ -83,24 +83,22 @@ function _stringify(v: unknown, stack: Set<any>): string {
     if (stack.has(v)) throw new TypeError("Cyclic object");
     stack.add(v);
     type SerializedEntry = { serializedKey: string; serializedValue: string };
-    type SerializedBucket = { entries: SerializedEntry[]; dedupe: boolean };
-    const normalizedEntries: Record<string, SerializedBucket> = Object.create(null);
+    const normalizedEntries: Record<string, SerializedEntry[]> = Object.create(null);
+    const dedupeByKey: Record<string, boolean> = Object.create(null);
     for (const [rawKey, rawValue] of v.entries()) {
       const serializedKey = _stringify(rawKey, stack);
       const revivedKey = reviveFromSerialized(serializedKey);
       const propertyKey = toPropertyKeyString(revivedKey, serializedKey);
       const serializedValue = _stringify(rawValue, stack);
       const candidate: SerializedEntry = { serializedKey, serializedValue };
-      const bucket = normalizedEntries[propertyKey];
       const shouldDedupe = typeof rawKey !== "symbol";
+      const bucket = normalizedEntries[propertyKey];
       if (bucket) {
-        bucket.entries.push(candidate);
-        bucket.dedupe = bucket.dedupe && shouldDedupe;
+        bucket.push(candidate);
+        dedupeByKey[propertyKey] = (dedupeByKey[propertyKey] ?? true) && shouldDedupe;
       } else {
-        normalizedEntries[propertyKey] = {
-          entries: [candidate],
-          dedupe: shouldDedupe,
-        };
+        normalizedEntries[propertyKey] = [candidate];
+        dedupeByKey[propertyKey] = shouldDedupe;
       }
     }
     const sortedKeys = Object.keys(normalizedEntries).sort();
@@ -108,13 +106,11 @@ function _stringify(v: unknown, stack: Set<any>): string {
     for (let i = 0; i < sortedKeys.length; i += 1) {
       const key = sortedKeys[i];
       const bucket = normalizedEntries[key];
-      if (!bucket || bucket.entries.length === 0) {
+      if (!bucket || bucket.length === 0) {
         continue;
       }
-      bucket.entries.sort(compareSerializedEntry);
-      const entriesToEmit = bucket.dedupe
-        ? [bucket.entries[0]]
-        : bucket.entries;
+      bucket.sort(compareSerializedEntry);
+      const entriesToEmit = dedupeByKey[key] ? [bucket[0]] : bucket;
       for (let j = 0; j < entriesToEmit.length; j += 1) {
         const entry = entriesToEmit[j];
         if (bodyParts.length > 0) {
