@@ -2,7 +2,7 @@
 import { Cat32 } from "./categorizer.js";
 
 function parseArgs(argv: string[]) {
-  const args: Record<string, string | true> = {};
+  const args: Record<string, string | undefined> = {};
   for (let i = 2; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--") {
@@ -10,9 +10,10 @@ function parseArgs(argv: string[]) {
       if (rest.length > 0) {
         const remainder = rest.join(" ");
         if (Object.prototype.hasOwnProperty.call(args, "_")) {
-          (args as { _: string })._ = `${(args as { _: string })._} ${remainder}`;
+          const existing = args._;
+          args._ = existing === undefined ? remainder : `${existing} ${remainder}`;
         } else {
-          (args as { _: string })._ = remainder;
+          args._ = remainder;
         }
       }
       break;
@@ -28,13 +29,14 @@ function parseArgs(argv: string[]) {
           args[key] = next;
           i += 1;
         } else {
-          args[key] = true;
+          throw new RangeError(`flag "${a}" requires a value`);
         }
       }
     } else if (!("_" in args)) {
-      (args as any)._ = a;
+      args._ = a;
     } else {
-      (args as any)._ = String((args as any)._ + " " + a);
+      const existing = args._;
+      args._ = existing === undefined ? a : `${existing} ${a}`;
     }
   }
   return args;
@@ -43,11 +45,11 @@ function parseArgs(argv: string[]) {
 async function main() {
   const args = parseArgs(process.argv);
   const key = Object.prototype.hasOwnProperty.call(args, "_")
-    ? ((args as { _: string })._)
+    ? args._
     : undefined;
-  const salt = (args.salt as string) ?? "";
-  const namespace = (args.namespace as string) ?? "";
-  const norm = (args.normalize as string) ?? "nfkc";
+  const salt = args.salt ?? "";
+  const namespace = args.namespace ?? "";
+  const norm = args.normalize ?? "nfkc";
 
   const cat = new Cat32({ salt, namespace, normalize: norm as any });
 
