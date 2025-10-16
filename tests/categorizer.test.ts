@@ -126,6 +126,17 @@ test("stableStringify matches JSON.stringify for string literals", () => {
   );
 });
 
+test(
+  "stableStringify matches JSON.stringify for stringified sentinel string literals",
+  () => {
+    const sentinelStringLiteral = `__string__:${typeSentinel("number", "NaN")}`;
+    assert.equal(
+      stableStringify(sentinelStringLiteral),
+      JSON.stringify(sentinelStringLiteral),
+    );
+  },
+);
+
 test("stableStringify matches JSON.stringify for sentinel-like string literals", () => {
   const sentinelLike = "\u0000cat32:number:Infinity\u0000";
   assert.equal(stableStringify(sentinelLike), JSON.stringify(sentinelLike));

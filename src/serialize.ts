@@ -199,10 +199,6 @@ function stringifyStringLiteral(value: string): string {
 }
 
 function normalizeStringLiteral(value: string): string {
-  if (isSentinelWrappedString(value)) {
-    return value;
-  }
-
   return value;
 }
 
