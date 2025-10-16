@@ -15,7 +15,7 @@ export function typeSentinel(type, payload = "") {
     return `${SENTINEL_PREFIX}${type}:${payload}${SENTINEL_SUFFIX}`;
 }
 export function escapeSentinelString(value) {
-    return value;
+    return normalizeStringLiteral(value);
 }
 export function stableStringify(v) {
     const stack = new Set();
@@ -177,7 +177,17 @@ function toMapPropertyKey(rawKey, serializedKey) {
     return toPropertyKeyString(rawKey, revivedKey, serializedKey);
 }
 function stringifyStringLiteral(value) {
-    return JSON.stringify(value);
+    return JSON.stringify(normalizeStringLiteral(value));
+}
+function normalizeStringLiteral(value) {
+    if (isSentinelWrappedString(value)) {
+        return value;
+    }
+    if (value.startsWith(STRING_LITERAL_SENTINEL_PREFIX) &&
+        isSentinelWrappedString(value.slice(STRING_LITERAL_SENTINEL_PREFIX.length))) {
+        return value.slice(STRING_LITERAL_SENTINEL_PREFIX.length);
+    }
+    return value;
 }
 function stringifySentinelLiteral(value) {
     if (typeof value !== "string") {
@@ -242,14 +252,6 @@ function toPropertyKeyString(rawKey, revivedKey, serializedKey) {
     }
     if (rawKey === null) {
         return "null";
-    }
-    const revivedNumeric = reviveNumericSentinel(revivedKey);
-    if (revivedNumeric !== undefined) {
-        return String(revivedNumeric);
-    }
-    const fallbackNumeric = reviveNumericSentinel(serializedKey);
-    if (fallbackNumeric !== undefined) {
-        return String(fallbackNumeric);
     }
     if (rawKey instanceof Date) {
         if (typeof revivedKey === "string") {
