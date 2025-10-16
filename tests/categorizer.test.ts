@@ -117,6 +117,16 @@ test("stableStringify differentiates sentinel key from literal NaN key", () => {
   assert.ok(stableStringify(sentinelObject) !== stableStringify(literalObject));
 });
 
+test("stableStringify distinguishes literal sentinel-like string keys from NaN", () => {
+  const sentinelStringKey = "\u0000cat32:number:NaN\u0000";
+  const literalObject = { NaN: 1 };
+
+  assert.ok(
+    stableStringify({ [sentinelStringKey]: 1 }) !==
+      stableStringify(literalObject),
+  );
+});
+
 test("Cat32 assign key matches JSON.stringify for string literals", () => {
   const assignment = new Cat32().assign("__string__:payload");
   assert.equal(assignment.key, JSON.stringify("__string__:payload"));
@@ -133,6 +143,17 @@ test("Cat32 assign differentiates sentinel key from literal NaN key", () => {
     categorizer.assign(sentinelObject).key !==
       categorizer.assign(literalObject).key,
   );
+});
+
+test("Cat32 assign keeps literal sentinel-like keys distinct from NaN", () => {
+  const sentinelStringKey = "\u0000cat32:number:NaN\u0000";
+  const categorizer = new Cat32();
+
+  const sentinelAssignment = categorizer.assign({ [sentinelStringKey]: 1 });
+  const literalAssignment = categorizer.assign({ NaN: 1 });
+
+  assert.ok(sentinelAssignment.key !== literalAssignment.key);
+  assert.ok(sentinelAssignment.hash !== literalAssignment.hash);
 });
 
 test("dist stableStringify handles Map bucket ordering", async () => {
