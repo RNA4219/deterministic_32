@@ -253,14 +253,6 @@ function toPropertyKeyString(rawKey, revivedKey, serializedKey) {
     if (rawKey === null) {
         return "null";
     }
-    const revivedNumeric = reviveNumericSentinel(revivedKey);
-    if (revivedNumeric !== undefined) {
-        return String(revivedNumeric);
-    }
-    const fallbackNumeric = reviveNumericSentinel(serializedKey);
-    if (fallbackNumeric !== undefined) {
-        return String(fallbackNumeric);
-    }
     if (rawKey instanceof Date) {
         if (typeof revivedKey === "string") {
             return escapeSentinelString(revivedKey);
