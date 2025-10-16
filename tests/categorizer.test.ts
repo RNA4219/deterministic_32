@@ -109,6 +109,17 @@ test("stableStringify matches JSON.stringify for string literals", () => {
   );
 });
 
+test("stableStringify matches JSON.stringify for type sentinel strings", () => {
+  const inputs = [
+    typeSentinel("number", "NaN"),
+    typeSentinel("bigint", "123"),
+  ];
+
+  for (const input of inputs) {
+    assert.equal(stableStringify(input), JSON.stringify(input));
+  }
+});
+
 test("Cat32 assign key matches JSON.stringify for string literals", () => {
   const assignment = new Cat32().assign("__string__:payload");
   assert.equal(assignment.key, JSON.stringify("__string__:payload"));
@@ -1218,13 +1229,14 @@ test("Infinity serialized distinctly from string sentinel", () => {
   assert.equal(infinityAssignment.hash === sentinelAssignment.hash, false);
 });
 
-test("raw number sentinel string differs from Infinity value", () => {
+test("raw number sentinel string matches Infinity value", () => {
   const c = new Cat32();
-  const sentinelAssignment = c.assign("\u0000cat32:number:Infinity\u0000");
+  const sentinelLiteral = typeSentinel("number", "Infinity");
+  const sentinelAssignment = c.assign(sentinelLiteral);
   const infinityAssignment = c.assign(Infinity);
 
-  assert.ok(sentinelAssignment.key !== infinityAssignment.key);
-  assert.ok(sentinelAssignment.hash !== infinityAssignment.hash);
+  assert.equal(sentinelAssignment.key, infinityAssignment.key);
+  assert.equal(sentinelAssignment.hash, infinityAssignment.hash);
 });
 
 test("top-level bigint differs from number", () => {

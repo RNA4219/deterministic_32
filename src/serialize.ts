@@ -5,7 +5,6 @@
 // - Maps/Sets are serialized as arrays in insertion order (keys sorted for Map via key string).
 
 const SENTINEL_PREFIX = "\u0000cat32:";
-const STRING_SENTINEL_PREFIX = `${SENTINEL_PREFIX}string:`;
 const SENTINEL_SUFFIX = "\u0000";
 const HOLE_SENTINEL = JSON.stringify(typeSentinel("hole"));
 const UNDEFINED_SENTINEL = "__undefined__";
@@ -19,9 +18,6 @@ export function typeSentinel(type: string, payload = ""): string {
 }
 
 export function escapeSentinelString(value: string): string {
-  if (isSentinelWrappedString(value) && !value.startsWith(STRING_SENTINEL_PREFIX)) {
-    return typeSentinel("string", value);
-  }
   return value;
 }
 
@@ -40,12 +36,6 @@ function _stringify(v: unknown, stack: Set<any>): string {
 
   if (t === "string") {
     const value = v as string;
-    if (
-      isSentinelWrappedString(value) &&
-      !value.startsWith(STRING_SENTINEL_PREFIX)
-    ) {
-      return stringifyStringLiteral(typeSentinel("string", value));
-    }
     return stringifyStringLiteral(value);
   }
   if (t === "number") {
