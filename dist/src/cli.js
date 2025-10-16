@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { Cat32 } from "./categorizer.js";
+const ALLOWED_FLAGS = new Set(["salt", "namespace", "normalize"]);
 function parseArgs(argv) {
     const args = {};
     for (let i = 2; i < argv.length; i++) {
@@ -20,11 +21,14 @@ function parseArgs(argv) {
         }
         if (a.startsWith("--")) {
             const eq = a.indexOf("=");
+            const key = a.slice(2, eq >= 0 ? eq : undefined);
+            if (!ALLOWED_FLAGS.has(key)) {
+                throw new RangeError(`unknown flag "--${key}"`);
+            }
             if (eq >= 0) {
-                args[a.slice(2, eq)] = a.slice(eq + 1);
+                args[key] = a.slice(eq + 1);
             }
             else {
-                const key = a.slice(2);
                 const next = argv[i + 1];
                 if (next !== undefined && next !== "--" && !next.startsWith("--")) {
                     args[key] = next;
