@@ -161,7 +161,7 @@ function _stringify(v: unknown, stack: Set<any>): string {
   }
 
   for (const symbol of enumerableSymbols) {
-    const symbolString = toPropertyKeyString(symbol, symbol.toString());
+    const symbolString = toPropertyKeyString(symbol, symbol, symbol.toString());
     entries.push({
       sortKey: symbolString,
       normalizedKey: symbolString,
@@ -280,31 +280,64 @@ function reviveSentinelValue(value: unknown): unknown {
   return value;
 }
 
-function toPropertyKeyString(value: unknown, fallback: string): string {
-  if (value === null) return "null";
-  const numeric = reviveNumericSentinel(value);
-  if (numeric !== undefined) {
-    return String(numeric);
+function toPropertyKeyString(
+  rawKey: unknown,
+  revivedKey: unknown,
+  serializedKey: string,
+): string {
+  if (typeof rawKey === "symbol") {
+    return (rawKey as symbol).toString();
   }
-  const type = typeof value;
-  if (type === "object" || type === "function") {
-    const fallbackNumeric = reviveNumericSentinel(fallback);
-    if (fallbackNumeric !== undefined) {
-      return String(fallbackNumeric);
+
+  if (rawKey === null) {
+    return "null";
+  }
+
+  const revivedNumeric = reviveNumericSentinel(revivedKey);
+  if (revivedNumeric !== undefined) {
+    return String(revivedNumeric);
+  }
+
+  const fallbackNumeric = reviveNumericSentinel(serializedKey);
+  if (fallbackNumeric !== undefined) {
+    return String(fallbackNumeric);
+  }
+
+  if (rawKey instanceof Date) {
+    if (typeof revivedKey === "string") {
+      return escapeSentinelString(revivedKey);
     }
-    return fallback;
+    return `${DATE_SENTINEL_PREFIX}${rawKey.toISOString()}`;
   }
-  if (type === "symbol") {
-    return (value as symbol).toString();
+
+  const rawType = typeof rawKey;
+  if (rawType === "string") {
+    return normalizePlainObjectKey(rawKey as string);
   }
+
   if (
-    type === "string" &&
-    (value as string).startsWith(STRING_SENTINEL_PREFIX) &&
-    (value as string).endsWith(SENTINEL_SUFFIX)
+    rawType === "number" ||
+    rawType === "bigint" ||
+    rawType === "boolean"
   ) {
-    return (value as string).slice(STRING_SENTINEL_PREFIX.length, -SENTINEL_SUFFIX.length);
+    return String(rawKey);
   }
-  return String(value);
+
+  if (rawType === "undefined") {
+    return "undefined";
+  }
+
+  if (rawType === "object" || rawType === "function") {
+    return normalizePlainObjectKey(String(rawKey));
+  }
+
+  if (typeof revivedKey === "string") {
+    return normalizePlainObjectKey(escapeSentinelString(revivedKey));
+  }
+
+  return normalizePlainObjectKey(
+    escapeSentinelString(String(revivedKey ?? serializedKey)),
+  );
 }
 
 function reviveNumericSentinel(value: unknown): number | bigint | undefined {
