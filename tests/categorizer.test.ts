@@ -137,6 +137,11 @@ test(
   },
 );
 
+test("stableStringify preserves prefixed sentinel string literal content", () => {
+  const value = "__string__:" + typeSentinel("number", "NaN");
+  assert.equal(stableStringify(value), JSON.stringify(value));
+});
+
 test("stableStringify matches JSON.stringify for sentinel-like string literals", () => {
   const sentinelLike = "\u0000cat32:number:Infinity\u0000";
   assert.equal(stableStringify(sentinelLike), JSON.stringify(sentinelLike));
@@ -180,6 +185,12 @@ test("stableStringify distinguishes literal sentinel-like string keys from NaN",
 test("Cat32 assign key matches JSON.stringify for string literals", () => {
   const assignment = new Cat32().assign("__string__:payload");
   assert.equal(assignment.key, JSON.stringify("__string__:payload"));
+});
+
+test("Cat32 assign key preserves prefixed sentinel string literal content", () => {
+  const value = "__string__:" + typeSentinel("number", "NaN");
+  const assignment = new Cat32().assign(value);
+  assert.equal(assignment.key, JSON.stringify(value));
 });
 
 test("Cat32 assign key matches JSON.stringify for sentinel-like string literals", () => {
