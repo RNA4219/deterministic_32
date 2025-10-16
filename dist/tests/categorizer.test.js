@@ -39,6 +39,10 @@ test("dist stableStringify matches JSON.stringify for string literals", async ()
 test("stableStringify matches JSON.stringify for string literals", () => {
     assert.equal(stableStringify("__string__:payload"), JSON.stringify("__string__:payload"));
 });
+test("stableStringify matches JSON.stringify for sentinel-like string literals", () => {
+    const sentinelLike = "\u0000cat32:number:Infinity\u0000";
+    assert.equal(stableStringify(sentinelLike), JSON.stringify(sentinelLike));
+});
 test("stableStringify differentiates sentinel key from literal NaN key", () => {
     const sentinelKey = typeSentinel("number", "NaN");
     const sentinelObject = { [sentinelKey]: "sentinel" };
@@ -48,6 +52,11 @@ test("stableStringify differentiates sentinel key from literal NaN key", () => {
 test("Cat32 assign key matches JSON.stringify for string literals", () => {
     const assignment = new Cat32().assign("__string__:payload");
     assert.equal(assignment.key, JSON.stringify("__string__:payload"));
+});
+test("Cat32 assign key matches JSON.stringify for sentinel-like string literals", () => {
+    const sentinelLike = "\u0000cat32:number:Infinity\u0000";
+    const assignment = new Cat32().assign(sentinelLike);
+    assert.equal(assignment.key, JSON.stringify(sentinelLike));
 });
 test("Cat32 assign differentiates sentinel key from literal NaN key", () => {
     const sentinelKey = typeSentinel("number", "NaN");

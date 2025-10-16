@@ -18,7 +18,7 @@ export function typeSentinel(type: string, payload = ""): string {
 }
 
 export function escapeSentinelString(value: string): string {
-  return value;
+  return normalizeStringLiteral(value);
 }
 
 export function stableStringify(v: unknown): string {
@@ -195,7 +195,22 @@ function toMapPropertyKey(rawKey: unknown, serializedKey: string): string {
 }
 
 function stringifyStringLiteral(value: string): string {
-  return JSON.stringify(value);
+  return JSON.stringify(normalizeStringLiteral(value));
+}
+
+function normalizeStringLiteral(value: string): string {
+  if (isSentinelWrappedString(value)) {
+    return value;
+  }
+
+  if (
+    value.startsWith(STRING_LITERAL_SENTINEL_PREFIX) &&
+    isSentinelWrappedString(value.slice(STRING_LITERAL_SENTINEL_PREFIX.length))
+  ) {
+    return value.slice(STRING_LITERAL_SENTINEL_PREFIX.length);
+  }
+
+  return value;
 }
 
 function stringifySentinelLiteral(value: string): string {
