@@ -39,9 +39,23 @@ test("dist stableStringify matches JSON.stringify for string literals", async ()
 test("stableStringify matches JSON.stringify for string literals", () => {
     assert.equal(stableStringify("__string__:payload"), JSON.stringify("__string__:payload"));
 });
+test("stableStringify differentiates sentinel key from literal NaN key", () => {
+    const sentinelKey = typeSentinel("number", "NaN");
+    const sentinelObject = { [sentinelKey]: "sentinel" };
+    const literalObject = { NaN: "literal" };
+    assert.ok(stableStringify(sentinelObject) !== stableStringify(literalObject));
+});
 test("Cat32 assign key matches JSON.stringify for string literals", () => {
     const assignment = new Cat32().assign("__string__:payload");
     assert.equal(assignment.key, JSON.stringify("__string__:payload"));
+});
+test("Cat32 assign differentiates sentinel key from literal NaN key", () => {
+    const sentinelKey = typeSentinel("number", "NaN");
+    const sentinelObject = { [sentinelKey]: "sentinel" };
+    const literalObject = { NaN: "literal" };
+    const categorizer = new Cat32();
+    assert.ok(categorizer.assign(sentinelObject).key !==
+        categorizer.assign(literalObject).key);
 });
 test("dist stableStringify handles Map bucket ordering", async () => {
     const sourceImportMetaUrl = import.meta.url.includes("/dist/tests/")
@@ -206,16 +220,16 @@ test("Cat32 normalizes Map keys with special numeric values", () => {
     assert.equal(mapNaN.hash, objectNaN.hash);
     const sentinelNaNKey = typeSentinel("number", "NaN");
     const objectNaNSentinel = cat.assign(Object.fromEntries([[sentinelNaNKey, "v"]]));
-    assert.equal(mapNaN.key, objectNaNSentinel.key);
-    assert.equal(mapNaN.hash, objectNaNSentinel.hash);
+    assert.ok(mapNaN.key !== objectNaNSentinel.key);
+    assert.ok(mapNaN.hash !== objectNaNSentinel.hash);
     const mapInfinity = cat.assign(new Map([[Infinity, "v"]]));
     const objectInfinity = cat.assign({ Infinity: "v" });
     assert.equal(mapInfinity.key, objectInfinity.key);
     assert.equal(mapInfinity.hash, objectInfinity.hash);
     const sentinelInfinityKey = typeSentinel("number", "Infinity");
     const objectInfinitySentinel = cat.assign(Object.fromEntries([[sentinelInfinityKey, "v"]]));
-    assert.equal(mapInfinity.key, objectInfinitySentinel.key);
-    assert.equal(mapInfinity.hash, objectInfinitySentinel.hash);
+    assert.ok(mapInfinity.key !== objectInfinitySentinel.key);
+    assert.ok(mapInfinity.hash !== objectInfinitySentinel.hash);
     const mapBigInt = cat.assign(new Map([[1n, "v"]]));
     const bigIntObjectKey = String(1n);
     const objectBigInt = cat.assign({ [bigIntObjectKey]: "v" });
@@ -223,8 +237,8 @@ test("Cat32 normalizes Map keys with special numeric values", () => {
     assert.equal(mapBigInt.hash, objectBigInt.hash);
     const sentinelBigIntKey = typeSentinel("bigint", "1");
     const objectBigIntSentinel = cat.assign(Object.fromEntries([[sentinelBigIntKey, "v"]]));
-    assert.equal(mapBigInt.key, objectBigIntSentinel.key);
-    assert.equal(mapBigInt.hash, objectBigIntSentinel.hash);
+    assert.ok(mapBigInt.key !== objectBigIntSentinel.key);
+    assert.ok(mapBigInt.hash !== objectBigIntSentinel.hash);
 });
 test("Cat32 assigns identical keys for Maps regardless of insertion order", () => {
     const cat = new Cat32();
