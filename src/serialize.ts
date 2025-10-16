@@ -199,17 +199,6 @@ function stringifyStringLiteral(value: string): string {
 }
 
 function normalizeStringLiteral(value: string): string {
-  if (isSentinelWrappedString(value)) {
-    return value;
-  }
-
-  if (
-    value.startsWith(STRING_LITERAL_SENTINEL_PREFIX) &&
-    isSentinelWrappedString(value.slice(STRING_LITERAL_SENTINEL_PREFIX.length))
-  ) {
-    return value.slice(STRING_LITERAL_SENTINEL_PREFIX.length);
-  }
-
   return value;
 }
 
