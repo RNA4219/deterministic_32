@@ -179,15 +179,7 @@ function compareSerializedEntry(left, right) {
 }
 function toMapPropertyKey(rawKey, serializedKey) {
     const revivedKey = reviveFromSerialized(serializedKey);
-    if (typeof rawKey === "symbol") {
-        return toPropertyKeyString(rawKey, revivedKey, serializedKey);
-    }
-    try {
-        return toPropertyKeyString(rawKey, revivedKey, serializedKey);
-    }
-    catch {
-        return toPropertyKeyString(revivedKey, revivedKey, serializedKey);
-    }
+    return toPropertyKeyString(rawKey, revivedKey, serializedKey);
 }
 function stringifyStringLiteral(value) {
     if (value.startsWith(STRING_LITERAL_SENTINEL_PREFIX)) {
@@ -292,7 +284,23 @@ function toPropertyKeyString(rawKey, revivedKey, serializedKey) {
         return "undefined";
     }
     if (rawType === "object" || rawType === "function") {
-        return normalizePlainObjectKey(String(rawKey));
+        let stringified;
+        try {
+            stringified = String(rawKey);
+        }
+        catch {
+            stringified = undefined;
+        }
+        if (stringified !== undefined) {
+            const normalizedString = normalizePlainObjectKey(stringified);
+            if (typeof revivedKey === "string") {
+                const normalizedRevived = normalizePlainObjectKey(escapeSentinelString(revivedKey));
+                if (normalizedRevived !== normalizedString) {
+                    return normalizedRevived;
+                }
+            }
+            return normalizedString;
+        }
     }
     if (typeof revivedKey === "string") {
         return normalizePlainObjectKey(escapeSentinelString(revivedKey));
