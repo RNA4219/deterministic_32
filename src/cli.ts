@@ -59,12 +59,36 @@ async function main() {
   process.stdout.write(JSON.stringify(res) + "\n");
 }
 
+type ReadableStdin = typeof process.stdin & {
+  setEncoding(encoding: string): void;
+  addListener(event: "data", listener: (chunk: string) => void): void;
+  addListener(event: "end" | "close", listener: () => void): void;
+  addListener(event: "error", listener: (error: unknown) => void): void;
+  removeListener(event: "data", listener: (chunk: string) => void): void;
+  removeListener(event: "end" | "close", listener: () => void): void;
+  removeListener(event: "error", listener: (error: unknown) => void): void;
+};
+
 function readStdin(): Promise<string> {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
+    const stdin = process.stdin as ReadableStdin;
     let data = "";
-    process.stdin.setEncoding("utf8");
-    process.stdin.on("data", (chunk) => (data += chunk));
-    process.stdin.on("end", () => {
+    let settled = false;
+    stdin.setEncoding("utf8");
+
+    function cleanup() {
+      stdin.removeListener("data", onData);
+      stdin.removeListener("end", onEnd);
+      stdin.removeListener("close", onClose);
+      stdin.removeListener("error", onError);
+    }
+
+    function resolveWithData() {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      cleanup();
       let finalData = data;
       if (finalData.endsWith("\r\n")) {
         finalData = finalData.slice(0, -2);
@@ -72,7 +96,33 @@ function readStdin(): Promise<string> {
         finalData = finalData.slice(0, -1);
       }
       resolve(finalData);
-    });
+    }
+
+    function onData(chunk: string) {
+      data += chunk;
+    }
+
+    function onEnd() {
+      resolveWithData();
+    }
+
+    function onClose() {
+      resolveWithData();
+    }
+
+    function onError(error: unknown) {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      cleanup();
+      reject(error);
+    }
+
+    stdin.addListener("data", onData);
+    stdin.addListener("end", onEnd);
+    stdin.addListener("close", onClose);
+    stdin.addListener("error", onError);
   });
 }
 
