@@ -148,7 +148,7 @@ function _stringify(v, stack) {
         });
     }
     for (const symbol of enumerableSymbols) {
-        const symbolString = toPropertyKeyString(symbol, symbol.toString());
+        const symbolString = toPropertyKeyString(symbol, symbol, symbol.toString());
         entries.push({
             sortKey: symbolString,
             normalizedKey: symbolString,
@@ -178,19 +178,8 @@ function compareSerializedEntry(left, right) {
     return 0;
 }
 function toMapPropertyKey(rawKey, serializedKey) {
-    if (typeof rawKey === "symbol") {
-        const revivedKey = reviveFromSerialized(serializedKey);
-        return toPropertyKeyString(revivedKey, serializedKey);
-    }
-    let stringifiedKey;
-    try {
-        stringifiedKey = String(rawKey);
-    }
-    catch {
-        const revivedKey = reviveFromSerialized(serializedKey);
-        return toPropertyKeyString(revivedKey, serializedKey);
-    }
-    return toPropertyKeyString(stringifiedKey, stringifiedKey);
+    const revivedKey = reviveFromSerialized(serializedKey);
+    return toPropertyKeyString(rawKey, revivedKey, serializedKey);
 }
 function stringifyStringLiteral(value) {
     if (value.startsWith(STRING_LITERAL_SENTINEL_PREFIX)) {
@@ -261,30 +250,62 @@ function reviveSentinelValue(value) {
     }
     return value;
 }
-function toPropertyKeyString(value, fallback) {
-    if (value === null)
+function toPropertyKeyString(rawKey, revivedKey, serializedKey) {
+    if (typeof rawKey === "symbol") {
+        return rawKey.toString();
+    }
+    if (rawKey === null) {
         return "null";
-    const numeric = reviveNumericSentinel(value);
-    if (numeric !== undefined) {
-        return String(numeric);
     }
-    const type = typeof value;
-    if (type === "object" || type === "function") {
-        const fallbackNumeric = reviveNumericSentinel(fallback);
-        if (fallbackNumeric !== undefined) {
-            return String(fallbackNumeric);
+    const revivedNumeric = reviveNumericSentinel(revivedKey);
+    if (revivedNumeric !== undefined) {
+        return String(revivedNumeric);
+    }
+    const fallbackNumeric = reviveNumericSentinel(serializedKey);
+    if (fallbackNumeric !== undefined) {
+        return String(fallbackNumeric);
+    }
+    if (rawKey instanceof Date) {
+        if (typeof revivedKey === "string") {
+            return escapeSentinelString(revivedKey);
         }
-        return fallback;
+        return `${DATE_SENTINEL_PREFIX}${rawKey.toISOString()}`;
     }
-    if (type === "symbol") {
-        return value.toString();
+    const rawType = typeof rawKey;
+    if (rawType === "string") {
+        return normalizePlainObjectKey(rawKey);
     }
-    if (type === "string" &&
-        value.startsWith(STRING_SENTINEL_PREFIX) &&
-        value.endsWith(SENTINEL_SUFFIX)) {
-        return value.slice(STRING_SENTINEL_PREFIX.length, -SENTINEL_SUFFIX.length);
+    if (rawType === "number" ||
+        rawType === "bigint" ||
+        rawType === "boolean") {
+        return String(rawKey);
     }
-    return String(value);
+    if (rawType === "undefined") {
+        return "undefined";
+    }
+    if (rawType === "object" || rawType === "function") {
+        let stringified;
+        try {
+            stringified = String(rawKey);
+        }
+        catch {
+            stringified = undefined;
+        }
+        if (stringified !== undefined) {
+            const normalizedString = normalizePlainObjectKey(stringified);
+            if (typeof revivedKey === "string") {
+                const normalizedRevived = normalizePlainObjectKey(escapeSentinelString(revivedKey));
+                if (normalizedRevived !== normalizedString) {
+                    return normalizedRevived;
+                }
+            }
+            return normalizedString;
+        }
+    }
+    if (typeof revivedKey === "string") {
+        return normalizePlainObjectKey(escapeSentinelString(revivedKey));
+    }
+    return normalizePlainObjectKey(escapeSentinelString(String(revivedKey ?? serializedKey)));
 }
 function reviveNumericSentinel(value) {
     if (typeof value === "number" || typeof value === "bigint") {

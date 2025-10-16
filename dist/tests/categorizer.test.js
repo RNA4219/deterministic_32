@@ -77,6 +77,17 @@ test("Cat32 assign normalizes Map keys by string representation", () => {
     assert.equal(mixedAssignment.hash, stringOnlyAssignment.hash);
     assert.equal(mixedAssignment.key, stringOnlyAssignment.key);
 });
+test("stableStringify aligns Map object keys with object literals", () => {
+    const obj = { foo: 1 };
+    const mapKey = stableStringify(new Map([[obj, "value"]]));
+    const objectKey = stableStringify({ [String(obj)]: "value" });
+    assert.equal(mapKey, objectKey);
+    const cat = new Cat32();
+    const mapAssignment = cat.assign(new Map([[obj, "value"]]));
+    const objectAssignment = cat.assign({ [String(obj)]: "value" });
+    assert.equal(mapAssignment.key, objectAssignment.key);
+    assert.equal(mapAssignment.hash, objectAssignment.hash);
+});
 test("tsc succeeds without duplicate identifier errors", async () => {
     const sourceImportMetaUrl = import.meta.url.includes("/dist/tests/")
         ? new URL("../../tests/categorizer.test.ts", import.meta.url)
@@ -708,6 +719,17 @@ test("Map values serialize identically to plain object values", () => {
         ["sym", sym],
     ]));
     const objectAssignment = c.assign({ fn, sym });
+    assert.equal(mapAssignment.key, objectAssignment.key);
+    assert.equal(mapAssignment.hash, objectAssignment.hash);
+});
+test("Map object key matches plain object string key", () => {
+    const obj = { foo: 1 };
+    const map = new Map([[obj, "value"]]);
+    const plainObject = { [String(obj)]: "value" };
+    assert.equal(stableStringify(map), stableStringify(plainObject));
+    const cat = new Cat32();
+    const mapAssignment = cat.assign(map);
+    const objectAssignment = cat.assign(plainObject);
     assert.equal(mapAssignment.key, objectAssignment.key);
     assert.equal(mapAssignment.hash, objectAssignment.hash);
 });
