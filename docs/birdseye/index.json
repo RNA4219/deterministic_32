@@ -5,15 +5,41 @@
     "src/categorizer.ts": {
       "role": "domain",
       "caps": "docs/birdseye/caps/src.categorizer.ts.json",
-      "mtime": "2025-10-16T20:55:05.135128Z"
+      "mtime": "2025-10-16T20:55:08+00:00"
     },
     "src/serialize.ts": {
       "role": "utility",
       "caps": "docs/birdseye/caps/src.serialize.ts.json",
-      "mtime": "2025-10-16T22:32:12.964613Z"
+      "mtime": "2025-10-16T22:32:17+00:00"
+    },
+    "src/cli.ts": {
+      "role": "cli",
+      "caps": "docs/birdseye/caps/src.cli.ts.json",
+      "mtime": "2025-10-16T22:32:17+00:00"
+    },
+    "src/hash.ts": {
+      "role": "utility",
+      "caps": "docs/birdseye/caps/src.hash.ts.json",
+      "mtime": "2025-10-16T20:55:08+00:00"
+    },
+    "src/index.ts": {
+      "role": "entrypoint",
+      "caps": "docs/birdseye/caps/src.index.ts.json",
+      "mtime": "2025-10-16T20:55:08+00:00"
+    },
+    "tests/categorizer.test.ts": {
+      "role": "test",
+      "caps": "docs/birdseye/caps/tests.categorizer.test.ts.json",
+      "mtime": "2025-10-16T22:32:17+00:00"
     }
   },
   "edges": [
-    ["src/categorizer.ts", "src/serialize.ts"]
+    ["src/categorizer.ts", "src/hash.ts"],
+    ["src/categorizer.ts", "src/serialize.ts"],
+    ["src/cli.ts", "src/categorizer.ts"],
+    ["src/index.ts", "src/categorizer.ts"],
+    ["src/index.ts", "src/serialize.ts"],
+    ["tests/categorizer.test.ts", "src/index.ts"],
+    ["tests/categorizer.test.ts", "src/serialize.ts"]
   ]
 }
