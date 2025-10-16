@@ -1,18 +1,18 @@
 {
   "version": "guardrails@0.1",
   "generated_at": "2025-10-16T16:52:00Z",
-  "nodes": [
-    {
-      "id": "src/categorizer.ts",
+  "nodes": {
+    "src/categorizer.ts": {
       "role": "domain",
-      "caps": "docs/birdseye/caps/src.categorizer.ts.json"
+      "caps": "docs/birdseye/caps/src.categorizer.ts.json",
+      "mtime": "2025-10-16T20:55:05.135128Z"
     },
-    {
-      "id": "src/serialize.ts",
+    "src/serialize.ts": {
       "role": "utility",
-      "caps": "docs/birdseye/caps/src.serialize.ts.json"
+      "caps": "docs/birdseye/caps/src.serialize.ts.json",
+      "mtime": "2025-10-16T22:32:12.964613Z"
     }
-  ],
+  },
   "edges": [
     ["src/categorizer.ts", "src/serialize.ts"]
   ]
