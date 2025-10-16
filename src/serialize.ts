@@ -6,7 +6,9 @@
 
 const SENTINEL_PREFIX = "\u0000cat32:";
 const SENTINEL_SUFFIX = "\u0000";
-const HOLE_SENTINEL = JSON.stringify(typeSentinel("hole"));
+const HOLE_SENTINEL_PAYLOAD = "__hole__";
+const HOLE_SENTINEL_RAW = typeSentinel("hole", HOLE_SENTINEL_PAYLOAD);
+const HOLE_SENTINEL = JSON.stringify(HOLE_SENTINEL_RAW);
 const UNDEFINED_SENTINEL = "__undefined__";
 const DATE_SENTINEL_PREFIX = "__date__:";
 const BIGINT_SENTINEL_PREFIX = "__bigint__:";
@@ -199,15 +201,12 @@ function stringifyStringLiteral(value: string): string {
 }
 
 function normalizeStringLiteral(value: string): string {
-  if (isSentinelWrappedString(value)) {
+  if (value.startsWith(STRING_LITERAL_SENTINEL_PREFIX)) {
     return value;
   }
 
-  if (value.startsWith(STRING_LITERAL_SENTINEL_PREFIX)) {
-    const literalSentinel = value.slice(STRING_LITERAL_SENTINEL_PREFIX.length);
-    if (isSentinelWrappedString(literalSentinel)) {
-      return STRING_LITERAL_SENTINEL_PREFIX + literalSentinel;
-    }
+  if (value === HOLE_SENTINEL_RAW) {
+    return `${STRING_LITERAL_SENTINEL_PREFIX}${value}`;
   }
 
   return value;
@@ -356,5 +355,5 @@ function reviveNumericSentinel(value: unknown): number | bigint | undefined {
 }
 
 function normalizePlainObjectKey(key: string): string {
-  return key;
+  return normalizeStringLiteral(key);
 }
