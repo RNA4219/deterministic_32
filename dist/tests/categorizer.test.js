@@ -11,6 +11,22 @@ const CLI_LITERAL_KEY_EVAL_SCRIPT = [
     "process.argv = [process.argv[0], cliPath, '--', '--literal-key'];",
     "import(cliPath).catch((error) => { console.error(error); process.exit(1); });",
 ].join(" ");
+const CLI_STDIN_ERROR_SCRIPT = [
+    "(async () => {",
+    "  const cliPath = process.argv.at(-1);",
+    "  process.stdin.isTTY = false;",
+    "  process.argv = [process.argv[0], cliPath];",
+    "  setTimeout(() => {",
+    "    process.stdin.emit('error', new Error('boom'));",
+    "  }, 0);",
+    "  try {",
+    "    await import(cliPath);",
+    "  } catch (error) {",
+    "    console.error(error);",
+    "    process.exit(1);",
+    "  }",
+    "})();",
+].join("\n");
 test("dist build re-exports stableStringify", async () => {
     const sourceImportMetaUrl = import.meta.url.includes("/dist/tests/")
         ? new URL("../../tests/categorizer.test.ts", import.meta.url)
@@ -416,12 +432,11 @@ test("CLI exits with code 2 when --salt is missing a value", async () => {
     });
     assert.equal(exitCode, 2, `cat32 failed: exit code ${exitCode}\nstdout:\n${stdout}\nstderr:\n${stderr}`);
 });
-test("CLI exits with code 2 when an unknown flag is provided", async () => {
+test("CLI exits with code 1 when stdin emits an error", async () => {
     const { spawn } = (await dynamicImport("node:child_process"));
-    const child = spawn(process.argv[0], [CLI_PATH, "--namesapce", "foo", "bar"], {
+    const child = spawn(process.argv[0], ["-e", CLI_STDIN_ERROR_SCRIPT, CLI_PATH], {
         stdio: ["pipe", "pipe", "pipe"],
     });
-    child.stdin.end();
     let stdout = "";
     child.stdout.setEncoding("utf8");
     child.stdout.on("data", (chunk) => {
@@ -435,8 +450,9 @@ test("CLI exits with code 2 when an unknown flag is provided", async () => {
     const exitCode = await new Promise((resolve) => {
         child.on("close", (code) => resolve(code));
     });
-    assert.equal(exitCode, 2, `cat32 failed: exit code ${exitCode}\nstdout:\n${stdout}\nstderr:\n${stderr}`);
-    assert.ok(/unknown flag "--namesapce"/.test(stderr));
+    assert.equal(exitCode, 1, `cat32 failed: exit code ${exitCode}\nstdout:\n${stdout}\nstderr:\n${stderr}`);
+    assert.ok(stderr.toLowerCase().includes("boom"), `stderr did not include boom: ${stderr}`);
+    assert.equal(stdout, "");
 });
 test("cat32 binary accepts flag values separated by whitespace", async () => {
     const { spawn } = (await dynamicImport("node:child_process"));
