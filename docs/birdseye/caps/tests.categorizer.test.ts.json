@@ -1,0 +1,8 @@
+{
+  "id": "tests/categorizer.test.ts",
+  "role": "test",
+  "summary": "Node:test suite covering Cat32 hashing, stableStringify sentinels, CLI exit codes, and TypeScript builds.",
+  "deps_out": ["src/index.ts", "src/serialize.ts"],
+  "deps_in": [],
+  "tests": ["tests/categorizer.test.ts"]
+}

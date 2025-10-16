@@ -1,0 +1,8 @@
+{
+  "id": "src/hash.ts",
+  "role": "utility",
+  "summary": "FNV-1a 32-bit hashing helpers returning unsigned int and padded hex.",
+  "deps_out": [],
+  "deps_in": ["src/categorizer.ts"],
+  "tests": ["tests/categorizer.test.ts"]
+}

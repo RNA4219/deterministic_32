@@ -1,0 +1,8 @@
+{
+  "id": "src/index.ts",
+  "role": "entrypoint",
+  "summary": "ESM entrypoint that re-exports Cat32 and stableStringify for consumers.",
+  "deps_out": ["src/categorizer.ts", "src/serialize.ts"],
+  "deps_in": ["tests/categorizer.test.ts"],
+  "tests": ["tests/categorizer.test.ts"]
+}
