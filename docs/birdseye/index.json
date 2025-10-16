@@ -1,44 +1,19 @@
 {
-  "generated_at": "2025-10-16T14:09:10Z",
-  "nodes": {
-    "src/index.ts": {
-      "role": "entrypoint",
-      "caps": "docs/birdseye/caps/src.index.ts.json",
-      "mtime": "2025-10-16T05:02:07+09:00"
-    },
-    "src/categorizer.ts": {
+  "version": "guardrails@0.1",
+  "generated_at": "2025-10-16T16:52:00Z",
+  "nodes": [
+    {
+      "id": "src/categorizer.ts",
       "role": "domain",
-      "caps": "docs/birdseye/caps/src.categorizer.ts.json",
-      "mtime": "2025-10-15T19:04:13+09:00"
+      "caps": "docs/birdseye/caps/src.categorizer.ts.json"
     },
-    "src/serialize.ts": {
+    {
+      "id": "src/serialize.ts",
       "role": "utility",
-      "caps": "docs/birdseye/caps/src.serialize.ts.json",
-      "mtime": "2025-10-16T23:04:00+09:00"
-    },
-    "src/hash.ts": {
-      "role": "utility",
-      "caps": "docs/birdseye/caps/src.hash.ts.json",
-      "mtime": "2025-10-14T17:37:21+09:00"
-    },
-    "src/cli.ts": {
-      "role": "cli",
-      "caps": "docs/birdseye/caps/src.cli.ts.json",
-      "mtime": "2025-10-16T22:49:07+09:00"
-    },
-    "tests/categorizer.test.ts": {
-      "role": "test",
-      "caps": "docs/birdseye/caps/tests.categorizer.test.ts.json",
-      "mtime": "2025-10-16T23:07:06+09:00"
+      "caps": "docs/birdseye/caps/src.serialize.ts.json"
     }
-  },
+  ],
   "edges": [
-    ["src/index.ts", "src/categorizer.ts"],
-    ["src/index.ts", "src/serialize.ts"],
-    ["src/categorizer.ts", "src/hash.ts"],
-    ["src/categorizer.ts", "src/serialize.ts"],
-    ["src/cli.ts", "src/categorizer.ts"],
-    ["tests/categorizer.test.ts", "src/index.ts"],
-    ["tests/categorizer.test.ts", "src/serialize.ts"]
+    ["src/categorizer.ts", "src/serialize.ts"]
   ]
 }
