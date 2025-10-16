@@ -142,6 +142,23 @@ test("stableStringify matches JSON.stringify for sentinel-like string literals",
   assert.equal(stableStringify(sentinelLike), JSON.stringify(sentinelLike));
 });
 
+test(
+  "stableStringify distinguishes prefixed string literals from hole sentinels",
+  () => {
+    const prefixedLiteral = `__string__:${typeSentinel("hole")}`;
+    const sentinelLiteral = typeSentinel("hole");
+    const sparseArray = new Array(1);
+
+    const prefixedResult = stableStringify([prefixedLiteral]);
+    const sentinelResult = stableStringify([sentinelLiteral]);
+    const sparseResult = stableStringify(sparseArray);
+
+    assert.ok(prefixedResult !== sentinelResult);
+    assert.ok(prefixedResult !== sparseResult);
+    assert.ok(sentinelResult !== sparseResult);
+  },
+);
+
 test("stableStringify differentiates sentinel key from literal NaN key", () => {
   const sentinelKey = typeSentinel("number", "NaN");
   const sentinelObject = { [sentinelKey]: "sentinel" };
@@ -194,6 +211,27 @@ test("Cat32 assign keeps literal sentinel-like keys distinct from NaN", () => {
   assert.ok(sentinelAssignment.key !== literalAssignment.key);
   assert.ok(sentinelAssignment.hash !== literalAssignment.hash);
 });
+
+test(
+  "Cat32 assign keeps prefixed string literals distinct from hole sentinels",
+  () => {
+    const categorizer = new Cat32();
+    const prefixedLiteral = `__string__:${typeSentinel("hole")}`;
+    const sentinelLiteral = typeSentinel("hole");
+    const sparseArray = new Array(1);
+
+    const prefixedAssignment = categorizer.assign([prefixedLiteral]);
+    const sentinelAssignment = categorizer.assign([sentinelLiteral]);
+    const sparseAssignment = categorizer.assign(sparseArray);
+
+    assert.ok(prefixedAssignment.key !== sentinelAssignment.key);
+    assert.ok(prefixedAssignment.key !== sparseAssignment.key);
+    assert.ok(sentinelAssignment.key !== sparseAssignment.key);
+    assert.ok(prefixedAssignment.hash !== sentinelAssignment.hash);
+    assert.ok(prefixedAssignment.hash !== sparseAssignment.hash);
+    assert.ok(sentinelAssignment.hash !== sparseAssignment.hash);
+  },
+);
 
 test("Cat32 assign treats prefixed literal strings as distinct from NaN", () => {
   const categorizer = new Cat32();
