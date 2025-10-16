@@ -256,6 +256,31 @@ test("CLI treats values after double dash as literal key", async () => {
     const parsed = JSON.parse(stdout);
     assert.equal(parsed.key, stableStringify("--literal-key"));
 });
+test("CLI accepts flag values separated by whitespace", async () => {
+    const { spawn } = (await dynamicImport("node:child_process"));
+    const child = spawn(process.argv[0], [CLI_PATH, "--salt", "foo", "bar"], {
+        stdio: ["pipe", "pipe", "pipe"],
+    });
+    child.stdin.end();
+    let stdout = "";
+    child.stdout.setEncoding("utf8");
+    child.stdout.on("data", (chunk) => {
+        stdout += chunk;
+    });
+    let stderr = "";
+    child.stderr.setEncoding("utf8");
+    child.stderr.on("data", (chunk) => {
+        stderr += chunk;
+    });
+    const exitCode = await new Promise((resolve) => {
+        child.on("close", (code) => resolve(code));
+    });
+    assert.equal(exitCode, 0, `cat32 failed: exit code ${exitCode}\nstdout:\n${stdout}\nstderr:\n${stderr}`);
+    const parsed = JSON.parse(stdout);
+    const expected = new Cat32({ salt: "foo" }).assign("bar");
+    assert.equal(parsed.hash, expected.hash);
+    assert.equal(parsed.key, expected.key);
+});
 const CLI_SET_ASSIGN_SCRIPT = [
     "(async () => {",
     "  const cliPath = process.argv.at(-1);",
@@ -562,6 +587,22 @@ test("Map keys match plain object representation regardless of entry order", () 
     assert.equal(duplicateKeyMapAssignment.key, duplicateKeyObjectAssignment.key);
     assert.equal(duplicateKeyMapAssignment.hash, duplicateKeyObjectAssignment.hash);
 });
+test("Map duplicate property keys deterministically pick a single representative", () => {
+    const c = new Cat32();
+    const mapAssignment = c.assign(new Map([
+        [0, "number"],
+        ["0", "string"],
+    ]));
+    const reverseMapAssignment = c.assign(new Map([
+        ["0", "string"],
+        [0, "number"],
+    ]));
+    const objectAssignment = c.assign({ 0: "string" });
+    assert.equal(mapAssignment.key, objectAssignment.key);
+    assert.equal(mapAssignment.hash, objectAssignment.hash);
+    assert.equal(reverseMapAssignment.key, objectAssignment.key);
+    assert.equal(reverseMapAssignment.hash, objectAssignment.hash);
+});
 test("Cat32 normalizes duplicate-like Map entries deterministically", () => {
     const c = new Cat32();
     const forwardOrder = c.assign(new Map([
@@ -574,6 +615,22 @@ test("Cat32 normalizes duplicate-like Map entries deterministically", () => {
     ]));
     assert.equal(forwardOrder.key, reverseOrder.key);
     assert.equal(forwardOrder.hash, reverseOrder.hash);
+});
+test("Map collisions with identical property keys produce deterministic output", () => {
+    const forward = new Map([
+        [1, "number"],
+        ["1", "string"],
+    ]);
+    const reverse = new Map([
+        ["1", "string"],
+        [1, "number"],
+    ]);
+    assert.equal(stableStringify(forward), stableStringify(reverse));
+    const c = new Cat32();
+    const forwardAssignment = c.assign(forward);
+    const reverseAssignment = c.assign(reverse);
+    assert.equal(forwardAssignment.key, reverseAssignment.key);
+    assert.equal(forwardAssignment.hash, reverseAssignment.hash);
 });
 test("Map values serialize identically to plain object values", () => {
     const c = new Cat32();
