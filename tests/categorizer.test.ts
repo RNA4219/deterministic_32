@@ -882,6 +882,29 @@ test("Map keys match plain object representation regardless of entry order", () 
   assert.equal(duplicateKeyMapAssignment.hash, duplicateKeyObjectAssignment.hash);
 });
 
+test("Map duplicate property keys deterministically pick a single representative", () => {
+  const c = new Cat32();
+
+  const mapAssignment = c.assign(
+    new Map<unknown, string>([
+      [0, "number"],
+      ["0", "string"],
+    ]),
+  );
+  const reverseMapAssignment = c.assign(
+    new Map<unknown, string>([
+      ["0", "string"],
+      [0, "number"],
+    ]),
+  );
+  const objectAssignment = c.assign({ 0: "string" });
+
+  assert.equal(mapAssignment.key, objectAssignment.key);
+  assert.equal(mapAssignment.hash, objectAssignment.hash);
+  assert.equal(reverseMapAssignment.key, objectAssignment.key);
+  assert.equal(reverseMapAssignment.hash, objectAssignment.hash);
+});
+
 test("Cat32 normalizes duplicate-like Map entries deterministically", () => {
   const c = new Cat32();
 

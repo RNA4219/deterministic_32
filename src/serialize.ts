@@ -83,7 +83,8 @@ function _stringify(v: unknown, stack: Set<any>): string {
     if (stack.has(v)) throw new TypeError("Cyclic object");
     stack.add(v);
     type SerializedEntry = { serializedKey: string; serializedValue: string };
-    const normalizedEntries: Record<string, SerializedEntry[]> = Object.create(null);
+    type SerializedBucket = { entries: SerializedEntry[]; dedupe: boolean };
+    const normalizedEntries: Record<string, SerializedBucket> = Object.create(null);
     for (const [rawKey, rawValue] of v.entries()) {
       const serializedKey = _stringify(rawKey, stack);
       const revivedKey = reviveFromSerialized(serializedKey);
@@ -91,10 +92,15 @@ function _stringify(v: unknown, stack: Set<any>): string {
       const serializedValue = _stringify(rawValue, stack);
       const candidate: SerializedEntry = { serializedKey, serializedValue };
       const bucket = normalizedEntries[propertyKey];
+      const shouldDedupe = typeof rawKey !== "symbol";
       if (bucket) {
-        bucket.push(candidate);
+        bucket.entries.push(candidate);
+        bucket.dedupe = bucket.dedupe && shouldDedupe;
       } else {
-        normalizedEntries[propertyKey] = [candidate];
+        normalizedEntries[propertyKey] = {
+          entries: [candidate],
+          dedupe: shouldDedupe,
+        };
       }
     }
     const sortedKeys = Object.keys(normalizedEntries).sort();
@@ -102,14 +108,22 @@ function _stringify(v: unknown, stack: Set<any>): string {
     for (let i = 0; i < sortedKeys.length; i += 1) {
       const key = sortedKeys[i];
       const bucket = normalizedEntries[key];
-      bucket.sort(compareSerializedEntry);
-      const entry = bucket[0];
-      if (bodyParts.length > 0) {
-        bodyParts.push(",");
+      if (!bucket || bucket.entries.length === 0) {
+        continue;
       }
-      bodyParts.push(JSON.stringify(key));
-      bodyParts.push(":");
-      bodyParts.push(entry.serializedValue);
+      bucket.entries.sort(compareSerializedEntry);
+      const entriesToEmit = bucket.dedupe
+        ? [bucket.entries[0]]
+        : bucket.entries;
+      for (let j = 0; j < entriesToEmit.length; j += 1) {
+        const entry = entriesToEmit[j];
+        if (bodyParts.length > 0) {
+          bodyParts.push(",");
+        }
+        bodyParts.push(JSON.stringify(key));
+        bodyParts.push(":");
+        bodyParts.push(entry.serializedValue);
+      }
     }
     stack.delete(v);
     return "{" + bodyParts.join("") + "}";
