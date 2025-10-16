@@ -195,6 +195,20 @@ test("Cat32 assign keeps literal sentinel-like keys distinct from NaN", () => {
   assert.ok(sentinelAssignment.hash !== literalAssignment.hash);
 });
 
+test("Cat32 assign treats prefixed literal strings as distinct from NaN", () => {
+  const categorizer = new Cat32();
+  const literalAssignment = categorizer.assign(
+    "__string__:\u0000cat32:number:NaN\u0000",
+  );
+  const nanAssignment = categorizer.assign(Number.NaN);
+  const sentinelAssignment = categorizer.assign(typeSentinel("number", "NaN"));
+
+  assert.ok(literalAssignment.key !== nanAssignment.key);
+  assert.ok(literalAssignment.hash !== nanAssignment.hash);
+  assert.ok(literalAssignment.key !== sentinelAssignment.key);
+  assert.ok(literalAssignment.hash !== sentinelAssignment.hash);
+});
+
 test("dist stableStringify handles Map bucket ordering", async () => {
   const sourceImportMetaUrl = import.meta.url.includes("/dist/tests/")
     ? new URL("../../tests/categorizer.test.ts", import.meta.url)
