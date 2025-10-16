@@ -83,16 +83,18 @@ function _stringify(v: unknown, stack: Set<any>): string {
     if (stack.has(v)) throw new TypeError("Cyclic object");
     stack.add(v);
     type SerializedEntry = { serializedKey: string; serializedValue: string };
-    const normalizedEntries: Record<string, SerializedEntry> = Object.create(null);
+    const normalizedEntries: Record<string, SerializedEntry[]> = Object.create(null);
     for (const [rawKey, rawValue] of v.entries()) {
       const serializedKey = _stringify(rawKey, stack);
       const revivedKey = reviveFromSerialized(serializedKey);
       const propertyKey = toPropertyKeyString(revivedKey, serializedKey);
       const serializedValue = _stringify(rawValue, stack);
       const candidate: SerializedEntry = { serializedKey, serializedValue };
-      const existing = normalizedEntries[propertyKey];
-      if (!existing || compareSerializedEntry(candidate, existing) < 0) {
-        normalizedEntries[propertyKey] = candidate;
+      const bucket = normalizedEntries[propertyKey];
+      if (bucket) {
+        bucket.push(candidate);
+      } else {
+        normalizedEntries[propertyKey] = [candidate];
       }
     }
     const sortedKeys = Object.keys(normalizedEntries).sort();
