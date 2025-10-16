@@ -1,7 +1,7 @@
 {
   "id": "src/serialize.ts",
   "role": "utility",
-  "summary": "Stable JSON-like serializer with sentinel escapes for Maps, Sets, Dates, and edge primitives.",
+  "summary": "Stable stringify, normalization helpers, and canonical key helpers shared across Cat32 APIs.",
   "deps_out": [],
   "deps_in": ["src/categorizer.ts", "src/index.ts", "tests/categorizer.test.ts"],
   "tests": ["tests/categorizer.test.ts"]

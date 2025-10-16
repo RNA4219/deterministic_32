@@ -1,8 +1,8 @@
 {
   "id": "src/categorizer.ts",
   "role": "domain",
-  "summary": "Cat32 core: stable key normalization, 32-slot hashing, and override handling.",
+  "summary": "Cat32 core orchestrates normalization, hashing, and override resolution for 32-way assignments.",
   "deps_out": ["src/hash.ts", "src/serialize.ts"],
-  "deps_in": ["src/index.ts", "src/cli.ts"],
+  "deps_in": ["src/cli.ts", "src/index.ts"],
   "tests": ["tests/categorizer.test.ts"]
 }

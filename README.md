@@ -64,7 +64,7 @@ Changing `labels/salt/namespace/normalize` changes results intentionally.
 - Not cryptographic. Do **not** use for secrecy or collision-critical workloads.
 - For compatibility flips, bump `namespace` (consumer side).
 - Overrides compare against **post-normalized keys**.
-- Birdseye map refresh: if `docs/birdseye/index.json.generated_at` is stale, run `codemap.update` (or regenerate manually) and commit the updated capsules.
+- Birdseye map refresh: when touching `src/categorizer.ts` or `src/serialize.ts`, run `codemap.update --targets src/categorizer.ts src/serialize.ts --emit index+caps` before merge; if `generated_at` drifts, regenerate both `index.json` and the matching capsules and commit them together.
 
 ## License
 MIT
