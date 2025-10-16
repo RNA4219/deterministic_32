@@ -144,6 +144,24 @@ test("Cat32 assign handles Map input deterministically", () => {
   assert.equal(assignment.key, "{\"k\":1}");
 });
 
+test("Cat32 assign normalizes Map keys by string representation", () => {
+  const obj = { foo: 1 };
+  const instance = new Cat32();
+
+  const mixedAssignment = instance.assign(
+    new Map<unknown, unknown>([
+      [obj, "object"],
+      [String(obj), "string"],
+    ]),
+  );
+  const stringOnlyAssignment = instance.assign(
+    new Map<unknown, unknown>([[String(obj), "string"]]),
+  );
+
+  assert.equal(mixedAssignment.hash, stringOnlyAssignment.hash);
+  assert.equal(mixedAssignment.key, stringOnlyAssignment.key);
+});
+
 test("tsc succeeds without duplicate identifier errors", async () => {
   const sourceImportMetaUrl = import.meta.url.includes("/dist/tests/")
     ? new URL("../../tests/categorizer.test.ts", import.meta.url)
