@@ -308,9 +308,5 @@ function reviveNumericSentinel(value) {
     return undefined;
 }
 function normalizePlainObjectKey(key) {
-    const numeric = reviveNumericSentinel(key);
-    if (numeric !== undefined) {
-        return String(numeric);
-    }
     return key;
 }

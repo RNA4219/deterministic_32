@@ -351,9 +351,5 @@ function reviveNumericSentinel(value: unknown): number | bigint | undefined {
 }
 
 function normalizePlainObjectKey(key: string): string {
-  const numeric = reviveNumericSentinel(key);
-  if (numeric !== undefined) {
-    return String(numeric);
-  }
   return key;
 }
