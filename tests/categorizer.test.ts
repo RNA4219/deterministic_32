@@ -129,6 +129,35 @@ test("dist stableStringify handles Map bucket ordering", async () => {
   );
 });
 
+test("dist Cat32 assign normalizes Map keys by string representation", async () => {
+  const sourceImportMetaUrl = import.meta.url.includes("/dist/tests/")
+    ? new URL("../../tests/categorizer.test.ts", import.meta.url)
+    : import.meta.url;
+
+  const distModule = (await import(
+    new URL("../dist/index.js", sourceImportMetaUrl).href,
+  )) as { Cat32?: typeof Cat32 };
+
+  assert.equal(typeof distModule.Cat32, "function");
+  const DistCat32 = distModule.Cat32!;
+
+  const obj = { foo: 1 };
+  const instance = new DistCat32();
+
+  const mixedAssignment = instance.assign(
+    new Map<unknown, unknown>([
+      [obj, "object"],
+      [String(obj), "string"],
+    ]),
+  );
+  const stringOnlyAssignment = instance.assign(
+    new Map<unknown, unknown>([[String(obj), "string"]]),
+  );
+
+  assert.equal(mixedAssignment.hash, stringOnlyAssignment.hash);
+  assert.equal(mixedAssignment.key, stringOnlyAssignment.key);
+});
+
 test("stableStringify maps simple entries without throwing", () => {
   const map = new Map([["k", 1]]);
   const result = stableStringify(map);

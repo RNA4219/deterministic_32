@@ -194,20 +194,17 @@ function compareSerializedEntry(
 }
 
 function toMapPropertyKey(rawKey: unknown, serializedKey: string): string {
+  const revivedKey = reviveFromSerialized(serializedKey);
+
   if (typeof rawKey === "symbol") {
-    const revivedKey = reviveFromSerialized(serializedKey);
-    return toPropertyKeyString(revivedKey, serializedKey);
+    return toPropertyKeyString(rawKey, revivedKey, serializedKey);
   }
 
-  let stringifiedKey: string;
   try {
-    stringifiedKey = String(rawKey);
+    return toPropertyKeyString(rawKey, revivedKey, serializedKey);
   } catch {
-    const revivedKey = reviveFromSerialized(serializedKey);
-    return toPropertyKeyString(revivedKey, serializedKey);
+    return toPropertyKeyString(revivedKey, revivedKey, serializedKey);
   }
-
-  return toPropertyKeyString(stringifiedKey, stringifiedKey);
 }
 
 function stringifyStringLiteral(value: string): string {
