@@ -1,5 +1,17 @@
 # deterministic-32
 
+<!-- guardrails:yaml
+forbidden_paths:
+  - "/core/schema/**"
+  - "/auth/**"
+require_human_approval:
+  - "/governance/**"
+slo:
+  lead_time_p95_hours: 72
+  mttr_p95_minutes: 60
+  change_failure_rate_max: 0.10
+-->
+
 <!-- LLM-BOOTSTRAP v1 -->
 読む順番:
 1. docs/birdseye/index.json  …… ノード一覧・隣接関係（軽量）
