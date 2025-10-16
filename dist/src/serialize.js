@@ -19,9 +19,6 @@ export function escapeSentinelString(value) {
     if (isSentinelWrappedString(value) && !value.startsWith(STRING_SENTINEL_PREFIX)) {
         return typeSentinel("string", value);
     }
-    if (value.startsWith(STRING_LITERAL_SENTINEL_PREFIX)) {
-        return typeSentinel("string", value);
-    }
     return value;
 }
 export function stableStringify(v) {
@@ -35,8 +32,14 @@ function _stringify(v, stack) {
     if (v === null)
         return "null";
     const t = typeof v;
-    if (t === "string")
-        return stringifyStringLiteral(v);
+    if (t === "string") {
+        const value = v;
+        if (isSentinelWrappedString(value) &&
+            !value.startsWith(STRING_SENTINEL_PREFIX)) {
+            return stringifyStringLiteral(typeSentinel("string", value));
+        }
+        return stringifyStringLiteral(value);
+    }
     if (t === "number") {
         const value = v;
         if (Number.isNaN(value) || !Number.isFinite(value)) {
@@ -182,15 +185,6 @@ function toMapPropertyKey(rawKey, serializedKey) {
     return toPropertyKeyString(rawKey, revivedKey, serializedKey);
 }
 function stringifyStringLiteral(value) {
-    if (value.startsWith(STRING_LITERAL_SENTINEL_PREFIX)) {
-        return JSON.stringify(typeSentinel("string", value));
-    }
-    if (isSentinelWrappedString(value)) {
-        if (value.startsWith(STRING_SENTINEL_PREFIX)) {
-            return JSON.stringify(value);
-        }
-        return JSON.stringify(typeSentinel("string", value));
-    }
     return JSON.stringify(value);
 }
 function stringifySentinelLiteral(value) {

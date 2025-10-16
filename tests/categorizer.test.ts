@@ -84,7 +84,7 @@ test("direct dist import exposes stableStringify", async () => {
   assert.equal(typeof distModule.stableStringify, "function");
 });
 
-test("dist stableStringify wraps string literal sentinels", async () => {
+test("dist stableStringify matches JSON.stringify for string literals", async () => {
   const sourceImportMetaUrl = import.meta.url.includes("/dist/tests/")
     ? new URL("../../tests/categorizer.test.ts", import.meta.url)
     : import.meta.url;
@@ -98,8 +98,20 @@ test("dist stableStringify wraps string literal sentinels", async () => {
 
   assert.equal(
     distStableStringify("__string__:payload"),
-    JSON.stringify(typeSentinel("string", "__string__:payload")),
+    JSON.stringify("__string__:payload"),
   );
+});
+
+test("stableStringify matches JSON.stringify for string literals", () => {
+  assert.equal(
+    stableStringify("__string__:payload"),
+    JSON.stringify("__string__:payload"),
+  );
+});
+
+test("Cat32 assign key matches JSON.stringify for string literals", () => {
+  const assignment = new Cat32().assign("__string__:payload");
+  assert.equal(assignment.key, JSON.stringify("__string__:payload"));
 });
 
 test("dist stableStringify handles Map bucket ordering", async () => {
@@ -883,7 +895,7 @@ test("stableStringify serializes undefined and Date sentinels", () => {
 test("stableStringify serializes string literal sentinels as JSON strings", () => {
   const literal = "__string__:payload";
   const serialized = stableStringify(literal);
-  const expected = JSON.stringify(typeSentinel("string", literal));
+  const expected = JSON.stringify(literal);
   assert.equal(serialized, expected);
 
   const cat = new Cat32();
@@ -921,9 +933,9 @@ test("string sentinel literals remain literal canonical keys", () => {
   assert.equal(assignment.key, stableStringify("__date__:2024-01-01Z"));
 });
 
-test("escapeSentinelString wraps string literal sentinel prefix", () => {
+test("escapeSentinelString leaves string literal sentinel prefix untouched", () => {
   const sentinelLike = "__string__:wrapped";
-  assert.equal(escapeSentinelString(sentinelLike), typeSentinel("string", sentinelLike));
+  assert.equal(escapeSentinelString(sentinelLike), sentinelLike);
 });
 
 test("stableStringify serializes explicit string sentinels", () => {
@@ -935,10 +947,8 @@ test("stableStringify serializes explicit string sentinels", () => {
 test("values containing __string__ escape exactly once", () => {
   const literal = "__string__:payload";
   const sentinel = typeSentinel("string", literal);
-  const serialized = stableStringify(literal);
-  const expected = JSON.stringify(sentinel);
-  assert.equal(serialized, expected);
-  assert.equal(stableStringify(sentinel), expected);
+  assert.equal(stableStringify(literal), JSON.stringify(literal));
+  assert.equal(stableStringify(sentinel), JSON.stringify(sentinel));
 });
 
 test("undefined sentinel string matches literal undefined in arrays", () => {
