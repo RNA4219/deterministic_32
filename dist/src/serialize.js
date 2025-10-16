@@ -81,23 +81,21 @@ function _stringify(v, stack) {
             throw new TypeError("Cyclic object");
         stack.add(v);
         const normalizedEntries = Object.create(null);
+        const dedupeByKey = Object.create(null);
         for (const [rawKey, rawValue] of v.entries()) {
             const serializedKey = _stringify(rawKey, stack);
-            const revivedKey = reviveFromSerialized(serializedKey);
-            const propertyKey = toPropertyKeyString(revivedKey, serializedKey);
+            const propertyKey = toMapPropertyKey(rawKey, serializedKey);
             const serializedValue = _stringify(rawValue, stack);
             const candidate = { serializedKey, serializedValue };
-            const bucket = normalizedEntries[propertyKey];
             const shouldDedupe = typeof rawKey !== "symbol";
+            const bucket = normalizedEntries[propertyKey];
             if (bucket) {
-                bucket.entries.push(candidate);
-                bucket.dedupe = bucket.dedupe && shouldDedupe;
+                bucket.push(candidate);
+                dedupeByKey[propertyKey] = (dedupeByKey[propertyKey] ?? true) && shouldDedupe;
             }
             else {
-                normalizedEntries[propertyKey] = {
-                    entries: [candidate],
-                    dedupe: shouldDedupe,
-                };
+                normalizedEntries[propertyKey] = [candidate];
+                dedupeByKey[propertyKey] = shouldDedupe;
             }
         }
         const sortedKeys = Object.keys(normalizedEntries).sort();
@@ -105,13 +103,11 @@ function _stringify(v, stack) {
         for (let i = 0; i < sortedKeys.length; i += 1) {
             const key = sortedKeys[i];
             const bucket = normalizedEntries[key];
-            if (!bucket || bucket.entries.length === 0) {
+            if (!bucket || bucket.length === 0) {
                 continue;
             }
-            bucket.entries.sort(compareSerializedEntry);
-            const entriesToEmit = bucket.dedupe
-                ? [bucket.entries[0]]
-                : bucket.entries;
+            bucket.sort(compareSerializedEntry);
+            const entriesToEmit = dedupeByKey[key] ? [bucket[0]] : bucket;
             for (let j = 0; j < entriesToEmit.length; j += 1) {
                 const entry = entriesToEmit[j];
                 if (bodyParts.length > 0) {
@@ -180,6 +176,21 @@ function compareSerializedEntry(left, right) {
     if (left.serializedValue > right.serializedValue)
         return 1;
     return 0;
+}
+function toMapPropertyKey(rawKey, serializedKey) {
+    if (typeof rawKey === "symbol") {
+        const revivedKey = reviveFromSerialized(serializedKey);
+        return toPropertyKeyString(revivedKey, serializedKey);
+    }
+    let stringifiedKey;
+    try {
+        stringifiedKey = String(rawKey);
+    }
+    catch {
+        const revivedKey = reviveFromSerialized(serializedKey);
+        return toPropertyKeyString(revivedKey, serializedKey);
+    }
+    return toPropertyKeyString(stringifiedKey, stringifiedKey);
 }
 function stringifyStringLiteral(value) {
     if (value.startsWith(STRING_LITERAL_SENTINEL_PREFIX)) {

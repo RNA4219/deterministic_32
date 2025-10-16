@@ -53,6 +53,30 @@ test("dist stableStringify handles Map bucket ordering", async () => {
     ]);
     assert.equal(distStableStringify(mapAscending), distStableStringify(mapDescending));
 });
+test("stableStringify maps simple entries without throwing", () => {
+    const map = new Map([["k", 1]]);
+    const result = stableStringify(map);
+    assert.equal(result, "{\"k\":1}");
+});
+test("Cat32 assign handles Map input deterministically", () => {
+    const instance = new Cat32();
+    const assignment = instance.assign(new Map([["k", 1]]));
+    assert.equal(assignment.index, 23);
+    assert.equal(assignment.label, "X");
+    assert.equal(assignment.hash, "4f77d9b7");
+    assert.equal(assignment.key, "{\"k\":1}");
+});
+test("Cat32 assign normalizes Map keys by string representation", () => {
+    const obj = { foo: 1 };
+    const instance = new Cat32();
+    const mixedAssignment = instance.assign(new Map([
+        [obj, "object"],
+        [String(obj), "string"],
+    ]));
+    const stringOnlyAssignment = instance.assign(new Map([[String(obj), "string"]]));
+    assert.equal(mixedAssignment.hash, stringOnlyAssignment.hash);
+    assert.equal(mixedAssignment.key, stringOnlyAssignment.key);
+});
 test("tsc succeeds without duplicate identifier errors", async () => {
     const sourceImportMetaUrl = import.meta.url.includes("/dist/tests/")
         ? new URL("../../tests/categorizer.test.ts", import.meta.url)

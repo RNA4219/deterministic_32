@@ -87,8 +87,7 @@ function _stringify(v: unknown, stack: Set<any>): string {
     const dedupeByKey: Record<string, boolean> = Object.create(null);
     for (const [rawKey, rawValue] of v.entries()) {
       const serializedKey = _stringify(rawKey, stack);
-      const revivedKey = reviveFromSerialized(serializedKey);
-      const propertyKey = toPropertyKeyString(rawKey, revivedKey, serializedKey);
+      const propertyKey = toMapPropertyKey(rawKey, serializedKey);
       const serializedValue = _stringify(rawValue, stack);
       const candidate: SerializedEntry = { serializedKey, serializedValue };
       const shouldDedupe = typeof rawKey !== "symbol";
@@ -192,6 +191,23 @@ function compareSerializedEntry(
   if (left.serializedValue < right.serializedValue) return -1;
   if (left.serializedValue > right.serializedValue) return 1;
   return 0;
+}
+
+function toMapPropertyKey(rawKey: unknown, serializedKey: string): string {
+  if (typeof rawKey === "symbol") {
+    const revivedKey = reviveFromSerialized(serializedKey);
+    return toPropertyKeyString(revivedKey, serializedKey);
+  }
+
+  let stringifiedKey: string;
+  try {
+    stringifiedKey = String(rawKey);
+  } catch {
+    const revivedKey = reviveFromSerialized(serializedKey);
+    return toPropertyKeyString(revivedKey, serializedKey);
+  }
+
+  return toPropertyKeyString(stringifiedKey, stringifiedKey);
 }
 
 function stringifyStringLiteral(value: string): string {
