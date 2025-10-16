@@ -9,7 +9,8 @@ function parseArgs(argv) {
             if (rest.length > 0) {
                 const remainder = rest.join(" ");
                 if (Object.prototype.hasOwnProperty.call(args, "_")) {
-                    args._ = `${args._} ${remainder}`;
+                    const existing = args._;
+                    args._ = existing === undefined ? remainder : `${existing} ${remainder}`;
                 }
                 else {
                     args._ = remainder;
@@ -30,7 +31,7 @@ function parseArgs(argv) {
                     i += 1;
                 }
                 else {
-                    args[key] = true;
+                    throw new RangeError(`flag "${a}" requires a value`);
                 }
             }
         }
@@ -38,7 +39,8 @@ function parseArgs(argv) {
             args._ = a;
         }
         else {
-            args._ = String(args._ + " " + a);
+            const existing = args._;
+            args._ = existing === undefined ? a : `${existing} ${a}`;
         }
     }
     return args;
@@ -46,7 +48,7 @@ function parseArgs(argv) {
 async function main() {
     const args = parseArgs(process.argv);
     const key = Object.prototype.hasOwnProperty.call(args, "_")
-        ? (args._)
+        ? args._
         : undefined;
     const salt = args.salt ?? "";
     const namespace = args.namespace ?? "";
