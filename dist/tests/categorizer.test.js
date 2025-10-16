@@ -35,6 +35,23 @@ test("dist stableStringify wraps string literal sentinels", async () => {
     const distStableStringify = distSerializeModule.stableStringify;
     assert.equal(distStableStringify("__string__:payload"), JSON.stringify(typeSentinel("string", "__string__:payload")));
 });
+test("dist stableStringify handles Map bucket ordering", async () => {
+    const sourceImportMetaUrl = import.meta.url.includes("/dist/tests/")
+        ? new URL("../../tests/categorizer.test.ts", import.meta.url)
+        : import.meta.url;
+    const distSerializeModule = (await import(new URL("../dist/serialize.js", sourceImportMetaUrl).href));
+    assert.equal(typeof distSerializeModule.stableStringify, "function");
+    const distStableStringify = distSerializeModule.stableStringify;
+    const mapAscending = new Map([
+        [1, "number"],
+        ["1", "string"],
+    ]);
+    const mapDescending = new Map([
+        ["1", "string"],
+        [1, "number"],
+    ]);
+    assert.equal(distStableStringify(mapAscending), distStableStringify(mapDescending));
+});
 test("tsc succeeds without duplicate identifier errors", async () => {
     const sourceImportMetaUrl = import.meta.url.includes("/dist/tests/")
         ? new URL("../../tests/categorizer.test.ts", import.meta.url)
