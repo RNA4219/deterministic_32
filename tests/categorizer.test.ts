@@ -904,6 +904,88 @@ test("cat32 binary accepts flag values separated by whitespace", async () => {
   assert.equal(parsed.key, expected.key);
 });
 
+test("cat32 binary outputs NDJSON by default", async () => {
+  const { spawn } = (await dynamicImport("node:child_process")) as { spawn: SpawnFunction };
+
+  const child = spawn(process.argv[0], [CLI_BIN_PATH, "cli-bin-default"], {
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+
+  let stdout = "";
+  child.stdout.setEncoding("utf8");
+  child.stdout.on("data", (chunk: string) => {
+    stdout += chunk;
+  });
+
+  let stderr = "";
+  child.stderr.setEncoding("utf8");
+  child.stderr.on("data", (chunk: string) => {
+    stderr += chunk;
+  });
+
+  const exitCode: number | null = await new Promise((resolve) => {
+    child.on("close", (code: number | null) => resolve(code));
+  });
+
+  assert.equal(
+    exitCode,
+    0,
+    `cat32 failed: exit code ${exitCode}\nstdout:\n${stdout}\nstderr:\n${stderr}`,
+  );
+
+  assert.ok(stdout.endsWith("\n"));
+  const lines = stdout.split("\n").filter((line) => line.length > 0);
+  assert.equal(lines.length, 1);
+
+  const parsed = JSON.parse(lines[0]) as { hash: string; key: string };
+  const expected = new Cat32().assign("cli-bin-default");
+  assert.equal(parsed.hash, expected.hash);
+  assert.equal(parsed.key, expected.key);
+});
+
+test("cat32 binary respects --json and --pretty flags", async () => {
+  const { spawn } = (await dynamicImport("node:child_process")) as { spawn: SpawnFunction };
+
+  const child = spawn(process.argv[0], [CLI_BIN_PATH, "--json", "--pretty", "cli-bin-pretty"], {
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+
+  let stdout = "";
+  child.stdout.setEncoding("utf8");
+  child.stdout.on("data", (chunk: string) => {
+    stdout += chunk;
+  });
+
+  let stderr = "";
+  child.stderr.setEncoding("utf8");
+  child.stderr.on("data", (chunk: string) => {
+    stderr += chunk;
+  });
+
+  const exitCode: number | null = await new Promise((resolve) => {
+    child.on("close", (code: number | null) => resolve(code));
+  });
+
+  assert.equal(
+    exitCode,
+    0,
+    `cat32 failed: exit code ${exitCode}\nstdout:\n${stdout}\nstderr:\n${stderr}`,
+  );
+
+  assert.ok(stdout.endsWith("\n"));
+  const prettyBody = stdout.slice(0, -1);
+  const lines = prettyBody.split("\n");
+  assert.ok(lines.length > 1);
+  for (const line of lines) {
+    assert.ok(line.trim().length > 0, `encountered empty line in output: ${stdout}`);
+  }
+
+  const parsed = JSON.parse(prettyBody) as { hash: string; key: string };
+  const expected = new Cat32().assign("cli-bin-pretty");
+  assert.equal(parsed.hash, expected.hash);
+  assert.equal(parsed.key, expected.key);
+});
+
 test("cat32 binary exits with code 2 when --namespace is missing a value", async () => {
   const { spawn } = (await dynamicImport("node:child_process")) as { spawn: SpawnFunction };
 
