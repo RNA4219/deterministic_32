@@ -59,6 +59,29 @@ const CLI_LITERAL_KEY_EVAL_SCRIPT = [
   "import(cliPath).catch((error) => { console.error(error); process.exit(1); });",
 ].join(" ");
 
+test("package.json bin exposes deterministic-32 entry", async () => {
+  const { readFile } = (await dynamicImport("node:fs/promises")) as {
+    readFile(path: string, options: string): Promise<string>;
+  };
+
+  const packageJsonUrl = import.meta.url.includes("/dist/tests/")
+    ? new URL("../../package.json", import.meta.url)
+    : new URL("../package.json", import.meta.url);
+
+  const packageJsonContent = await readFile(packageJsonUrl.pathname, "utf8");
+  const packageJson = JSON.parse(packageJsonContent) as {
+    bin?: Record<string, unknown>;
+  };
+
+  assert.ok(
+    packageJson.bin &&
+      typeof packageJson.bin === "object" &&
+      !Array.isArray(packageJson.bin),
+    "package.json missing bin map",
+  );
+  assert.equal(packageJson.bin["deterministic-32"], "dist/cli.js");
+});
+
 const CLI_STDIN_ERROR_SCRIPT = [
   "(async () => {",
   "  const cliPath = process.argv.at(-1);",
