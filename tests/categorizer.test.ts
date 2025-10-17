@@ -1326,6 +1326,17 @@ test("Map keys match plain object representation regardless of entry order", () 
   assert.equal(duplicateKeyMapAssignment.hash, duplicateKeyObjectAssignment.hash);
 });
 
+test("Map Date key matches plain object string key", () => {
+  const c = new Cat32();
+  const date = new Date("2024-05-01T00:00:00.000Z");
+
+  const mapAssignment = c.assign(new Map([[date, "value"]]));
+  const objectAssignment = c.assign({ [String(date)]: "value" });
+
+  assert.equal(mapAssignment.key, objectAssignment.key);
+  assert.equal(mapAssignment.hash, objectAssignment.hash);
+});
+
 test("Map duplicate property keys deterministically pick a single representative", () => {
   const c = new Cat32();
 

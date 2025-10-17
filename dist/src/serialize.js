@@ -175,6 +175,9 @@ function compareSerializedEntry(left, right) {
     return 0;
 }
 function toMapPropertyKey(rawKey, serializedKey) {
+    if (rawKey instanceof Date) {
+        return normalizePlainObjectKey(String(rawKey));
+    }
     const revivedKey = reviveFromSerialized(serializedKey);
     return toPropertyKeyString(rawKey, revivedKey, serializedKey);
 }
