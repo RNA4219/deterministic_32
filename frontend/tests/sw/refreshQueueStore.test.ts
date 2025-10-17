@@ -55,3 +55,46 @@ test("enqueue stores cloned request with matching data", async () => {
     "cloned request should preserve body content",
   );
 });
+
+test("enqueue stores cloned request in queue map", async () => {
+  const store = createRefreshQueueStore();
+  const request = createRequest("https://example.test/queue", {
+    method: "PUT",
+    body: JSON.stringify({ flag: true }),
+    headers: { "Content-Type": "application/json" },
+  });
+
+  const { id } = store.enqueue(request);
+  const record = store.get(id);
+  assert.ok(record, "record should exist after enqueue");
+  if (!record) {
+    throw new Error("record must exist for assertions");
+  }
+
+  const storedRequest = record.request;
+  assert.ok(
+    storedRequest !== request,
+    "stored request instance should differ from original request",
+  );
+  assert.equal(
+    storedRequest.method,
+    request.method,
+    "stored request should preserve method",
+  );
+  assert.equal(
+    storedRequest.url,
+    request.url,
+    "stored request should preserve URL",
+  );
+
+  const [storedBody, originalBody] = await Promise.all([
+    storedRequest.clone().text(),
+    request.clone().text(),
+  ]);
+
+  assert.equal(
+    storedBody,
+    originalBody,
+    "stored request should preserve body",
+  );
+});
