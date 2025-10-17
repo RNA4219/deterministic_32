@@ -52,12 +52,42 @@ test("dist stableStringify matches JSON.stringify for string literals", async ()
     const distStableStringify = distSerializeModule.stableStringify;
     assert.equal(distStableStringify("__string__:payload"), JSON.stringify("__string__:payload"));
 });
+test("dist stableStringify preserves prefixed sentinel string literal content", async () => {
+    const sourceImportMetaUrl = import.meta.url.includes("/dist/tests/")
+        ? new URL("../../tests/categorizer.test.ts", import.meta.url)
+        : import.meta.url;
+    const distSerializeModule = (await import(new URL("../dist/serialize.js", sourceImportMetaUrl).href));
+    assert.equal(typeof distSerializeModule.stableStringify, "function");
+    const distStableStringify = distSerializeModule.stableStringify;
+    const prefixedLiteral = "__string__:" + typeSentinel("number", "NaN");
+    assert.equal(distStableStringify(prefixedLiteral), JSON.stringify(prefixedLiteral));
+    assert.ok(distStableStringify(prefixedLiteral) !== distStableStringify(NaN));
+});
 test("stableStringify matches JSON.stringify for string literals", () => {
     assert.equal(stableStringify("__string__:payload"), JSON.stringify("__string__:payload"));
+});
+test("stableStringify matches JSON.stringify for stringified sentinel string literals", () => {
+    const sentinelStringLiteral = `__string__:${typeSentinel("number", "NaN")}`;
+    assert.equal(stableStringify(sentinelStringLiteral), JSON.stringify(sentinelStringLiteral));
+});
+test("stableStringify preserves prefixed sentinel string literal content", () => {
+    const value = "__string__:" + typeSentinel("number", "NaN");
+    assert.equal(stableStringify(value), JSON.stringify(value));
 });
 test("stableStringify matches JSON.stringify for sentinel-like string literals", () => {
     const sentinelLike = "\u0000cat32:number:Infinity\u0000";
     assert.equal(stableStringify(sentinelLike), JSON.stringify(sentinelLike));
+});
+test("stableStringify distinguishes prefixed string literals from hole sentinels", () => {
+    const prefixedLiteral = `__string__:${typeSentinel("hole")}`;
+    const sentinelLiteral = typeSentinel("hole");
+    const sparseArray = new Array(1);
+    const prefixedResult = stableStringify([prefixedLiteral]);
+    const sentinelResult = stableStringify([sentinelLiteral]);
+    const sparseResult = stableStringify(sparseArray);
+    assert.ok(prefixedResult !== sentinelResult);
+    assert.ok(prefixedResult !== sparseResult);
+    assert.ok(sentinelResult !== sparseResult);
 });
 test("stableStringify differentiates sentinel key from literal NaN key", () => {
     const sentinelKey = typeSentinel("number", "NaN");
@@ -74,6 +104,11 @@ test("stableStringify distinguishes literal sentinel-like string keys from NaN",
 test("Cat32 assign key matches JSON.stringify for string literals", () => {
     const assignment = new Cat32().assign("__string__:payload");
     assert.equal(assignment.key, JSON.stringify("__string__:payload"));
+});
+test("Cat32 assign key preserves prefixed sentinel string literal content", () => {
+    const value = "__string__:" + typeSentinel("number", "NaN");
+    const assignment = new Cat32().assign(value);
+    assert.equal(assignment.key, JSON.stringify(value));
 });
 test("Cat32 assign key matches JSON.stringify for sentinel-like string literals", () => {
     const sentinelLike = "\u0000cat32:number:Infinity\u0000";
@@ -95,6 +130,31 @@ test("Cat32 assign keeps literal sentinel-like keys distinct from NaN", () => {
     const literalAssignment = categorizer.assign({ NaN: 1 });
     assert.ok(sentinelAssignment.key !== literalAssignment.key);
     assert.ok(sentinelAssignment.hash !== literalAssignment.hash);
+});
+test("Cat32 assign keeps prefixed string literals distinct from hole sentinels", () => {
+    const categorizer = new Cat32();
+    const prefixedLiteral = `__string__:${typeSentinel("hole")}`;
+    const sentinelLiteral = typeSentinel("hole");
+    const sparseArray = new Array(1);
+    const prefixedAssignment = categorizer.assign([prefixedLiteral]);
+    const sentinelAssignment = categorizer.assign([sentinelLiteral]);
+    const sparseAssignment = categorizer.assign(sparseArray);
+    assert.ok(prefixedAssignment.key !== sentinelAssignment.key);
+    assert.ok(prefixedAssignment.key !== sparseAssignment.key);
+    assert.ok(sentinelAssignment.key !== sparseAssignment.key);
+    assert.ok(prefixedAssignment.hash !== sentinelAssignment.hash);
+    assert.ok(prefixedAssignment.hash !== sparseAssignment.hash);
+    assert.ok(sentinelAssignment.hash !== sparseAssignment.hash);
+});
+test("Cat32 assign treats prefixed literal strings as distinct from NaN", () => {
+    const categorizer = new Cat32();
+    const literalAssignment = categorizer.assign("__string__:\u0000cat32:number:NaN\u0000");
+    const nanAssignment = categorizer.assign(Number.NaN);
+    const sentinelAssignment = categorizer.assign(typeSentinel("number", "NaN"));
+    assert.ok(literalAssignment.key !== nanAssignment.key);
+    assert.ok(literalAssignment.hash !== nanAssignment.hash);
+    assert.ok(literalAssignment.key !== sentinelAssignment.key);
+    assert.ok(literalAssignment.hash !== sentinelAssignment.hash);
 });
 test("dist stableStringify handles Map bucket ordering", async () => {
     const sourceImportMetaUrl = import.meta.url.includes("/dist/tests/")
