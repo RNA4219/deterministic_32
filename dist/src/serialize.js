@@ -11,6 +11,10 @@ const HOLE_SENTINEL = JSON.stringify(HOLE_SENTINEL_RAW);
 const UNDEFINED_SENTINEL = "__undefined__";
 const DATE_SENTINEL_PREFIX = "__date__:";
 const STRING_LITERAL_SENTINEL_PREFIX = "__string__:";
+const sharedArrayBufferGlobal = globalThis;
+const sharedArrayBufferCtor = typeof sharedArrayBufferGlobal.SharedArrayBuffer === "function"
+    ? sharedArrayBufferGlobal.SharedArrayBuffer
+    : undefined;
 export function typeSentinel(type, payload = "") {
     return `${SENTINEL_PREFIX}${type}:${payload}${SENTINEL_SUFFIX}`;
 }
@@ -66,6 +70,15 @@ function _stringify(v, stack) {
     // Date
     if (v instanceof Date) {
         return stringifySentinelLiteral(`${DATE_SENTINEL_PREFIX}${v.toISOString()}`);
+    }
+    if (ArrayBuffer.isView(v)) {
+        return stringifyStringLiteral(String(v));
+    }
+    if (sharedArrayBufferCtor && v instanceof sharedArrayBufferCtor) {
+        return stringifyStringLiteral(String(v));
+    }
+    if (v instanceof ArrayBuffer) {
+        return stringifyStringLiteral(String(v));
     }
     // Map
     if (v instanceof Map) {

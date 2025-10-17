@@ -13,20 +13,26 @@ const WARMUP_OPERATIONS = 100_000;
 const MEASURED_OPERATIONS = 1_000_000;
 const SAMPLE_KEY_COUNT = 10_000;
 const categorizer = new Cat32({ namespace: "bench", salt: "cat32" });
-const sampleKeys = new Array(SAMPLE_KEY_COUNT);
-for (let i = 0; i < SAMPLE_KEY_COUNT; i += 1) {
-    sampleKeys[i] = `user:${i.toString(36)}-${(i * 2654435761) & 0xffffffff}`;
-}
-let checksum = 0;
-for (let i = 0; i < WARMUP_OPERATIONS; i += 1) {
-    const assignment = categorizer.assign(sampleKeys[i % SAMPLE_KEY_COUNT]);
-    checksum ^= assignment.index;
-}
+const createSampleKeys = (count) => {
+    const keys = new Array(count);
+    for (let index = 0; index < count; index += 1) {
+        keys[index] = `user:${index.toString(36)}-${(index * 2654435761) & 0xffffffff}`;
+    }
+    return keys;
+};
+const sampleKeys = createSampleKeys(SAMPLE_KEY_COUNT);
+const sampleKeyModulo = sampleKeys.length;
+const assignMany = (iterations, initialChecksum) => {
+    let checksum = initialChecksum;
+    for (let index = 0; index < iterations; index += 1) {
+        const assignment = categorizer.assign(sampleKeys[index % sampleKeyModulo]);
+        checksum ^= assignment.index;
+    }
+    return checksum;
+};
+let checksum = assignMany(WARMUP_OPERATIONS, 0);
 const start = performanceApi.now();
-for (let i = 0; i < MEASURED_OPERATIONS; i += 1) {
-    const assignment = categorizer.assign(sampleKeys[i % SAMPLE_KEY_COUNT]);
-    checksum ^= assignment.index;
-}
+checksum = assignMany(MEASURED_OPERATIONS, checksum);
 const elapsedMs = performanceApi.now() - start;
 const elapsedSeconds = elapsedMs / 1_000;
 const opsPerSecond = MEASURED_OPERATIONS / elapsedSeconds;
