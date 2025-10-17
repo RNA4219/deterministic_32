@@ -25,11 +25,11 @@ function normalizeObject(value: object, seen: WeakSet<object>): JsonValue {
     if (ArrayBuffer.isView(value)) {
       return Array.from(new Uint8Array(value.buffer, value.byteOffset, value.byteLength));
     }
-    if (value instanceof ArrayBuffer) {
-      return Array.from(new Uint8Array(value, 0, value.byteLength));
-    }
-    if (typeof SharedArrayBuffer !== "undefined" && value instanceof SharedArrayBuffer) {
-      return Array.from(new Uint8Array(value));
+    const isSharedArrayBuffer =
+      typeof SharedArrayBuffer !== "undefined" && value instanceof SharedArrayBuffer;
+    if (value instanceof ArrayBuffer || isSharedArrayBuffer) {
+      const buffer = value as ArrayBuffer | SharedArrayBuffer;
+      return Array.from(new Uint8Array(buffer));
     }
     const plain: JsonObject = {};
     for (const [key, entryValue] of Object.entries(value)) {
