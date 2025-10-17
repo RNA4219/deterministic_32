@@ -18,12 +18,16 @@ export type RefreshQueueStore = {
 
 let nextId = 0;
 
-const createRecord = (request: Request): RefreshQueueRecord => ({
-  id: `${Date.now().toString(36)}-${(nextId++).toString(36)}`,
-  request,
-  enqueuedAt: new Date(),
-  attempts: 0,
-});
+const createRecord = (request: Request): RefreshQueueRecord => {
+  const clonedRequest = request.clone();
+
+  return {
+    id: `${Date.now().toString(36)}-${(nextId++).toString(36)}`,
+    request: clonedRequest,
+    enqueuedAt: new Date(),
+    attempts: 0,
+  };
+};
 
 export const createRefreshQueueStore = (): RefreshQueueStore => {
   const records = new Map<string, RefreshQueueRecord>();

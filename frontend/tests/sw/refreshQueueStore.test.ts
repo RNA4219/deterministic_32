@@ -25,3 +25,33 @@ test("recordFailure keeps entry with failure metadata", () => {
   assert.ok(record.failedAt instanceof Date, "failedAt should be timestamped");
   assert.equal(record.attempts, 1, "attempt count should be preserved");
 });
+
+test("enqueue stores cloned request with matching data", async () => {
+  const store = createRefreshQueueStore();
+  const request = createRequest("https://example.test/api?query=1", {
+    method: "POST",
+    body: JSON.stringify({ value: 42 }),
+    headers: { "Content-Type": "application/json" },
+  });
+
+  const { request: storedRequest } = store.enqueue(request);
+
+  assert.ok(storedRequest !== request, "stored request should be a cloned instance");
+  assert.equal(
+    storedRequest.method,
+    request.method,
+    "cloned request should preserve method",
+  );
+  assert.equal(storedRequest.url, request.url, "cloned request should preserve URL");
+
+  const [storedBody, originalBody] = await Promise.all([
+    storedRequest.clone().text(),
+    request.clone().text(),
+  ]);
+
+  assert.equal(
+    storedBody,
+    originalBody,
+    "cloned request should preserve body content",
+  );
+});
