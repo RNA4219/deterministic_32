@@ -2,6 +2,22 @@ import json, statistics, pathlib, os, datetime
 from collections import Counter
 from typing import Tuple
 
+
+def compute_p95(durations: list[int]) -> int:
+    if not durations:
+        return 0
+    if len(durations) >= 20:
+        return int(statistics.quantiles(durations, n=20)[18])
+    ordered = sorted(durations)
+    if len(ordered) == 1:
+        return int(ordered[0])
+    position = 0.95 * (len(ordered) - 1)
+    lower_index = int(position)
+    upper_index = min(lower_index + 1, len(ordered) - 1)
+    fraction = position - lower_index
+    interpolated = ordered[lower_index] + (ordered[upper_index] - ordered[lower_index]) * fraction
+    return int(interpolated)
+
 LOG = pathlib.Path("logs/test.jsonl")
 REPORT = pathlib.Path("reports/today.md")
 ISSUE_OUT = pathlib.Path("reports/issue_suggestions.md")
@@ -80,7 +96,7 @@ def main():
     tests, durs, fails = load_results()
     total = len(tests) or 1
     pass_rate = (total - len(fails)) / total
-    p95 = int(statistics.quantiles(durs or [0], n=20)[18]) if durs else 0
+    p95 = compute_p95(durs)
     now = datetime.datetime.utcnow().isoformat()
     REPORT.parent.mkdir(parents=True, exist_ok=True)
     with REPORT.open("w", encoding="utf-8") as f:
