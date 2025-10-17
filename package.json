@@ -22,7 +22,7 @@
     "deterministic-32": "dist/cli.js"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json && node -e \"const fs=require('node:fs');const path=require('node:path');const dist=path.resolve('dist');const src=path.join(dist,'src');for (const entry of fs.readdirSync(src,{withFileTypes:true})){if(entry.isFile()&&(/\\.(js|d.ts)$/.test(entry.name))){fs.copyFileSync(path.join(src,entry.name),path.join(dist,entry.name));}}const reporterSrc=path.resolve('reporters/json');const reporterDest=path.resolve('node_modules/json');fs.rmSync(reporterDest,{recursive:true,force:true});fs.mkdirSync(reporterDest,{recursive:true});for (const filename of ['index.js','package.json']){fs.copyFileSync(path.join(reporterSrc,filename),path.join(reporterDest,filename));}\"",
+    "build": "tsc -p tsconfig.json && node -e \"const fs=require('node:fs');const path=require('node:path');const dist=path.resolve('dist');const srcRoot=path.join(dist,'src');if(fs.existsSync(srcRoot)){fs.cpSync(srcRoot,dist,{recursive:true,filter:(source)=>{if(source===srcRoot){return true;}const stat=fs.statSync(source);if(stat.isDirectory()){return true;}return source.endsWith('.js')||source.endsWith('.d.ts');}});}const reporterSrc=path.resolve('reporters/json');const reporterDest=path.resolve('node_modules/json');fs.rmSync(reporterDest,{recursive:true,force:true});fs.mkdirSync(reporterDest,{recursive:true});for(const filename of ['index.js','package.json']){fs.copyFileSync(path.join(reporterSrc,filename),path.join(reporterDest,filename));}\"",
     "test": "npm run build && node --test dist/tests",
     "prepare": "npm run build",
     "lint": "eslint \"src/**/*.ts\" \"tests/**/*.ts\"",
