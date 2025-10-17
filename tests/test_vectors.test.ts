@@ -103,6 +103,21 @@ function parseTable(markdown: string, heading: string): VectorRow[] {
   if (headerIndex === -1) {
     throw new Error(`table header missing for heading: ${heading}`);
   }
+  const headerCells = splitMarkdownRow(lines[headerIndex]).map((cell) =>
+    cell.trim().toLowerCase(),
+  );
+  const columnIndex = new Map<string, number>();
+  headerCells.forEach((name, idx) => {
+    if (name) {
+      columnIndex.set(name, idx);
+    }
+  });
+  const requiredColumns = ["input", "normalized", "salted_key", "hash_hex", "index"];
+  for (const column of requiredColumns) {
+    if (!columnIndex.has(column)) {
+      throw new Error(`column \"${column}\" missing for heading: ${heading}`);
+    }
+  }
   const rows: VectorRow[] = [];
   for (let i = headerIndex + 2; i < lines.length; i++) {
     const line = lines[i];
@@ -113,7 +128,11 @@ function parseTable(markdown: string, heading: string): VectorRow[] {
     if (cells.length < 5) {
       continue;
     }
-    const [rawInput, rawNormalizedKey, rawSaltedKey, rawHash, rawIndex] = cells;
+    const rawInput = cells[columnIndex.get("input")!];
+    const rawNormalizedKey = cells[columnIndex.get("normalized")!];
+    const rawSaltedKey = cells[columnIndex.get("salted_key")!];
+    const rawHash = cells[columnIndex.get("hash_hex")!];
+    const rawIndex = cells[columnIndex.get("index")!];
     rows.push({
       input: decodeCell(rawInput),
       normalizedKey: unescapeInlineCode(decodeCell(rawNormalizedKey)),
