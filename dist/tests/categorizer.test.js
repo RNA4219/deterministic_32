@@ -52,6 +52,17 @@ test("dist stableStringify matches JSON.stringify for string literals", async ()
     const distStableStringify = distSerializeModule.stableStringify;
     assert.equal(distStableStringify("__string__:payload"), JSON.stringify("__string__:payload"));
 });
+test("dist stableStringify preserves prefixed sentinel string literal content", async () => {
+    const sourceImportMetaUrl = import.meta.url.includes("/dist/tests/")
+        ? new URL("../../tests/categorizer.test.ts", import.meta.url)
+        : import.meta.url;
+    const distSerializeModule = (await import(new URL("../dist/serialize.js", sourceImportMetaUrl).href));
+    assert.equal(typeof distSerializeModule.stableStringify, "function");
+    const distStableStringify = distSerializeModule.stableStringify;
+    const prefixedLiteral = "__string__:" + typeSentinel("number", "NaN");
+    assert.equal(distStableStringify(prefixedLiteral), JSON.stringify(prefixedLiteral));
+    assert.ok(distStableStringify(prefixedLiteral) !== distStableStringify(NaN));
+});
 test("stableStringify matches JSON.stringify for string literals", () => {
     assert.equal(stableStringify("__string__:payload"), JSON.stringify("__string__:payload"));
 });
