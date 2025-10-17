@@ -40,6 +40,7 @@ test("build copies nested source files", async () => {
   const nestedSourceFileUrl = new URL("nested.ts", tempSourceDirUrl);
   const nestedDistDirUrl = new URL("dist/tmp/", repoRootUrl);
   const nestedDistFileUrl = new URL("nested.js", nestedDistDirUrl);
+  const nestedDistSourceDirUrl = new URL("dist/src/tmp/", repoRootUrl);
 
   await mkdir(tempSourceDirUrl, { recursive: true });
   await writeFile(nestedSourceFileUrl, "export const nestedValue: number = 42;\n");
@@ -83,5 +84,6 @@ test("build copies nested source files", async () => {
   } finally {
     await rm(tempSourceDirUrl, { recursive: true, force: true });
     await rm(nestedDistDirUrl, { recursive: true, force: true });
+    await rm(nestedDistSourceDirUrl, { recursive: true, force: true });
   }
 });
