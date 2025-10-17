@@ -28,3 +28,23 @@ test("dist JSON reporter removes seen references after normalization", async () 
     "expected seen.delete(value) to be emitted",
   );
 });
+
+test("dist JSON reporter serializes SharedArrayBuffer data to a byte array", async () => {
+  if (typeof SharedArrayBuffer === "undefined") {
+    return;
+  }
+
+  const module = (await dynamicImport(distJsonReporterUrl.href)) as {
+    toSerializableEvent: (event: { type: string; data?: unknown }) => {
+      readonly data?: unknown;
+    };
+  };
+
+  const shared = new SharedArrayBuffer(4);
+  const view = new Uint8Array(shared);
+  view.set([1, 2, 3, 4]);
+
+  const serialized = module.toSerializableEvent({ type: "test", data: shared });
+
+  assert.deepEqual(serialized.data, [1, 2, 3, 4]);
+});
