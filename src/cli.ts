@@ -26,6 +26,8 @@ type ParsedArgs = Record<string, string | boolean | undefined> & {
   pretty?: boolean;
 };
 
+type OutputFormat = "compact" | "pretty";
+
 function parseArgs(argv: string[]): ParsedArgs {
   const args: Record<string, string | boolean | undefined> = {};
   let positional: string | undefined;
@@ -106,14 +108,24 @@ async function main() {
   const shouldReadFromStdin = key === undefined;
   const input = shouldReadFromStdin ? await readStdin() : key;
   const res = cat.assign(input);
-  const jsonOption = typeof args.json === "string" ? args.json : undefined;
-  const jsonFormat = jsonOption ?? "compact";
-  if (jsonFormat !== "compact" && jsonFormat !== "pretty") {
-    throw new RangeError(`unsupported --json value "${jsonFormat}"`);
-  }
-  const pretty = args.pretty === true || jsonFormat === "pretty";
-  const indent = pretty ? 2 : 0;
+  const format = resolveOutputFormat(args);
+  const indent = format === "pretty" ? 2 : 0;
   process.stdout.write(JSON.stringify(res, null, indent) + "\n");
+}
+
+function resolveOutputFormat(args: ParsedArgs): OutputFormat {
+  const jsonOption = typeof args.json === "string" ? args.json : undefined;
+  const prettyFlag = args.pretty === true;
+  if (jsonOption === undefined) {
+    return prettyFlag ? "pretty" : "compact";
+  }
+  if (jsonOption === "compact" || jsonOption === "pretty") {
+    if (prettyFlag) {
+      return "pretty";
+    }
+    return jsonOption;
+  }
+  throw new RangeError(`unsupported --json value "${jsonOption}"`);
 }
 
 type ReadableStdin = typeof process.stdin & {
