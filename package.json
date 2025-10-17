@@ -18,7 +18,8 @@
     "LICENSE"
   ],
   "bin": {
-    "cat32": "dist/cli.js"
+    "cat32": "dist/cli.js",
+    "deterministic-32": "dist/cli.js"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json && node -e \"const fs=require('node:fs');const path=require('node:path');const dist=path.resolve('dist');const src=path.join(dist,'src');for (const entry of fs.readdirSync(src,{withFileTypes:true})){if(entry.isFile()&&(/\\.(js|d.ts)$/.test(entry.name))){fs.copyFileSync(path.join(src,entry.name),path.join(dist,entry.name));}}\"",
