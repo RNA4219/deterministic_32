@@ -23,8 +23,26 @@
   "scripts": {
     "build": "tsc -p tsconfig.json && node -e \"const fs=require('node:fs');const path=require('node:path');const dist=path.resolve('dist');const src=path.join(dist,'src');for (const entry of fs.readdirSync(src,{withFileTypes:true})){if(entry.isFile()&&(/\\.(js|d.ts)$/.test(entry.name))){fs.copyFileSync(path.join(src,entry.name),path.join(dist,entry.name));}}\"",
     "test": "npm run build && node --test dist/tests",
-    "prepare": "npm run build"
+    "prepare": "npm run build",
+    "lint": "eslint \"src/**/*.ts\" \"tests/**/*.ts\"",
+    "lint:fix": "npm run lint -- --fix"
   },
-  "engines": { "node": ">=18" },
-  "keywords": ["deterministic", "hash", "categorize", "bucketing", "consistent", "32"]
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "deterministic",
+    "hash",
+    "categorize",
+    "bucketing",
+    "consistent",
+    "32"
+  ],
+  "devDependencies": {
+    "eslint": "^9.0.0",
+    "@typescript-eslint/parser": "^7.0.0",
+    "@typescript-eslint/eslint-plugin": "^7.0.0",
+    "@eslint/js": "^9.0.0",
+    "globals": "^15.0.0"
+  }
 }
