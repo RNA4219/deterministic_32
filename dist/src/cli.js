@@ -55,24 +55,23 @@ function parseArgs(argv) {
                 args[key] = true;
             }
             else if (spec.mode === "optional-value") {
-                let value;
                 if (eq >= 0) {
-                    value = a.slice(eq + 1);
+                    const explicitValue = a.slice(eq + 1);
+                    assertAllowedFlagValue(key, explicitValue, spec.allowedValues);
+                    args[key] = explicitValue;
+                    continue;
+                }
+                const next = argv[i + 1];
+                const hasNextToken = next !== undefined && next !== "--" && !next.startsWith("--");
+                const nextIsAllowedValue = hasNextToken &&
+                    (spec.allowedValues === undefined || spec.allowedValues.includes(next));
+                if (nextIsAllowedValue) {
+                    args[key] = next;
+                    i += 1;
                 }
                 else {
-                    const next = argv[i + 1];
-                    if (next !== undefined &&
-                        next !== "--" &&
-                        !next.startsWith("--")) {
-                        value = next;
-                        i += 1;
-                    }
-                    else {
-                        value = spec.defaultValue;
-                    }
+                    args[key] = spec.defaultValue;
                 }
-                assertAllowedFlagValue(key, value, spec.allowedValues);
-                args[key] = value;
             }
             else {
                 let value;
