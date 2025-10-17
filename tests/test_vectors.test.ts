@@ -35,16 +35,18 @@ const testVectorsPromise: Promise<ParsedTables> = (async () => {
 const VECTOR_SUITES: readonly {
   heading: string;
   description: string;
-  options: Pick<CategorizerOptions, "salt" | "namespace">;
+  create: () => Cat32;
+  options?: Pick<CategorizerOptions, "salt" | "namespace">;
 }[] = [
   {
     heading: "Unsalted",
     description: "Cat32 matches documented unsalted vectors",
-    options: {},
+    create: () => new Cat32(),
   },
   {
     heading: "Salted (salt=projX, namespace=v1)",
     description: "Cat32 matches documented salted vectors",
+    create: () => new Cat32({ salt: "projX", namespace: "v1" }),
     options: { salt: "projX", namespace: "v1" },
   },
 ];
@@ -56,7 +58,7 @@ for (const suite of VECTOR_SUITES) {
     if (!rows) {
       throw new Error(`table not found for heading: ${suite.heading}`);
     }
-    const cat = new Cat32(suite.options);
+    const cat = suite.create();
     for (const vector of rows) {
       const assignment = cat.assign(vector.input);
       assert.equal(
@@ -103,6 +105,21 @@ function parseTable(markdown: string, heading: string): VectorRow[] {
   if (headerIndex === -1) {
     throw new Error(`table header missing for heading: ${heading}`);
   }
+  const headerCells = splitMarkdownRow(lines[headerIndex]).map((cell) =>
+    cell.trim().toLowerCase(),
+  );
+  const columnIndex = new Map<string, number>();
+  headerCells.forEach((name, idx) => {
+    if (name) {
+      columnIndex.set(name, idx);
+    }
+  });
+  const requiredColumns = ["input", "normalized", "salted_key", "hash_hex", "index"];
+  for (const column of requiredColumns) {
+    if (!columnIndex.has(column)) {
+      throw new Error(`column \"${column}\" missing for heading: ${heading}`);
+    }
+  }
   const rows: VectorRow[] = [];
   for (let i = headerIndex + 2; i < lines.length; i++) {
     const line = lines[i];
@@ -113,7 +130,11 @@ function parseTable(markdown: string, heading: string): VectorRow[] {
     if (cells.length < 5) {
       continue;
     }
-    const [rawInput, rawNormalizedKey, rawSaltedKey, rawHash, rawIndex] = cells;
+    const rawInput = cells[columnIndex.get("input")!];
+    const rawNormalizedKey = cells[columnIndex.get("normalized")!];
+    const rawSaltedKey = cells[columnIndex.get("salted_key")!];
+    const rawHash = cells[columnIndex.get("hash_hex")!];
+    const rawIndex = cells[columnIndex.get("index")!];
     rows.push({
       input: decodeCell(rawInput),
       normalizedKey: unescapeInlineCode(decodeCell(rawNormalizedKey)),
@@ -163,10 +184,10 @@ function splitMarkdownRow(line: string): string[] {
 
 function deriveSaltedKey(
   key: string,
-  options: Pick<CategorizerOptions, "salt" | "namespace">,
+  options?: Pick<CategorizerOptions, "salt" | "namespace">,
 ): string {
-  const baseSalt = options.salt ?? "";
-  const namespaceSuffix = options.namespace ? `|ns:${options.namespace}` : "";
+  const baseSalt = options?.salt ?? "";
+  const namespaceSuffix = options?.namespace ? `|ns:${options.namespace}` : "";
   const combined = `${baseSalt}${namespaceSuffix}`;
   return combined ? `${key}|salt:${combined}` : key;
 }
