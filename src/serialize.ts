@@ -192,6 +192,9 @@ function compareSerializedEntry(
 }
 
 function toMapPropertyKey(rawKey: unknown, serializedKey: string): string {
+  if (rawKey instanceof Date) {
+    return normalizePlainObjectKey(String(rawKey));
+  }
   const revivedKey = reviveFromSerialized(serializedKey);
   return toPropertyKeyString(rawKey, revivedKey, serializedKey);
 }
