@@ -6,58 +6,24 @@ on:
 jobs:
   run:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        node-version: ["18", "20"]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: ${{ matrix["node-version"] }}
-      - name: Install toolchain
-        run: npm install --no-save typescript
-      - name: Build project
-        run: npm run build
-      - name: Run test suite
+          node-version: "18"
+      - name: Install dependencies
+        run: npm ci
+      - name: Build and run tests
         run: |
+          npm run build
           mkdir -p logs
           node --test \
-            --test-reporter tap \
-            --test-reporter-destination=logs/test.tap \
-            dist/tests
-      - name: Convert TAP to JSONL
-        run: |
-          node <<'NODE'
-          const fs = require('node:fs');
-          const path = require('node:path');
-          const tapPath = path.join('logs', 'test.tap');
-          const jsonlPath = path.join('logs', 'test.jsonl');
-          if (!fs.existsSync(tapPath)) {
-            fs.writeFileSync(jsonlPath, '');
-            process.exit(0);
-          }
-          const lines = fs.readFileSync(tapPath, 'utf8').split(/\r?\n/);
-          const fd = fs.openSync(jsonlPath, 'w');
-          let index = 0;
-          for (const rawLine of lines) {
-            const line = rawLine.trim();
-            if (!line || line.startsWith('#') || line.startsWith('TAP version') || line.startsWith('1..')) {
-              continue;
-            }
-            const match = /^(not ok|ok)\s+\d+\s*-?\s*(.*)$/.exec(line);
-            if (!match) {
-              continue;
-            }
-            index += 1;
-            const status = match[1] === 'ok' ? 'pass' : 'fail';
-            const name = match[2] ? match[2].trim() : `test-${index}`;
-            const entry = { name, status, duration_ms: 0 };
-            fs.writeSync(fd, JSON.stringify(entry) + '\n');
-          }
-          fs.closeSync(fd);
-          NODE
+            dist/tests \
+            --test-reporter=json \
+            --test-reporter-destination=logs/test.jsonl
       - name: Upload logs
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: test-logs
-          path: logs
+          path: logs/test.jsonl
