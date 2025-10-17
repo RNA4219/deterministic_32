@@ -32,11 +32,12 @@ jobs:
           python -m pip install --upgrade pip
           python scripts/analyze.py
       - name: Commit report
+        if: github.event_name != 'workflow_run' || (github.event.workflow_run.head_commit.author.name != 'reflect-bot' && github.event.workflow_run.head_commit.author.email != 'bot@example.com')
         run: |
           git config user.name "reflect-bot"
           git config user.email "bot@example.com"
           git add reports/today.md
-          git commit -m "chore(report): reflection report [skip ci]" || echo "no changes"
+          git commit -m "chore(report): reflection report" || echo "no changes"
           git push || true
       - name: Open issue if needed (draft memo)
         if: ${{ hashFiles('reports/issue_suggestions.md') != '' }}
