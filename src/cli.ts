@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { Cat32 } from "./categorizer.js";
+import { Cat32, type NormalizeMode } from "./categorizer.js";
 
 type FlagSpec =
   | { mode: "value" }
@@ -130,9 +130,10 @@ async function main() {
   const key = args._;
   const salt = typeof args.salt === "string" ? args.salt : "";
   const namespace = typeof args.namespace === "string" ? args.namespace : "";
-  const norm = typeof args.normalize === "string" ? args.normalize : "nfkc";
+  const normalizeOption = typeof args.normalize === "string" ? args.normalize : undefined;
+  const normalizeMode = resolveNormalizeMode(normalizeOption);
 
-  const cat = new Cat32({ salt, namespace, normalize: norm as any });
+  const cat = new Cat32({ salt, namespace, normalize: normalizeMode });
 
   const shouldReadFromStdin = key === undefined;
   const input = shouldReadFromStdin ? await readStdin() : key;
@@ -140,6 +141,20 @@ async function main() {
   const format = resolveOutputFormat(args);
   const indent = format === "pretty" ? 2 : 0;
   process.stdout.write(JSON.stringify(res, null, indent) + "\n");
+}
+
+function resolveNormalizeMode(value: string | undefined): NormalizeMode {
+  if (value === undefined) {
+    return "nfkc";
+  }
+  if (isNormalizeMode(value)) {
+    return value;
+  }
+  throw new RangeError('normalize must be one of "none", "nfc", or "nfkc"');
+}
+
+function isNormalizeMode(value: string): value is NormalizeMode {
+  return value === "none" || value === "nfc" || value === "nfkc";
 }
 
 function resolveOutputFormat(args: ParsedArgs): OutputFormat {

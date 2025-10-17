@@ -58,14 +58,12 @@ function parseArgs(argv) {
                 let value;
                 if (eq >= 0) {
                     value = a.slice(eq + 1);
-                    assertAllowedFlagValue(key, value, spec.allowedValues);
                 }
                 else {
                     const next = argv[i + 1];
                     if (next !== undefined &&
                         next !== "--" &&
                         !next.startsWith("--")) {
-                        assertAllowedFlagValue(key, next, spec.allowedValues);
                         value = next;
                         i += 1;
                     }
@@ -73,6 +71,7 @@ function parseArgs(argv) {
                         value = spec.defaultValue;
                     }
                 }
+                assertAllowedFlagValue(key, value, spec.allowedValues);
                 args[key] = value;
             }
             else {
@@ -111,14 +110,27 @@ async function main() {
     const key = args._;
     const salt = typeof args.salt === "string" ? args.salt : "";
     const namespace = typeof args.namespace === "string" ? args.namespace : "";
-    const norm = typeof args.normalize === "string" ? args.normalize : "nfkc";
-    const cat = new Cat32({ salt, namespace, normalize: norm });
+    const normalizeOption = typeof args.normalize === "string" ? args.normalize : undefined;
+    const normalizeMode = resolveNormalizeMode(normalizeOption);
+    const cat = new Cat32({ salt, namespace, normalize: normalizeMode });
     const shouldReadFromStdin = key === undefined;
     const input = shouldReadFromStdin ? await readStdin() : key;
     const res = cat.assign(input);
     const format = resolveOutputFormat(args);
     const indent = format === "pretty" ? 2 : 0;
     process.stdout.write(JSON.stringify(res, null, indent) + "\n");
+}
+function resolveNormalizeMode(value) {
+    if (value === undefined) {
+        return "nfkc";
+    }
+    if (isNormalizeMode(value)) {
+        return value;
+    }
+    throw new RangeError('normalize must be one of "none", "nfc", or "nfkc"');
+}
+function isNormalizeMode(value) {
+    return value === "none" || value === "nfc" || value === "nfkc";
 }
 function resolveOutputFormat(args) {
     const jsonOption = typeof args.json === "string" ? args.json : undefined;

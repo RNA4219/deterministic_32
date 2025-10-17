@@ -2,11 +2,8 @@
 import test from "node:test";
 import assert from "node:assert";
 import { Cat32 } from "../src/index.js";
+import type { NormalizeMode } from "../src/categorizer.js";
 import { escapeSentinelString, stableStringify, typeSentinel } from "../src/serialize.js";
-
-declare const Buffer: {
-  from(input: string | Uint8Array): { toString(encoding: string): string };
-};
 
 type SpawnOptions = {
   stdio?: ("pipe" | "inherit" | "ignore")[];
@@ -1301,14 +1298,14 @@ test("README library example overrides use canonical keys", () => {
 
 test("override rejects NaN with explicit error", () => {
   assert.throws(
-    () => new Cat32({ overrides: { foo: Number.NaN as any } }),
+    () => new Cat32({ overrides: { foo: Number.NaN } }),
     (error) => error instanceof Error && error.message === "index out of range: NaN",
   );
 });
 
 test("override rejects NaN", () => {
   assert.throws(
-    () => new Cat32({ overrides: { foo: Number.NaN as any } }),
+    () => new Cat32({ overrides: { foo: Number.NaN } }),
     (error) => error instanceof Error,
   );
 });
@@ -1330,7 +1327,7 @@ test("override accepts canonical key strings", () => {
 test("range 0..31 and various types", () => {
   const c = new Cat32();
   for (const k of ["a", "b", "c", "日本語", "ＡＢＣ", 123, true, null]) {
-    const idx = c.index(k as any);
+    const idx = c.index(k);
     assert.ok(idx >= 0 && idx <= 31);
   }
 });
@@ -1344,7 +1341,7 @@ test("normalization NFKC merges fullwidth", () => {
 
 test("unsupported normalization option throws", () => {
   assert.throws(
-    () => new Cat32({ normalize: "nfkd" as any }),
+    () => new Cat32({ normalize: "nfkd" as NormalizeMode }),
     (error) => error instanceof RangeError,
   );
 });
@@ -1796,7 +1793,7 @@ test("date object property serializes with sentinel", () => {
 });
 
 test("cyclic object throws", () => {
-  const a: any = { x: 1 };
+  const a: { x: number; self?: unknown } = { x: 1 };
   a.self = a;
   const c = new Cat32();
   assert.throws(() => c.assign(a), /Cyclic object/);
