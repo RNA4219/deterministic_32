@@ -84,11 +84,12 @@ function parseArgs(argv: string[]): ParsedArgs {
           value = a.slice(eq + 1);
         } else {
           const next = argv[i + 1];
-          if (
+          const nextIsAllowedValue =
             next !== undefined &&
             next !== "--" &&
-            !next.startsWith("--")
-          ) {
+            !next.startsWith("--") &&
+            (spec.allowedValues === undefined || spec.allowedValues.includes(next));
+          if (nextIsAllowedValue) {
             value = next;
             i += 1;
           } else {
