@@ -65,6 +65,7 @@ npx deterministic-32 "user:123" --salt=proj --namespace=v1
 echo '{"id":1,"k":"v"}' | npx deterministic-32 --salt=proj
 # Output: one JSON per line (same shape as assign())
 ```
+- `--json=compact` で既定形式を明示し、`--json=pretty` または `--pretty` で整形出力できます。
 
 ## Determinism
 - Canonical key = **normalize(NFKC)** ∘ **stable stringify (key-sorted, cycle-check)**.
