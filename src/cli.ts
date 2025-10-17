@@ -3,14 +3,17 @@ import { Cat32 } from "./categorizer.js";
 
 type FlagSpec =
   | { mode: "value" }
-  | { mode: "optional-value"; defaultValue: string }
+  | { mode: "optional-value"; defaultValue: string; allowedValues?: readonly string[] }
   | { mode: "boolean" };
 
 const FLAG_SPECS = new Map<string, FlagSpec>([
   ["salt", { mode: "value" }],
   ["namespace", { mode: "value" }],
   ["normalize", { mode: "value" }],
-  ["json", { mode: "optional-value", defaultValue: "compact" }],
+  [
+    "json",
+    { mode: "optional-value", defaultValue: "compact", allowedValues: ["compact", "pretty"] },
+  ],
   ["pretty", { mode: "boolean" }],
 ]);
 
@@ -48,6 +51,25 @@ function parseArgs(argv: string[]): ParsedArgs {
           throw new RangeError(`flag "${a}" does not accept a value`);
         }
         args[key] = true;
+      } else if (spec.mode === "optional-value") {
+        let value: string;
+        if (eq >= 0) {
+          value = a.slice(eq + 1);
+        } else {
+          const next = argv[i + 1];
+          if (
+            next !== undefined &&
+            next !== "--" &&
+            !next.startsWith("--") &&
+            (spec.allowedValues === undefined || spec.allowedValues.includes(next))
+          ) {
+            value = next;
+            i += 1;
+          } else {
+            value = spec.defaultValue;
+          }
+        }
+        args[key] = value;
       } else {
         let value: string | undefined;
         if (eq >= 0) {
@@ -57,8 +79,6 @@ function parseArgs(argv: string[]): ParsedArgs {
           if (next !== undefined && next !== "--" && !next.startsWith("--")) {
             value = next;
             i += 1;
-          } else if (spec.mode === "optional-value") {
-            value = spec.defaultValue;
           } else {
             throw new RangeError(`flag "${a}" requires a value`);
           }
