@@ -73,3 +73,18 @@ test("JSON reporter expands shared references without cycles", () => {
     second: { array: [1, { nested: true }], object: { foo: "bar" } },
   });
 });
+
+test("JSON reporter serializes shared references without circular markers", () => {
+  const shared = { value: 42 };
+  const event: TestEvent = {
+    type: "test:data",
+    data: { first: shared, second: shared },
+  };
+
+  const normalized = toSerializableEvent(event);
+
+  assert.deepEqual(normalized.data, {
+    first: { value: 42 },
+    second: { value: 42 },
+  });
+});
