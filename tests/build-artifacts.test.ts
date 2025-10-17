@@ -6,6 +6,11 @@ const dynamicImport = new Function(
   "return import(specifier);",
 ) as (specifier: string) => Promise<unknown>;
 
+type ProcessLike = {
+  env?: Record<string, string | undefined>;
+  platform?: string;
+};
+
 type Mkdir = (path: string | URL, options: { recursive?: boolean }) => Promise<void>;
 type WriteFile = (path: string | URL, data: string) => Promise<void>;
 type Rm = (
@@ -19,8 +24,13 @@ type ExecFile = (
   options: { cwd?: string; env?: Record<string, string | undefined> },
   callback: (error: unknown, stdout: string, stderr: string) => void,
 ) => void;
+const runTest = test as unknown as (
+  name: string,
+  options: { timeout?: number },
+  fn: () => Promise<void>,
+) => void;
 
-test("build copies nested source files", async () => {
+runTest("build copies nested source files", { timeout: 60_000 }, async () => {
   const { mkdir, writeFile, rm, access } = (await dynamicImport("node:fs/promises")) as {
     mkdir: Mkdir;
     writeFile: WriteFile;
@@ -36,24 +46,27 @@ test("build copies nested source files", async () => {
 
   const repoRootUrl = new URL("../..", import.meta.url);
   const repoRootPath = fileURLToPath(repoRootUrl);
-  const tempSourceDirUrl = new URL("src/tmp/", repoRootUrl);
+  const uniqueSuffix = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+  const tempSourceDirUrl = new URL(`src/tmp-build-artifacts-${uniqueSuffix}/`, repoRootUrl);
   const nestedSourceFileUrl = new URL("nested.ts", tempSourceDirUrl);
-  const nestedDistDirUrl = new URL("dist/tmp/", repoRootUrl);
+  const nestedDistDirUrl = new URL(`dist/tmp-build-artifacts-${uniqueSuffix}/`, repoRootUrl);
   const nestedDistFileUrl = new URL("nested.js", nestedDistDirUrl);
-  const nestedDistSourceDirUrl = new URL("dist/src/tmp/", repoRootUrl);
+  const nestedDistSourceDirUrl = new URL(
+    `dist/src/tmp-build-artifacts-${uniqueSuffix}/`,
+    repoRootUrl,
+  );
 
   await mkdir(tempSourceDirUrl, { recursive: true });
   await writeFile(nestedSourceFileUrl, "export const nestedValue: number = 42;\n");
 
-  const env = {
-    ...((process as unknown as { env?: Record<string, string | undefined> }).env ?? {}),
-    CI: "1",
-  };
+  const { env: baseEnv = {}, platform = "linux" } = (process as unknown as ProcessLike) ?? {};
+  const npmExecutable = platform === "win32" ? "npm.cmd" : "npm";
+  const env = { ...baseEnv, CI: "1" };
 
   try {
     await new Promise<void>((resolve, reject) => {
       execFile(
-        "npm",
+        npmExecutable,
         ["run", "build"],
         { cwd: repoRootPath, env },
         (error) => {
