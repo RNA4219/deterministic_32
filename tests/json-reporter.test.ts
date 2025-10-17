@@ -88,3 +88,21 @@ test("JSON reporter serializes shared references without circular markers", () =
     second: { value: 42 },
   });
 });
+
+test("JSON reporter respects ArrayBuffer view offsets", () => {
+  const source = new Uint8Array([10, 20, 30, 40]).buffer;
+  const event: TestEvent = {
+    type: "test:data",
+    data: {
+      typed: new Uint8Array(source, 1, 2),
+      dataView: new DataView(source, 1, 2),
+    },
+  };
+
+  const normalized = toSerializableEvent(event);
+
+  assert.deepEqual(normalized.data, {
+    typed: [20, 30],
+    dataView: [20, 30],
+  });
+});
