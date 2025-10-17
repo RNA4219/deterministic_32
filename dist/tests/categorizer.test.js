@@ -1332,6 +1332,91 @@ test("CLI command cat32 \"\" exits successfully", async () => {
     const expected = new Cat32().assign("");
     assert.equal(result.hash, expected.hash);
 });
+test("CLI outputs compact JSON by default", async () => {
+    const { spawn } = (await dynamicImport("node:child_process"));
+    const child = spawn(process.argv[0], [CLI_PATH, "default-json"], {
+        stdio: ["ignore", "pipe", "inherit"],
+    });
+    let stdout = "";
+    child.stdout.setEncoding("utf8");
+    child.stdout.on("data", (chunk) => {
+        stdout += chunk;
+    });
+    const exitCode = await new Promise((resolve) => {
+        child.on("close", (code) => resolve(code));
+    });
+    assert.equal(exitCode, 0);
+    const expected = new Cat32().assign("default-json");
+    assert.equal(stdout, JSON.stringify(expected) + "\n");
+});
+test("CLI outputs compact JSON when --json is provided without a value", async () => {
+    const { spawn } = (await dynamicImport("node:child_process"));
+    const child = spawn(process.argv[0], [CLI_PATH, "--json", "json-flag"], {
+        stdio: ["ignore", "pipe", "inherit"],
+    });
+    let stdout = "";
+    child.stdout.setEncoding("utf8");
+    child.stdout.on("data", (chunk) => {
+        stdout += chunk;
+    });
+    const exitCode = await new Promise((resolve) => {
+        child.on("close", (code) => resolve(code));
+    });
+    assert.equal(exitCode, 0);
+    const expected = new Cat32().assign("json-flag");
+    assert.equal(stdout, JSON.stringify(expected) + "\n");
+});
+test("CLI outputs compact JSON when --json=compact is provided", async () => {
+    const { spawn } = (await dynamicImport("node:child_process"));
+    const child = spawn(process.argv[0], [CLI_PATH, "--json=compact", "json-flag"], {
+        stdio: ["ignore", "pipe", "inherit"],
+    });
+    let stdout = "";
+    child.stdout.setEncoding("utf8");
+    child.stdout.on("data", (chunk) => {
+        stdout += chunk;
+    });
+    const exitCode = await new Promise((resolve) => {
+        child.on("close", (code) => resolve(code));
+    });
+    assert.equal(exitCode, 0);
+    const expected = new Cat32().assign("json-flag");
+    assert.equal(stdout, JSON.stringify(expected) + "\n");
+});
+test("CLI outputs pretty JSON when --json=pretty is provided", async () => {
+    const { spawn } = (await dynamicImport("node:child_process"));
+    const child = spawn(process.argv[0], [CLI_PATH, "--json=pretty", "json-pretty"], {
+        stdio: ["ignore", "pipe", "inherit"],
+    });
+    let stdout = "";
+    child.stdout.setEncoding("utf8");
+    child.stdout.on("data", (chunk) => {
+        stdout += chunk;
+    });
+    const exitCode = await new Promise((resolve) => {
+        child.on("close", (code) => resolve(code));
+    });
+    assert.equal(exitCode, 0);
+    const expected = new Cat32().assign("json-pretty");
+    assert.equal(stdout, JSON.stringify(expected, null, 2) + "\n");
+});
+test("CLI pretty flag indents JSON output", async () => {
+    const { spawn } = (await dynamicImport("node:child_process"));
+    const child = spawn(process.argv[0], [CLI_PATH, "--pretty", "pretty-flag"], {
+        stdio: ["ignore", "pipe", "inherit"],
+    });
+    let stdout = "";
+    child.stdout.setEncoding("utf8");
+    child.stdout.on("data", (chunk) => {
+        stdout += chunk;
+    });
+    const exitCode = await new Promise((resolve) => {
+        child.on("close", (code) => resolve(code));
+    });
+    assert.equal(exitCode, 0);
+    const expected = new Cat32().assign("pretty-flag");
+    assert.equal(stdout, JSON.stringify(expected, null, 2) + "\n");
+});
 test("CLI exits with code 2 for invalid normalize option using stdin", async () => {
     const { spawn } = (await dynamicImport("node:child_process"));
     const child = spawn(process.argv[0], [CLI_PATH, "--normalize=invalid"], {

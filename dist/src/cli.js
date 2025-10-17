@@ -1,67 +1,123 @@
 #!/usr/bin/env node
 import { Cat32 } from "./categorizer.js";
-const ALLOWED_FLAGS = new Set(["salt", "namespace", "normalize"]);
+const FLAG_SPECS = new Map([
+    ["salt", { mode: "value" }],
+    ["namespace", { mode: "value" }],
+    ["normalize", { mode: "value" }],
+    [
+        "json",
+        { mode: "optional-value", defaultValue: "compact", allowedValues: ["compact", "pretty"] },
+    ],
+    ["pretty", { mode: "boolean" }],
+    ["help", { mode: "boolean" }],
+]);
+const HELP_TEXT = [
+    "Usage: cat32 [options] [input]",
+    "",
+    "Options:",
+    "  --salt <value>           Salt to apply when assigning a category.",
+    "  --namespace <value>      Namespace that scopes generated categories.",
+    "  --normalize <value>      Unicode normalization form (default: nfkc).",
+    "  --json [format]          Output JSON format: compact or pretty (default: compact).",
+    "  --pretty                 Shorthand for --json pretty.",
+    "  --help                   Show this help message and exit.",
+    "",
+].join("\n");
 function parseArgs(argv) {
     const args = {};
+    let positional;
     for (let i = 2; i < argv.length; i++) {
         const a = argv[i];
         if (a === "--") {
             const rest = argv.slice(i + 1);
             if (rest.length > 0) {
                 const remainder = rest.join(" ");
-                if (Object.prototype.hasOwnProperty.call(args, "_")) {
-                    const existing = args._;
-                    args._ = existing === undefined ? remainder : `${existing} ${remainder}`;
-                }
-                else {
-                    args._ = remainder;
-                }
+                positional = positional === undefined ? remainder : `${positional} ${remainder}`;
             }
             break;
         }
         if (a.startsWith("--")) {
             const eq = a.indexOf("=");
             const key = a.slice(2, eq >= 0 ? eq : undefined);
-            if (!ALLOWED_FLAGS.has(key)) {
+            const spec = FLAG_SPECS.get(key);
+            if (spec === undefined) {
                 throw new RangeError(`unknown flag "--${key}"`);
             }
-            if (eq >= 0) {
-                args[key] = a.slice(eq + 1);
+            if (spec.mode === "boolean") {
+                if (eq >= 0) {
+                    throw new RangeError(`flag "${a}" does not accept a value`);
+                }
+                args[key] = true;
             }
-            else {
-                const next = argv[i + 1];
-                if (next !== undefined && next !== "--" && !next.startsWith("--")) {
-                    args[key] = next;
-                    i += 1;
+            else if (spec.mode === "optional-value") {
+                let value;
+                if (eq >= 0) {
+                    value = a.slice(eq + 1);
                 }
                 else {
-                    throw new RangeError(`flag "${a}" requires a value`);
+                    const next = argv[i + 1];
+                    if (next !== undefined &&
+                        next !== "--" &&
+                        !next.startsWith("--") &&
+                        (spec.allowedValues === undefined || spec.allowedValues.includes(next))) {
+                        value = next;
+                        i += 1;
+                    }
+                    else {
+                        value = spec.defaultValue;
+                    }
                 }
+                args[key] = value;
+            }
+            else {
+                let value;
+                if (eq >= 0) {
+                    value = a.slice(eq + 1);
+                }
+                else {
+                    const next = argv[i + 1];
+                    if (next !== undefined && next !== "--" && !next.startsWith("--")) {
+                        value = next;
+                        i += 1;
+                    }
+                    else {
+                        throw new RangeError(`flag "${a}" requires a value`);
+                    }
+                }
+                args[key] = value;
             }
         }
-        else if (!("_" in args)) {
-            args._ = a;
+        else if (positional === undefined) {
+            positional = a;
         }
         else {
-            const existing = args._;
-            args._ = existing === undefined ? a : `${existing} ${a}`;
+            positional = `${positional} ${a}`;
         }
     }
-    return args;
+    return Object.assign(args, { _: positional });
 }
 async function main() {
     const args = parseArgs(process.argv);
-    const key = Object.prototype.hasOwnProperty.call(args, "_")
-        ? args._
-        : undefined;
-    const salt = args.salt ?? "";
-    const namespace = args.namespace ?? "";
-    const norm = args.normalize ?? "nfkc";
+    if (args.help === true) {
+        process.stdout.write(HELP_TEXT);
+        return;
+    }
+    const key = args._;
+    const salt = typeof args.salt === "string" ? args.salt : "";
+    const namespace = typeof args.namespace === "string" ? args.namespace : "";
+    const norm = typeof args.normalize === "string" ? args.normalize : "nfkc";
     const cat = new Cat32({ salt, namespace, normalize: norm });
     const shouldReadFromStdin = key === undefined;
     const input = shouldReadFromStdin ? await readStdin() : key;
     const res = cat.assign(input);
-    process.stdout.write(JSON.stringify(res) + "\n");
+    const jsonOption = typeof args.json === "string" ? args.json : undefined;
+    const jsonFormat = jsonOption ?? "compact";
+    if (jsonFormat !== "compact" && jsonFormat !== "pretty") {
+        throw new RangeError(`unsupported --json value "${jsonFormat}"`);
+    }
+    const pretty = args.pretty === true || jsonFormat === "pretty";
+    const indent = pretty ? 2 : 0;
+    process.stdout.write(JSON.stringify(res, null, indent) + "\n");
 }
 function readStdin() {
     return new Promise((resolve, reject) => {

@@ -15,7 +15,21 @@ const FLAG_SPECS = new Map<string, FlagSpec>([
     { mode: "optional-value", defaultValue: "compact", allowedValues: ["compact", "pretty"] },
   ],
   ["pretty", { mode: "boolean" }],
+  ["help", { mode: "boolean" }],
 ]);
+
+const HELP_TEXT = [
+  "Usage: cat32 [options] [input]",
+  "",
+  "Options:",
+  "  --salt <value>           Salt to apply when assigning a category.",
+  "  --namespace <value>      Namespace that scopes generated categories.",
+  "  --normalize <value>      Unicode normalization form (default: nfkc).",
+  "  --json [format]          Output JSON format: compact or pretty (default: compact).",
+  "  --pretty                 Shorthand for --json pretty.",
+  "  --help                   Show this help message and exit.",
+  "",
+].join("\n");
 
 type ParsedArgs = Record<string, string | boolean | undefined> & {
   _: string | undefined;
@@ -24,6 +38,7 @@ type ParsedArgs = Record<string, string | boolean | undefined> & {
   normalize?: string;
   json?: string;
   pretty?: boolean;
+  help?: boolean;
 };
 
 type OutputFormat = "compact" | "pretty";
@@ -98,6 +113,10 @@ function parseArgs(argv: string[]): ParsedArgs {
 
 async function main() {
   const args = parseArgs(process.argv);
+  if (args.help === true) {
+    process.stdout.write(HELP_TEXT);
+    return;
+  }
   const key = args._;
   const salt = typeof args.salt === "string" ? args.salt : "";
   const namespace = typeof args.namespace === "string" ? args.namespace : "";
