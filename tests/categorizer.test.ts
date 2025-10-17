@@ -2012,7 +2012,7 @@ test("CLI outputs compact JSON by default", async () => {
 
 test("CLI outputs compact JSON when --json is provided without a value", async () => {
   const { spawn } = (await dynamicImport("node:child_process")) as { spawn: SpawnFunction };
-  const child = spawn(process.argv[0], [CLI_PATH, "--json", "json-flag"], {
+  const child = spawn(process.argv[0], [CLI_PATH, "--json", "--", "json-flag"], {
     stdio: ["ignore", "pipe", "inherit"],
   });
 
@@ -2029,6 +2029,29 @@ test("CLI outputs compact JSON when --json is provided without a value", async (
 
   const expected = new Cat32().assign("json-flag");
   assert.equal(stdout, JSON.stringify(expected) + "\n");
+});
+
+test("CLI exits with code 2 when --json has an invalid value", async () => {
+  const { spawn } = (await dynamicImport("node:child_process")) as { spawn: SpawnFunction };
+  const child = spawn(process.argv[0], [CLI_PATH, "--json", "foo"], {
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+
+  let stderr = "";
+  child.stderr.setEncoding("utf8");
+  child.stderr.on("data", (chunk: string) => {
+    stderr += chunk;
+  });
+
+  const exitCode: number | null = await new Promise((resolve) => {
+    child.on("close", (code: number | null) => resolve(code));
+  });
+
+  assert.equal(exitCode, 2);
+  assert.ok(
+    stderr.includes('unsupported --json value "foo"'),
+    `stderr did not include unsupported --json value message: ${stderr}`,
+  );
 });
 
 test("CLI outputs compact JSON when --json=compact is provided", async () => {
