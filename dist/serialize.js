@@ -10,8 +10,6 @@ const HOLE_SENTINEL_RAW = typeSentinel("hole", HOLE_SENTINEL_PAYLOAD);
 const HOLE_SENTINEL = JSON.stringify(HOLE_SENTINEL_RAW);
 const UNDEFINED_SENTINEL = "__undefined__";
 const DATE_SENTINEL_PREFIX = "__date__:";
-const BIGINT_SENTINEL_PREFIX = "__bigint__:";
-const NUMBER_SENTINEL_PREFIX = "__number__:";
 const STRING_LITERAL_SENTINEL_PREFIX = "__string__:";
 export function typeSentinel(type, payload = "") {
     return `${SENTINEL_PREFIX}${type}:${payload}${SENTINEL_SUFFIX}`;
@@ -22,9 +20,6 @@ export function escapeSentinelString(value) {
 export function stableStringify(v) {
     const stack = new Set();
     return _stringify(v, stack);
-}
-function isSentinelWrappedString(value) {
-    return value.startsWith(SENTINEL_PREFIX) && value.endsWith(SENTINEL_SUFFIX);
 }
 function _stringify(v, stack) {
     if (v === null)
