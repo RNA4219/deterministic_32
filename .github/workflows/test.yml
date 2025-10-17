@@ -8,14 +8,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      # ★ プロジェクトに合わせて差し替え（ここはダミー出力）
-      - name: Run tests (dummy)
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 18
+      - name: Install dependencies
+        run: npm ci
+      - name: Build
+        run: npm run build
+      - name: Run tests
         run: |
           mkdir -p logs
-          echo '{"name":"sample::ok","status":"pass","duration_ms":120}' >> logs/test.jsonl
-          echo '{"name":"sample::fail","status":"fail","duration_ms":900}' >> logs/test.jsonl
+          node --test dist/tests --test-reporter json --test-reporter-destination logs/test.jsonl
       - name: Upload logs
         uses: actions/upload-artifact@v4
         with:
           name: test-logs
-          path: logs
+          path: logs/test.jsonl
