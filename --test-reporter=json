@@ -1,0 +1,68 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { spawn } from 'node:child_process';
+import { pathToFileURL } from 'node:url';
+
+const DESTINATION_PREFIX = '--test-reporter-destination=';
+const DEFAULT_DESTINATION = 'logs/test.jsonl';
+const DEFAULT_TARGET = 'dist/tests';
+
+const resolveDestination = () => {
+  for (const entry of fs.readdirSync('.', { withFileTypes: true })) {
+    if (!entry.name.startsWith(DESTINATION_PREFIX)) {
+      continue;
+    }
+    let suffix = entry.name.slice(DESTINATION_PREFIX.length);
+    let current = entry.isDirectory() ? entry.name : null;
+    while (current) {
+      const contents = fs.readdirSync(current, { withFileTypes: true });
+      const next = contents.find((item) => item.isDirectory());
+      if (!next) {
+        break;
+      }
+      suffix = path.join(suffix, next.name);
+      current = path.join(current, next.name);
+    }
+    return suffix || DEFAULT_DESTINATION;
+  }
+  return DEFAULT_DESTINATION;
+};
+
+const destination = resolveDestination();
+const resolvedDestination = path.resolve(destination);
+fs.mkdirSync(path.dirname(resolvedDestination), { recursive: true });
+
+const reporterSpecifier = pathToFileURL(path.resolve('reporters/json/index.js')).href;
+const args = [
+  '--test',
+  `--test-reporter=${reporterSpecifier}`,
+  `--test-reporter-destination=${resolvedDestination}`,
+  DEFAULT_TARGET
+];
+
+const childEnv = { ...process.env };
+delete childEnv.NODE_TEST_CONTEXT;
+const child = spawn(process.execPath, args, { stdio: 'inherit', env: childEnv });
+for (const signal of ['SIGINT', 'SIGTERM', 'SIGQUIT']) {
+  process.on(signal, () => {
+    if (!child.killed) {
+      child.kill(signal);
+    }
+  });
+}
+
+const exitResult = await new Promise((resolve) => {
+  child.once('error', (error) => {
+    console.error(error);
+    resolve({ code: 1, signal: null });
+  });
+  child.once('exit', (code, signal) => {
+    resolve({ code, signal });
+  });
+});
+
+if (exitResult.signal) {
+  process.kill(process.pid, exitResult.signal);
+} else {
+  process.exit(exitResult.code ?? 1);
+}
