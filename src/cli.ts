@@ -79,25 +79,25 @@ function parseArgs(argv: string[]): ParsedArgs {
         }
         args[key] = true;
       } else if (spec.mode === "optional-value") {
-        let value: string;
         if (eq >= 0) {
-          value = a.slice(eq + 1);
-        } else {
-          const next = argv[i + 1];
-          const nextIsAllowedValue =
-            next !== undefined &&
-            next !== "--" &&
-            !next.startsWith("--") &&
-            (spec.allowedValues === undefined || spec.allowedValues.includes(next));
-          if (nextIsAllowedValue) {
-            value = next;
-            i += 1;
-          } else {
-            value = spec.defaultValue;
-          }
+          const explicitValue = a.slice(eq + 1);
+          assertAllowedFlagValue(key, explicitValue, spec.allowedValues);
+          args[key] = explicitValue;
+          continue;
         }
-        assertAllowedFlagValue(key, value, spec.allowedValues);
-        args[key] = value;
+
+        const next = argv[i + 1];
+        const hasNextToken = next !== undefined && next !== "--" && !next.startsWith("--");
+        const nextIsAllowedValue =
+          hasNextToken &&
+          (spec.allowedValues === undefined || spec.allowedValues.includes(next));
+
+        if (nextIsAllowedValue) {
+          args[key] = next;
+          i += 1;
+        } else {
+          args[key] = spec.defaultValue;
+        }
       } else {
         let value: string | undefined;
         if (eq >= 0) {

@@ -923,7 +923,7 @@ test("cat32 binary accepts flag values separated by whitespace", async () => {
   assert.equal(parsed.key, expected.key);
 });
 
-test("cat32 binary treats --json separated value as positional input", async () => {
+test("cat32 binary outputs compact JSON when --json is followed by positional input", async () => {
   const { spawn } = (await dynamicImport("node:child_process")) as { spawn: SpawnFunction };
 
   const child = spawn(process.argv[0], [CLI_BIN_PATH, "--json", "foo"], {
@@ -954,10 +954,13 @@ test("cat32 binary treats --json separated value as positional input", async () 
     `cat32 failed: exit code ${exitCode}\nstdout:\n${stdout}\nstderr:\n${stderr}`,
   );
 
-  const parsed = JSON.parse(stdout) as { hash: string; key: string };
+  assert.ok(stdout.endsWith("\n"));
+  const body = stdout.slice(0, -1);
+  const parsed = JSON.parse(body) as { hash: string; key: string };
   const expected = new Cat32().assign("foo");
   assert.equal(parsed.hash, expected.hash);
   assert.equal(parsed.key, expected.key);
+  assert.equal(body, JSON.stringify(parsed));
 });
 
 test("cat32 binary exits with code 2 for unsupported --json= value", async () => {
@@ -2079,7 +2082,7 @@ test("CLI outputs compact JSON by default", async () => {
   assert.equal(stdout, JSON.stringify(expected) + "\n");
 });
 
-test("cat32 command treats --json separated value as positional input", async () => {
+test("cat32 command outputs compact JSON when --json is followed by positional input", async () => {
   const { spawn } = (await dynamicImport("node:child_process")) as { spawn: SpawnFunction };
 
   const cat32CommandPath = import.meta.url.includes("/dist/tests/")
@@ -2143,7 +2146,7 @@ test("CLI outputs compact JSON when --json is provided without a value", async (
   assert.equal(stdout, JSON.stringify(expected) + "\n");
 });
 
-test("CLI treats --json separated value as positional input", async () => {
+test("CLI outputs compact JSON when --json is followed by positional input", async () => {
   const { spawn } = (await dynamicImport("node:child_process")) as { spawn: SpawnFunction };
   const child = spawn(process.argv[0], [CLI_PATH, "--json", "foo"], {
     stdio: ["ignore", "pipe", "inherit"],
