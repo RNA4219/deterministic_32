@@ -61,9 +61,11 @@ function parseArgs(argv) {
                 }
                 else {
                     const next = argv[i + 1];
-                    if (next !== undefined &&
+                    const shouldConsumeNext = next !== undefined &&
                         next !== "--" &&
-                        !next.startsWith("--")) {
+                        !next.startsWith("--") &&
+                        (spec.allowedValues === undefined || spec.allowedValues.includes(next));
+                    if (shouldConsumeNext) {
                         value = next;
                         i += 1;
                     }
