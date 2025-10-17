@@ -13,6 +13,20 @@ const UNDEFINED_SENTINEL = "__undefined__";
 const DATE_SENTINEL_PREFIX = "__date__:";
 const STRING_LITERAL_SENTINEL_PREFIX = "__string__:";
 
+type ArrayBufferLikeConstructor = {
+  new (...args: unknown[]): ArrayBufferLike;
+  prototype: ArrayBufferLike;
+};
+
+const sharedArrayBufferGlobal = globalThis as unknown as {
+  SharedArrayBuffer?: ArrayBufferLikeConstructor;
+};
+
+const sharedArrayBufferCtor =
+  typeof sharedArrayBufferGlobal.SharedArrayBuffer === "function"
+    ? sharedArrayBufferGlobal.SharedArrayBuffer
+    : undefined;
+
 export function typeSentinel(type: string, payload = ""): string {
   return `${SENTINEL_PREFIX}${type}:${payload}${SENTINEL_SUFFIX}`;
 }
@@ -71,6 +85,10 @@ function _stringify(v: unknown, stack: Set<unknown>): string {
   }
 
   if (ArrayBuffer.isView(v)) {
+    return stringifyStringLiteral(String(v));
+  }
+
+  if (sharedArrayBufferCtor && v instanceof sharedArrayBufferCtor) {
     return stringifyStringLiteral(String(v));
   }
 
