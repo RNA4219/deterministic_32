@@ -17,12 +17,19 @@ jobs:
         run: |
           npm run build
           mkdir -p logs
+          set +e
           node --test \
             dist/tests \
             --test-reporter=json \
             --test-reporter-destination=logs/test.jsonl
+          status=$?
+          set -e
+          if [ ! -f logs/test.jsonl ]; then
+            touch logs/test.jsonl
+          fi
+          exit $status
       - name: Upload logs
-        if: success()
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: test-logs
