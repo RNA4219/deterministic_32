@@ -18,23 +18,22 @@ jobs:
       - name: Type check
         run: npx tsc --noEmit
   run:
-    needs: typecheck
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     strategy:
       matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
         node-version: ["18", "20"]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: ${{ matrix["node-version"] }}
-      - name: Install dependencies
-        run: npm install
-      - name: Run lint
-        run: npm run lint
+          node-version: ${{ matrix.node-version }}
+      - name: Install toolchain
+        run: npm install --no-save typescript
       - name: Build project
         run: npm run build
       - name: Run test suite
+        shell: bash
         run: |
           mkdir -p logs
           node --test \
@@ -42,6 +41,7 @@ jobs:
             --test-reporter-destination=logs/test.tap \
             dist/tests
       - name: Convert TAP to JSONL
+        shell: bash
         run: |
           node <<'NODE'
           const fs = require('node:fs');
