@@ -71,3 +71,18 @@ test("JSON reporter respects view ranges when normalizing binary data", () => {
     dataView: [30, 40],
   });
 });
+
+test("JSON reporter serializes shared references without circular markers", () => {
+  const shared = { value: 42 };
+  const event: TestEvent = {
+    type: "test:data",
+    data: { first: shared, second: shared },
+  };
+
+  const normalized = toSerializableEvent(event);
+
+  assert.deepEqual(normalized.data, {
+    first: { value: 42 },
+    second: { value: 42 },
+  });
+});

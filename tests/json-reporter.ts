@@ -20,17 +20,21 @@ function normalizeError(error: Error, seen: WeakSet<object>): JsonObject {
 function normalizeObject(value: Record<string, unknown>, seen: WeakSet<object>): JsonValue {
   if (seen.has(value)) return CIRCULAR;
   seen.add(value);
-  if (Array.isArray(value)) return value.map((item) => normalizeUnknown(item, seen));
-  if (ArrayBuffer.isView(value)) {
-    const view = value as ArrayBufferView;
-    return Array.from(new Uint8Array(view.buffer, view.byteOffset, view.byteLength));
+  try {
+    if (Array.isArray(value)) return value.map((item) => normalizeUnknown(item, seen));
+    if (ArrayBuffer.isView(value)) {
+      const view = value as ArrayBufferView;
+      return Array.from(new Uint8Array(view.buffer, view.byteOffset, view.byteLength));
+    }
+    if (value instanceof ArrayBuffer) return Array.from(new Uint8Array(value));
+    const plain: JsonObject = {};
+    for (const [key, entryValue] of Object.entries(value)) {
+      plain[key] = normalizeUnknown(entryValue, seen);
+    }
+    return plain;
+  } finally {
+    seen.delete(value);
   }
-  if (value instanceof ArrayBuffer) return Array.from(new Uint8Array(value));
-  const plain: JsonObject = {};
-  for (const key of Object.keys(value)) {
-    plain[key] = normalizeUnknown(value[key], seen);
-  }
-  return plain;
 }
 
 function normalizeUnknown(value: unknown, seen: WeakSet<object>): JsonValue {
