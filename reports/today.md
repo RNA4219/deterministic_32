@@ -1,7 +1,9 @@
-# Reflection Report (2025-10-17T07:23:04.598204)
+# Reflection Report (2025-10-17T07:52:20.913409)
 
-- Total tests: 113
-- Pass rate: 100.00%
-- Duration p95: 0 ms
-- Failures: 0
+- Total tests: 2
+- Pass rate: 50.00%
+- Duration p95: 1563 ms
+- Failures: 1
 
+## Why-Why (draft)
+- sample::fail: 仮説=前処理の不安定/依存の競合/境界値不足
