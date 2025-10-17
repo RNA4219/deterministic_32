@@ -45,6 +45,6 @@
     "eslint": "^9.0.0",
     "globals": "^15.0.0",
     "json": "file:reporters/json",
-    "typescript": "^5.6.3"
+    "typescript": "5.9.3"
   }
 }

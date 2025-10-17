@@ -24,5 +24,9 @@ test("package.json exposes a TypeScript dev dependency", async () => {
   );
 
   const version = (devDependencies!.typescript as string).trim();
-  assert.ok(version !== "", "expected TypeScript version to be non-empty");
+  assert.equal(
+    version,
+    "5.9.3",
+    "expected TypeScript version to be pinned to 5.9.3",
+  );
 });
