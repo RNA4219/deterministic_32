@@ -14,17 +14,24 @@ function normalizeObject(value, seen) {
     if (seen.has(value))
         return CIRCULAR;
     seen.add(value);
-    if (Array.isArray(value))
-        return value.map((item) => normalizeUnknown(item, seen));
-    if (ArrayBuffer.isView(value))
-        return Array.from(new Uint8Array(value.buffer));
-    if (value instanceof ArrayBuffer)
-        return Array.from(new Uint8Array(value));
-    const plain = {};
-    for (const key of Object.keys(value)) {
-        plain[key] = normalizeUnknown(value[key], seen);
+    try {
+        if (Array.isArray(value))
+            return value.map((item) => normalizeUnknown(item, seen));
+        if (ArrayBuffer.isView(value)) {
+            return Array.from(new Uint8Array(value.buffer, value.byteOffset, value.byteLength));
+        }
+        if (value instanceof ArrayBuffer) {
+            return Array.from(new Uint8Array(value, 0, value.byteLength));
+        }
+        const plain = {};
+        for (const [key, entryValue] of Object.entries(value)) {
+            plain[key] = normalizeUnknown(entryValue, seen);
+        }
+        return plain;
     }
-    return plain;
+    finally {
+        seen.delete(value);
+    }
 }
 function normalizeUnknown(value, seen) {
     if (value === null)
