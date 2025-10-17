@@ -54,3 +54,22 @@ test("JSON reporter normalizes errors", () => {
     },
   });
 });
+
+test("JSON reporter expands shared references without cycles", () => {
+  const sharedArray = [1, { nested: true }];
+  const sharedObject = { foo: "bar" };
+  const event: TestEvent = {
+    type: "test:diagnostic",
+    data: {
+      first: { array: sharedArray, object: sharedObject },
+      second: { array: sharedArray, object: sharedObject },
+    },
+  };
+
+  const normalized = toSerializableEvent(event);
+
+  assert.deepEqual(normalized.data, {
+    first: { array: [1, { nested: true }], object: { foo: "bar" } },
+    second: { array: [1, { nested: true }], object: { foo: "bar" } },
+  });
+});
