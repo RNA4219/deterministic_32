@@ -14,11 +14,12 @@ const VECTOR_SUITES = [
     {
         heading: "Unsalted",
         description: "Cat32 matches documented unsalted vectors",
-        options: {},
+        create: () => new Cat32(),
     },
     {
         heading: "Salted (salt=projX, namespace=v1)",
         description: "Cat32 matches documented salted vectors",
+        create: () => new Cat32({ salt: "projX", namespace: "v1" }),
         options: { salt: "projX", namespace: "v1" },
     },
 ];
@@ -29,7 +30,7 @@ for (const suite of VECTOR_SUITES) {
         if (!rows) {
             throw new Error(`table not found for heading: ${suite.heading}`);
         }
-        const cat = new Cat32(suite.options);
+        const cat = suite.create();
         for (const vector of rows) {
             const assignment = cat.assign(vector.input);
             assert.equal(assignment.key, vector.normalizedKey, `key mismatch for input ${JSON.stringify(vector.input)}`);
@@ -130,8 +131,8 @@ function splitMarkdownRow(line) {
     return cells;
 }
 function deriveSaltedKey(key, options) {
-    const baseSalt = options.salt ?? "";
-    const namespaceSuffix = options.namespace ? `|ns:${options.namespace}` : "";
+    const baseSalt = options?.salt ?? "";
+    const namespaceSuffix = options?.namespace ? `|ns:${options.namespace}` : "";
     const combined = `${baseSalt}${namespaceSuffix}`;
     return combined ? `${key}|salt:${combined}` : key;
 }
