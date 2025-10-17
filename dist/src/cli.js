@@ -23,6 +23,11 @@ const HELP_TEXT = [
     "  --help                   Show this help message and exit.",
     "",
 ].join("\n");
+function assertAllowedFlagValue(key, value, allowedValues) {
+    if (allowedValues !== undefined && !allowedValues.includes(value)) {
+        throw new RangeError(`unsupported --${key} value "${value}"`);
+    }
+}
 function parseArgs(argv) {
     const args = {};
     let positional;
@@ -53,20 +58,14 @@ function parseArgs(argv) {
                 let value;
                 if (eq >= 0) {
                     value = a.slice(eq + 1);
-                    if (spec.allowedValues !== undefined &&
-                        !spec.allowedValues.includes(value)) {
-                        throw new RangeError(`unsupported --${key} value "${value}"`);
-                    }
+                    assertAllowedFlagValue(key, value, spec.allowedValues);
                 }
                 else {
                     const next = argv[i + 1];
                     if (next !== undefined &&
                         next !== "--" &&
                         !next.startsWith("--")) {
-                        if (spec.allowedValues !== undefined &&
-                            !spec.allowedValues.includes(next)) {
-                            throw new RangeError(`unsupported --${key} value "${next}"`);
-                        }
+                        assertAllowedFlagValue(key, next, spec.allowedValues);
                         value = next;
                         i += 1;
                     }

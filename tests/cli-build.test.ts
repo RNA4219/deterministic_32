@@ -10,7 +10,11 @@ const EXPECTED_SNIPPETS = [
   "function resolveOutputFormat(args) {",
   "const jsonOption = typeof args.json === \"string\" ? args.json : undefined;",
   "const prettyFlag = args.pretty === true;",
+  "if (jsonOption === undefined) {",
   "return prettyFlag ? \"pretty\" : \"compact\";",
+  "if (jsonOption === \"compact\" || jsonOption === \"pretty\") {",
+  "if (prettyFlag) {",
+  "return jsonOption;",
   "throw new RangeError(`unsupported --json value \"${jsonOption}\"`);",
 ] as const;
 
@@ -22,16 +26,25 @@ test("dist CLI build contains resolveOutputFormat logic", async () => {
     readFile: (path: string, encoding: "utf8") => Promise<string>;
   };
 
-  const distCliUrl = import.meta.url.includes("/dist/tests/")
-    ? new URL("../src/cli.js", import.meta.url)
-    : new URL("../dist/src/cli.js", import.meta.url);
-  const distCliPath = fileURLToPath(distCliUrl);
-  const cliSource = await readFile(distCliPath, "utf8");
+  const isBuiltTest = import.meta.url.includes("/dist/tests/");
+  const distDirUrl = isBuiltTest
+    ? new URL("..", import.meta.url)
+    : new URL("../dist/", import.meta.url);
 
-  for (const snippet of EXPECTED_SNIPPETS) {
-    assert.ok(
-      cliSource.includes(snippet),
-      `expected to find ${JSON.stringify(snippet)} in dist/src/cli.js`,
-    );
+  const targets = [
+    { description: "dist/src/cli.js", url: new URL("src/cli.js", distDirUrl) },
+    { description: "dist/cli.js", url: new URL("cli.js", distDirUrl) },
+  ] as const;
+
+  for (const target of targets) {
+    const distCliPath = fileURLToPath(target.url);
+    const cliSource = await readFile(distCliPath, "utf8");
+
+    for (const snippet of EXPECTED_SNIPPETS) {
+      assert.ok(
+        cliSource.includes(snippet),
+        `expected to find ${JSON.stringify(snippet)} in ${target.description}`,
+      );
+    }
   }
 });
