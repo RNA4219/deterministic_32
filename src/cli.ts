@@ -82,7 +82,6 @@ function parseArgs(argv: string[]): ParsedArgs {
         let value: string;
         if (eq >= 0) {
           value = a.slice(eq + 1);
-          assertAllowedFlagValue(key, value, spec.allowedValues);
         } else {
           const next = argv[i + 1];
           if (
@@ -90,13 +89,13 @@ function parseArgs(argv: string[]): ParsedArgs {
             next !== "--" &&
             !next.startsWith("--")
           ) {
-            assertAllowedFlagValue(key, next, spec.allowedValues);
             value = next;
             i += 1;
           } else {
             value = spec.defaultValue;
           }
         }
+        assertAllowedFlagValue(key, value, spec.allowedValues);
         args[key] = value;
       } else {
         let value: string | undefined;
