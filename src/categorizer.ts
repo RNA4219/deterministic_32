@@ -1,5 +1,5 @@
 import { fnv1a32, toHex32 } from "./hash.js";
-import { escapeSentinelString, stableStringify } from "./serialize.js";
+import { stableStringify } from "./serialize.js";
 
 export type NormalizeMode = "none" | "nfc" | "nfkc";
 

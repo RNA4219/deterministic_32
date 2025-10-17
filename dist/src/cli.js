@@ -58,14 +58,12 @@ function parseArgs(argv) {
                 let value;
                 if (eq >= 0) {
                     value = a.slice(eq + 1);
-                    assertAllowedFlagValue(key, value, spec.allowedValues);
                 }
                 else {
                     const next = argv[i + 1];
                     if (next !== undefined &&
                         next !== "--" &&
                         !next.startsWith("--")) {
-                        assertAllowedFlagValue(key, next, spec.allowedValues);
                         value = next;
                         i += 1;
                     }
@@ -73,6 +71,7 @@ function parseArgs(argv) {
                         value = spec.defaultValue;
                     }
                 }
+                assertAllowedFlagValue(key, value, spec.allowedValues);
                 args[key] = value;
             }
             else {
@@ -102,6 +101,15 @@ function parseArgs(argv) {
     }
     return Object.assign(args, { _: positional });
 }
+function parseNormalizeOption(value) {
+    if (value === undefined) {
+        return "nfkc";
+    }
+    if (value === "none" || value === "nfc" || value === "nfkc") {
+        return value;
+    }
+    throw new RangeError("normalize must be one of \"none\", \"nfc\", or \"nfkc\"");
+}
 async function main() {
     const args = parseArgs(process.argv);
     if (args.help === true) {
@@ -111,8 +119,8 @@ async function main() {
     const key = args._;
     const salt = typeof args.salt === "string" ? args.salt : "";
     const namespace = typeof args.namespace === "string" ? args.namespace : "";
-    const norm = typeof args.normalize === "string" ? args.normalize : "nfkc";
-    const cat = new Cat32({ salt, namespace, normalize: norm });
+    const normalize = parseNormalizeOption(typeof args.normalize === "string" ? args.normalize : undefined);
+    const cat = new Cat32({ salt, namespace, normalize });
     const shouldReadFromStdin = key === undefined;
     const input = shouldReadFromStdin ? await readStdin() : key;
     const res = cat.assign(input);

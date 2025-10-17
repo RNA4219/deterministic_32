@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { Cat32 } from "./categorizer.js";
+import { Cat32, type NormalizeMode } from "./categorizer.js";
 
 type FlagSpec =
   | { mode: "value" }
@@ -121,6 +121,16 @@ function parseArgs(argv: string[]): ParsedArgs {
   return Object.assign(args, { _: positional }) as ParsedArgs;
 }
 
+function parseNormalizeOption(value: string | undefined): NormalizeMode {
+  if (value === undefined) {
+    return "nfkc";
+  }
+  if (value === "none" || value === "nfc" || value === "nfkc") {
+    return value;
+  }
+  throw new RangeError("normalize must be one of \"none\", \"nfc\", or \"nfkc\"");
+}
+
 async function main() {
   const args = parseArgs(process.argv);
   if (args.help === true) {
@@ -130,9 +140,11 @@ async function main() {
   const key = args._;
   const salt = typeof args.salt === "string" ? args.salt : "";
   const namespace = typeof args.namespace === "string" ? args.namespace : "";
-  const norm = typeof args.normalize === "string" ? args.normalize : "nfkc";
+  const normalize = parseNormalizeOption(
+    typeof args.normalize === "string" ? args.normalize : undefined,
+  );
 
-  const cat = new Cat32({ salt, namespace, normalize: norm as any });
+  const cat = new Cat32({ salt, namespace, normalize });
 
   const shouldReadFromStdin = key === undefined;
   const input = shouldReadFromStdin ? await readStdin() : key;
