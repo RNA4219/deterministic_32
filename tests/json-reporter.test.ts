@@ -71,3 +71,20 @@ test("JSON reporter respects view ranges when normalizing binary data", () => {
     dataView: [30, 40],
   });
 });
+
+test("JSON reporter serializes only the window for nested binary views", () => {
+  const bytes = Uint8Array.from({ length: 6 }, (_, index) => index + 1);
+  const nestedUint8 = new Uint8Array(bytes.buffer, 1, 3);
+  const nestedDataView = new DataView(bytes.buffer, 2, 2);
+  const event: TestEvent = {
+    type: "test:data",
+    data: { nested: { nestedUint8 }, nestedDataView },
+  };
+
+  const normalized = toSerializableEvent(event);
+
+  assert.deepEqual(normalized.data, {
+    nested: { nestedUint8: [2, 3, 4] },
+    nestedDataView: [3, 4],
+  });
+});

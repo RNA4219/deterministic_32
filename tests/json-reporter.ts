@@ -22,8 +22,8 @@ function normalizeObject(value: Record<string, unknown>, seen: WeakSet<object>):
   seen.add(value);
   if (Array.isArray(value)) return value.map((item) => normalizeUnknown(item, seen));
   if (ArrayBuffer.isView(value)) {
-    const view = value as ArrayBufferView;
-    return Array.from(new Uint8Array(view.buffer, view.byteOffset, view.byteLength));
+    const { buffer, byteOffset, byteLength } = value as ArrayBufferView;
+    return Array.from(new Uint8Array(buffer, byteOffset, byteLength));
   }
   if (value instanceof ArrayBuffer) return Array.from(new Uint8Array(value));
   const plain: JsonObject = {};
