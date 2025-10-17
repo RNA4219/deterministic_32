@@ -20,8 +20,10 @@ function normalizeObject(value, seen) {
         if (ArrayBuffer.isView(value)) {
             return Array.from(new Uint8Array(value.buffer, value.byteOffset, value.byteLength));
         }
-        if (value instanceof ArrayBuffer) {
-            return Array.from(new Uint8Array(value, 0, value.byteLength));
+        const isSharedArrayBuffer = typeof SharedArrayBuffer !== "undefined" && value instanceof SharedArrayBuffer;
+        if (value instanceof ArrayBuffer || isSharedArrayBuffer) {
+            const buffer = value;
+            return Array.from(new Uint8Array(buffer));
         }
         const plain = {};
         for (const [key, entryValue] of Object.entries(value)) {
