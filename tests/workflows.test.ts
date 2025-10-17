@@ -61,3 +61,27 @@ test("test workflow runs lint", async () => {
 
   assert.ok(/npm run lint/.test(workflowContent));
 });
+
+test("typecheck job runs lint before building", async () => {
+  const readFile = await loadReadFile();
+  const workflowContent = await readFile(testWorkflowUrl, "utf8");
+
+  const typecheckJobMatch = workflowContent.match(
+    /  typecheck:\n((?: {4}.+\n)+)/,
+  );
+
+  assert.ok(typecheckJobMatch, "typecheck job is not defined");
+
+  const [, typecheckJobContent] = typecheckJobMatch;
+
+  assert.ok(/run: npm run lint/.test(typecheckJobContent));
+  const lintIndex = typecheckJobContent.indexOf("run: npm run lint");
+  const buildIndex = typecheckJobContent.indexOf("npm run build");
+
+  assert.ok(lintIndex !== -1, "lint step is missing in the typecheck job");
+  assert.ok(buildIndex !== -1, "build step is missing in the typecheck job");
+  assert.ok(
+    lintIndex < buildIndex,
+    "lint should run before the build step",
+  );
+});
