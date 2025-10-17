@@ -1,8 +1,11 @@
 import { Transform, type TransformCallback } from "node:stream";
 
 type JsonPrimitive = string | number | boolean | null;
-export type JsonValue = JsonPrimitive | JsonObject | JsonValue[];
-export type JsonObject = { [key: string]: JsonValue };
+export type JsonValue = JsonPrimitive | JsonObject | JsonArray;
+export interface JsonObject {
+  [key: string]: JsonValue;
+}
+type JsonArray = JsonValue[];
 
 export type TestEvent = { readonly type: string; readonly data?: unknown };
 export type SerializableTestEvent = { readonly type: string; readonly data?: JsonValue };
@@ -17,18 +20,19 @@ function normalizeError(error: Error, seen: WeakSet<object>): JsonObject {
   return base;
 }
 
-function normalizeObject(value: Record<string, unknown>, seen: WeakSet<object>): JsonValue {
+function normalizeObject(value: object, seen: WeakSet<object>): JsonValue {
+  if (ArrayBuffer.isView(value)) {
+    const { buffer, byteOffset, byteLength } = value as ArrayBufferView;
+    return Array.from(new Uint8Array(buffer, byteOffset, byteLength));
+  }
+  if (value instanceof ArrayBuffer) return Array.from(new Uint8Array(value));
   if (seen.has(value)) return CIRCULAR;
   seen.add(value);
   if (Array.isArray(value)) return value.map((item) => normalizeUnknown(item, seen));
-  if (ArrayBuffer.isView(value)) {
-    const view = value as ArrayBufferView;
-    return Array.from(new Uint8Array(view.buffer, view.byteOffset, view.byteLength));
-  }
-  if (value instanceof ArrayBuffer) return Array.from(new Uint8Array(value));
+  const record = value as Record<string, unknown>;
   const plain: JsonObject = {};
-  for (const key of Object.keys(value)) {
-    plain[key] = normalizeUnknown(value[key], seen);
+  for (const key of Object.keys(record)) {
+    plain[key] = normalizeUnknown(record[key], seen);
   }
   return plain;
 }
@@ -56,7 +60,7 @@ function normalizeUnknown(value: unknown, seen: WeakSet<object>): JsonValue {
   }
   if (value instanceof Error) return normalizeError(value, seen);
   if (typeof value !== "object") return String(value);
-  return normalizeObject(value as Record<string, unknown>, seen);
+  return normalizeObject(value as object, seen);
 }
 
 function toSerializableEvent(event: TestEvent): SerializableTestEvent {
