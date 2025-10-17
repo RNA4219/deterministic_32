@@ -17,20 +17,25 @@ function normalizeError(error: Error, seen: WeakSet<object>): JsonObject {
   return base;
 }
 
-function normalizeObject(value: Record<string, unknown>, seen: WeakSet<object>): JsonValue {
+function normalizeObject(value: object, seen: WeakSet<object>): JsonValue {
   if (seen.has(value)) return CIRCULAR;
   seen.add(value);
-  if (Array.isArray(value)) return value.map((item) => normalizeUnknown(item, seen));
-  if (ArrayBuffer.isView(value)) {
-    const view = value as ArrayBufferView;
-    return Array.from(new Uint8Array(view.buffer, view.byteOffset, view.byteLength));
+  try {
+    if (Array.isArray(value)) return value.map((item) => normalizeUnknown(item, seen));
+    if (ArrayBuffer.isView(value)) {
+      const view = value as ArrayBufferView;
+      return Array.from(new Uint8Array(view.buffer));
+    }
+    if (value instanceof ArrayBuffer) return Array.from(new Uint8Array(value));
+    const plain: JsonObject = {};
+    const record = value as Record<string, unknown>;
+    for (const key of Object.keys(record)) {
+      plain[key] = normalizeUnknown(record[key], seen);
+    }
+    return plain;
+  } finally {
+    seen.delete(value);
   }
-  if (value instanceof ArrayBuffer) return Array.from(new Uint8Array(value));
-  const plain: JsonObject = {};
-  for (const key of Object.keys(value)) {
-    plain[key] = normalizeUnknown(value[key], seen);
-  }
-  return plain;
 }
 
 function normalizeUnknown(value: unknown, seen: WeakSet<object>): JsonValue {
@@ -56,7 +61,7 @@ function normalizeUnknown(value: unknown, seen: WeakSet<object>): JsonValue {
   }
   if (value instanceof Error) return normalizeError(value, seen);
   if (typeof value !== "object") return String(value);
-  return normalizeObject(value as Record<string, unknown>, seen);
+  return normalizeObject(value as object, seen);
 }
 
 function toSerializableEvent(event: TestEvent): SerializableTestEvent {
