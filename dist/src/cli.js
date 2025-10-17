@@ -53,13 +53,20 @@ function parseArgs(argv) {
                 let value;
                 if (eq >= 0) {
                     value = a.slice(eq + 1);
+                    if (spec.allowedValues !== undefined &&
+                        !spec.allowedValues.includes(value)) {
+                        throw new RangeError(`unsupported --${key} value "${value}"`);
+                    }
                 }
                 else {
                     const next = argv[i + 1];
                     if (next !== undefined &&
                         next !== "--" &&
-                        !next.startsWith("--") &&
-                        (spec.allowedValues === undefined || spec.allowedValues.includes(next))) {
+                        !next.startsWith("--")) {
+                        if (spec.allowedValues !== undefined &&
+                            !spec.allowedValues.includes(next)) {
+                            throw new RangeError(`unsupported --${key} value "${next}"`);
+                        }
                         value = next;
                         i += 1;
                     }
@@ -110,14 +117,23 @@ async function main() {
     const shouldReadFromStdin = key === undefined;
     const input = shouldReadFromStdin ? await readStdin() : key;
     const res = cat.assign(input);
-    const jsonOption = typeof args.json === "string" ? args.json : undefined;
-    const jsonFormat = jsonOption ?? "compact";
-    if (jsonFormat !== "compact" && jsonFormat !== "pretty") {
-        throw new RangeError(`unsupported --json value "${jsonFormat}"`);
-    }
-    const pretty = args.pretty === true || jsonFormat === "pretty";
-    const indent = pretty ? 2 : 0;
+    const format = resolveOutputFormat(args);
+    const indent = format === "pretty" ? 2 : 0;
     process.stdout.write(JSON.stringify(res, null, indent) + "\n");
+}
+function resolveOutputFormat(args) {
+    const jsonOption = typeof args.json === "string" ? args.json : undefined;
+    const prettyFlag = args.pretty === true;
+    if (jsonOption === undefined) {
+        return prettyFlag ? "pretty" : "compact";
+    }
+    if (jsonOption === "compact" || jsonOption === "pretty") {
+        if (prettyFlag) {
+            return "pretty";
+        }
+        return jsonOption;
+    }
+    throw new RangeError(`unsupported --json value "${jsonOption}"`);
 }
 function readStdin() {
     return new Promise((resolve, reject) => {
