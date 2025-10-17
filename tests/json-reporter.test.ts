@@ -88,3 +88,26 @@ test("JSON reporter serializes shared references without circular markers", () =
     second: { value: 42 },
   });
 });
+
+test("JSON reporter serializes only the view range of ArrayBuffer views", () => {
+  const buffer = new ArrayBuffer(8);
+  const bytes = new Uint8Array(buffer);
+  for (let index = 0; index < bytes.length; index += 1) {
+    bytes[index] = index;
+  }
+
+  const typedView = new Uint8Array(buffer, 2, 3);
+  const dataView = new DataView(buffer, 1, 2);
+
+  const event: TestEvent = {
+    type: "test:data",
+    data: { typed: typedView, dataView },
+  };
+
+  const normalized = toSerializableEvent(event);
+
+  assert.deepEqual(normalized.data, {
+    typed: [2, 3, 4],
+    dataView: [1, 2],
+  });
+});
