@@ -20,6 +20,11 @@ const releaseDrafterWorkflowUrl = new URL(
   repositoryRoot,
 );
 
+const testWorkflowUrl = new URL(
+  ".github/workflows/test.yml",
+  repositoryRoot,
+);
+
 type ReadFile = (path: URL, options: "utf8") => Promise<string>;
 
 const loadReadFile = async (): Promise<ReadFile> => {
@@ -48,4 +53,11 @@ test("release drafter workflow runs the release drafter action", async () => {
     ),
   );
   assert.ok(/on:\s*\n\s*push:/.test(workflowContent));
+});
+
+test("test workflow runs lint", async () => {
+  const readFile = await loadReadFile();
+  const workflowContent = await readFile(testWorkflowUrl, "utf8");
+
+  assert.ok(/npm run lint/.test(workflowContent));
 });
