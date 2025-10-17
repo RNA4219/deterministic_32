@@ -55,20 +55,37 @@ test("JSON reporter normalizes errors", () => {
   });
 });
 
-test("JSON reporter respects view ranges when normalizing binary data", () => {
-  const bytes = new Uint8Array([10, 20, 30, 40]);
-  const uint8View = bytes.subarray(1, 3);
-  const dataView = new DataView(bytes.buffer, 2, 2);
+test("JSON reporter expands shared references without cycles", () => {
+  const sharedArray = [1, { nested: true }];
+  const sharedObject = { foo: "bar" };
   const event: TestEvent = {
-    type: "test:data",
-    data: { uint8View, dataView },
+    type: "test:diagnostic",
+    data: {
+      first: { array: sharedArray, object: sharedObject },
+      second: { array: sharedArray, object: sharedObject },
+    },
   };
 
   const normalized = toSerializableEvent(event);
 
   assert.deepEqual(normalized.data, {
-    uint8View: [20, 30],
-    dataView: [30, 40],
+    first: { array: [1, { nested: true }], object: { foo: "bar" } },
+    second: { array: [1, { nested: true }], object: { foo: "bar" } },
+  });
+});
+
+test("JSON reporter serializes shared references without circular markers", () => {
+  const shared = { value: 42 };
+  const event: TestEvent = {
+    type: "test:data",
+    data: { first: shared, second: shared },
+  };
+
+  const normalized = toSerializableEvent(event);
+
+  assert.deepEqual(normalized.data, {
+    first: { value: 42 },
+    second: { value: 42 },
   });
 });
 

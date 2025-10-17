@@ -34,7 +34,6 @@ function normalizeObject(value: object, seen: WeakSet<object>): JsonValue {
   for (const key of Object.keys(record)) {
     plain[key] = normalizeUnknown(record[key], seen);
   }
-  return plain;
 }
 
 function normalizeUnknown(value: unknown, seen: WeakSet<object>): JsonValue {
