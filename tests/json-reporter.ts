@@ -17,7 +17,7 @@ function normalizeError(error: Error, seen: WeakSet<object>): JsonObject {
   return base;
 }
 
-function normalizeObject(value: Record<string, unknown>, seen: WeakSet<object>): JsonValue {
+function normalizeObject(value: object, seen: WeakSet<object>): JsonValue {
   if (seen.has(value)) return CIRCULAR;
   seen.add(value);
   if (Array.isArray(value)) return value.map((item) => normalizeUnknown(item, seen));
@@ -30,7 +30,6 @@ function normalizeObject(value: Record<string, unknown>, seen: WeakSet<object>):
   for (const key of Object.keys(value)) {
     plain[key] = normalizeUnknown(value[key], seen);
   }
-  return plain;
 }
 
 function normalizeUnknown(value: unknown, seen: WeakSet<object>): JsonValue {
@@ -56,7 +55,7 @@ function normalizeUnknown(value: unknown, seen: WeakSet<object>): JsonValue {
   }
   if (value instanceof Error) return normalizeError(value, seen);
   if (typeof value !== "object") return String(value);
-  return normalizeObject(value as Record<string, unknown>, seen);
+  return normalizeObject(value as object, seen);
 }
 
 function toSerializableEvent(event: TestEvent): SerializableTestEvent {
