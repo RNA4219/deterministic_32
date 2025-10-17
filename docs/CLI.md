@@ -9,11 +9,13 @@ $ npx deterministic-32 <key?> [--salt=... --namespace=... --normalize=nfkc|nfc|n
   ```json
   {"index":7,"label":"H","hash":"1a2b3c4d","key":"...canonical..."}
   ```
-  - `--json` を付けない場合は従来通り **compact JSON**。`--json=compact` で明示指定でき、`--json=pretty` または `--pretty` でインデント付き JSON を得られる。
+  - `--json` を付けない場合は従来通り **compact JSON**。`--json=compact` で明示指定できる。
   - `--json` 単体でも compact JSON（1行1JSON）を維持する。
+  - `--json=compact`/既定モードのみ **NDJSON**（1行1 JSON オブジェクト、末尾改行あり）の制約が掛かる。
+  - `--json=pretty` または `--pretty` はインデント2の複数行 JSON を出力し、複雑なキーでも可読性を優先して確認できる。
   - `--json=pretty` と `--pretty` は同じ整形結果になる。
-  - `--json` と `--pretty` を同時指定した場合は整形出力（インデント2）となる。
-  - いずれのモードでも末尾に改行を含む **NDJSON**（1行1 JSON オブジェクト）を維持する。
+  - `--json` と `--pretty` を同時指定した場合も整形出力（インデント2）。
+  - 整形モードは1件のレコードが複数行に分割されるため、NDJSON と誤解しないよう注意。
   - 終了コード:
   - `0` … 成功
   - `2` … 循環/labels長不正/override不正など仕様違反
