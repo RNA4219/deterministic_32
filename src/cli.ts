@@ -72,14 +72,25 @@ function parseArgs(argv: string[]): ParsedArgs {
         let value: string;
         if (eq >= 0) {
           value = a.slice(eq + 1);
+          if (
+            spec.allowedValues !== undefined &&
+            !spec.allowedValues.includes(value)
+          ) {
+            throw new RangeError(`unsupported --${key} value "${value}"`);
+          }
         } else {
           const next = argv[i + 1];
           if (
             next !== undefined &&
             next !== "--" &&
-            !next.startsWith("--") &&
-            (spec.allowedValues === undefined || spec.allowedValues.includes(next))
+            !next.startsWith("--")
           ) {
+            if (
+              spec.allowedValues !== undefined &&
+              !spec.allowedValues.includes(next)
+            ) {
+              throw new RangeError(`unsupported --${key} value "${next}"`);
+            }
             value = next;
             i += 1;
           } else {
