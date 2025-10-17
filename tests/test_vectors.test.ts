@@ -35,16 +35,18 @@ const testVectorsPromise: Promise<ParsedTables> = (async () => {
 const VECTOR_SUITES: readonly {
   heading: string;
   description: string;
-  options: Pick<CategorizerOptions, "salt" | "namespace">;
+  create: () => Cat32;
+  options?: Pick<CategorizerOptions, "salt" | "namespace">;
 }[] = [
   {
     heading: "Unsalted",
     description: "Cat32 matches documented unsalted vectors",
-    options: {},
+    create: () => new Cat32(),
   },
   {
     heading: "Salted (salt=projX, namespace=v1)",
     description: "Cat32 matches documented salted vectors",
+    create: () => new Cat32({ salt: "projX", namespace: "v1" }),
     options: { salt: "projX", namespace: "v1" },
   },
 ];
@@ -56,7 +58,7 @@ for (const suite of VECTOR_SUITES) {
     if (!rows) {
       throw new Error(`table not found for heading: ${suite.heading}`);
     }
-    const cat = new Cat32(suite.options);
+    const cat = suite.create();
     for (const vector of rows) {
       const assignment = cat.assign(vector.input);
       assert.equal(
@@ -163,10 +165,10 @@ function splitMarkdownRow(line: string): string[] {
 
 function deriveSaltedKey(
   key: string,
-  options: Pick<CategorizerOptions, "salt" | "namespace">,
+  options?: Pick<CategorizerOptions, "salt" | "namespace">,
 ): string {
-  const baseSalt = options.salt ?? "";
-  const namespaceSuffix = options.namespace ? `|ns:${options.namespace}` : "";
+  const baseSalt = options?.salt ?? "";
+  const namespaceSuffix = options?.namespace ? `|ns:${options.namespace}` : "";
   const combined = `${baseSalt}${namespaceSuffix}`;
   return combined ? `${key}|salt:${combined}` : key;
 }
