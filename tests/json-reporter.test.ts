@@ -54,3 +54,20 @@ test("JSON reporter normalizes errors", () => {
     },
   });
 });
+
+test("JSON reporter respects view ranges when normalizing binary data", () => {
+  const bytes = new Uint8Array([10, 20, 30, 40]);
+  const uint8View = bytes.subarray(1, 3);
+  const dataView = new DataView(bytes.buffer, 2, 2);
+  const event: TestEvent = {
+    type: "test:data",
+    data: { uint8View, dataView },
+  };
+
+  const normalized = toSerializableEvent(event);
+
+  assert.deepEqual(normalized.data, {
+    uint8View: [20, 30],
+    dataView: [30, 40],
+  });
+});
