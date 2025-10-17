@@ -7,7 +7,7 @@ src/
   serialize.ts     // stableStringify（循環検出・Map/Set/Date 規約）
   categorizer.ts   // Cat32：salt/ns/labels/overrides を束ねる
   index.ts         // export
-  cli.ts           // 標準入力/引数→NDJSONで Assignment 出力
+  cli.ts           // 標準入力/引数→NDJSON(既定)/整形 JSON で Assignment 出力
 tests/
   *.test.ts        // プロパティ/回帰テスト
 ```
@@ -37,7 +37,8 @@ tests/
 ## 6. CLI（cli.ts）
 - 引数: `--salt=... --namespace=... --normalize=nfkc|nfc|none`
 - 入力: 引数 `<key>` がなければ **stdin** を読む。
-- 出力: **NDJSON** で `Assignment` を1行出力。
+- 出力: 既定/`compact` モードは **NDJSON**（1 行 1 JSON）で `Assignment` を出力。
+- 整形モード（`--json=pretty`/`--pretty`/`--json --pretty`）は複数行の整形 JSON を返し、NDJSON とは異なる。
 - 失敗コード: `2`（循環/ラベル不正など）、`1`（その他）。
 
 ## 7. 性能
