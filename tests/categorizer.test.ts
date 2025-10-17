@@ -285,6 +285,56 @@ test("dist stableStringify handles Map bucket ordering", async () => {
   );
 });
 
+test(
+  "dist stableStringify and Cat32 assign keep hole sentinel cases distinct",
+  async () => {
+    const sourceImportMetaUrl = import.meta.url.includes("/dist/tests/")
+      ? new URL("../../tests/categorizer.test.ts", import.meta.url)
+      : import.meta.url;
+
+    const distSerializeModule = (await import(
+      new URL("../dist/serialize.js", sourceImportMetaUrl).href,
+    )) as {
+      stableStringify?: ((value: unknown) => string) | undefined;
+    };
+
+    assert.equal(typeof distSerializeModule.stableStringify, "function");
+    const distStableStringify = distSerializeModule.stableStringify!;
+
+    const distModule = (await import(
+      new URL("../dist/index.js", sourceImportMetaUrl).href,
+    )) as { Cat32?: typeof Cat32 };
+
+    assert.equal(typeof distModule.Cat32, "function");
+    const DistCat32 = distModule.Cat32!;
+
+    const prefixedLiteral = `__string__:${typeSentinel("hole")}`;
+    const sentinelLiteral = typeSentinel("hole");
+    const sparseArray = new Array(1);
+
+    const prefixedKey = distStableStringify([prefixedLiteral]);
+    const sentinelKey = distStableStringify([sentinelLiteral]);
+    const sparseKey = distStableStringify(sparseArray);
+
+    assert.ok(prefixedKey !== sentinelKey);
+    assert.ok(prefixedKey !== sparseKey);
+    assert.ok(sentinelKey !== sparseKey);
+
+    const categorizer = new DistCat32();
+    const prefixedAssignment = categorizer.assign([prefixedLiteral]);
+    const sentinelAssignment = categorizer.assign([sentinelLiteral]);
+    const sparseAssignment = categorizer.assign(sparseArray);
+
+    assert.ok(prefixedAssignment.key !== sentinelAssignment.key);
+    assert.ok(prefixedAssignment.key !== sparseAssignment.key);
+    assert.ok(sentinelAssignment.key !== sparseAssignment.key);
+
+    assert.ok(prefixedAssignment.hash !== sentinelAssignment.hash);
+    assert.ok(prefixedAssignment.hash !== sparseAssignment.hash);
+    assert.ok(sentinelAssignment.hash !== sparseAssignment.hash);
+  },
+);
+
 test("dist Cat32 assign normalizes Map keys by string representation", async () => {
   const sourceImportMetaUrl = import.meta.url.includes("/dist/tests/")
     ? new URL("../../tests/categorizer.test.ts", import.meta.url)
