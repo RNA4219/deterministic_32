@@ -6,11 +6,14 @@ on:
 jobs:
   run:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: ["18", "20"]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: ${{ matrix["node-version"] }}
       - name: Install toolchain
         run: npm install --no-save typescript
       - name: Build project
