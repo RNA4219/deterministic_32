@@ -42,3 +42,53 @@ test("JSON reporter normalizes errors", () => {
         },
     });
 });
+test("JSON reporter expands shared references without cycles", () => {
+    const sharedArray = [1, { nested: true }];
+    const sharedObject = { foo: "bar" };
+    const event = {
+        type: "test:diagnostic",
+        data: {
+            first: { array: sharedArray, object: sharedObject },
+            second: { array: sharedArray, object: sharedObject },
+        },
+    };
+    const normalized = toSerializableEvent(event);
+    assert.deepEqual(normalized.data, {
+        first: { array: [1, { nested: true }], object: { foo: "bar" } },
+        second: { array: [1, { nested: true }], object: { foo: "bar" } },
+    });
+});
+test("JSON reporter serializes shared references without circular markers", () => {
+    const shared = { value: 42 };
+    const event = {
+        type: "test:data",
+        data: { first: shared, second: shared },
+    };
+    const normalized = toSerializableEvent(event);
+    assert.deepEqual(normalized.data, {
+        first: { value: 42 },
+        second: { value: 42 },
+    });
+});
+test("JSON reporter serializes typed array views with byte offsets", () => {
+    const backing = new Uint8Array([5, 10, 15, 20]);
+    const view = new Uint8Array(backing.buffer, 1, 2);
+    const event = { type: "test:data", data: view };
+    const normalized = toSerializableEvent(event);
+    assert.deepEqual(normalized.data, [10, 15]);
+});
+test("JSON reporter respects ArrayBuffer view offsets", () => {
+    const source = new Uint8Array([10, 20, 30, 40]).buffer;
+    const event = {
+        type: "test:data",
+        data: {
+            typed: new Uint8Array(source, 1, 2),
+            dataView: new DataView(source, 1, 2),
+        },
+    };
+    const normalized = toSerializableEvent(event);
+    assert.deepEqual(normalized.data, {
+        typed: [20, 30],
+        dataView: [20, 30],
+    });
+});
