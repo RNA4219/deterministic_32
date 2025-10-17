@@ -13,6 +13,7 @@ $ npx deterministic-32 <key?> [--salt=... --namespace=... --normalize=nfkc|nfc|n
   - `--json` 単体でも compact JSON（1行1JSON）を維持する。
   - `--json=pretty` と `--pretty` は同じ整形結果になる。
   - `--json` と `--pretty` を同時指定した場合は整形出力（インデント2）となる。
+  - いずれのモードでも末尾に改行を含む **NDJSON**（1行1 JSON オブジェクト）を維持する。
   - 終了コード:
   - `0` … 成功
   - `2` … 循環/labels長不正/override不正など仕様違反
@@ -36,6 +37,14 @@ $ cat32 --json=pretty foo
 }
 
 $ cat32 --pretty foo
+{
+  "index": 7,
+  "label": "H",
+  "hash": "1a2b3c4d",
+  "key": "foo"
+}
+
+$ cat32 --json --pretty foo
 {
   "index": 7,
   "label": "H",

@@ -4,7 +4,7 @@ on:
     branches: ["**"]
   pull_request:
 jobs:
-  run:
+  typecheck:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -16,6 +16,7 @@ jobs:
       - name: Build project
         run: npm run build
       - name: Run test suite
+        shell: bash
         run: |
           mkdir -p logs
           node --test dist/tests --test-reporter json --test-reporter-destination logs/test.jsonl

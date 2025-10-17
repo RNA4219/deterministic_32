@@ -15,7 +15,21 @@ const FLAG_SPECS = new Map<string, FlagSpec>([
     { mode: "optional-value", defaultValue: "compact", allowedValues: ["compact", "pretty"] },
   ],
   ["pretty", { mode: "boolean" }],
+  ["help", { mode: "boolean" }],
 ]);
+
+const HELP_TEXT = [
+  "Usage: cat32 [options] [input]",
+  "",
+  "Options:",
+  "  --salt <value>           Salt to apply when assigning a category.",
+  "  --namespace <value>      Namespace that scopes generated categories.",
+  "  --normalize <value>      Unicode normalization form (default: nfkc).",
+  "  --json [format]          Output JSON format: compact or pretty (default: compact).",
+  "  --pretty                 Shorthand for --json pretty.",
+  "  --help                   Show this help message and exit.",
+  "",
+].join("\n");
 
 type ParsedArgs = Record<string, string | boolean | undefined> & {
   _: string | undefined;
@@ -24,7 +38,10 @@ type ParsedArgs = Record<string, string | boolean | undefined> & {
   normalize?: string;
   json?: string;
   pretty?: boolean;
+  help?: boolean;
 };
+
+type OutputFormat = "compact" | "pretty";
 
 function parseArgs(argv: string[]): ParsedArgs {
   const args: Record<string, string | boolean | undefined> = {};
@@ -96,6 +113,10 @@ function parseArgs(argv: string[]): ParsedArgs {
 
 async function main() {
   const args = parseArgs(process.argv);
+  if (args.help === true) {
+    process.stdout.write(HELP_TEXT);
+    return;
+  }
   const key = args._;
   const salt = typeof args.salt === "string" ? args.salt : "";
   const namespace = typeof args.namespace === "string" ? args.namespace : "";
@@ -106,14 +127,24 @@ async function main() {
   const shouldReadFromStdin = key === undefined;
   const input = shouldReadFromStdin ? await readStdin() : key;
   const res = cat.assign(input);
-  const jsonOption = typeof args.json === "string" ? args.json : undefined;
-  const jsonFormat = jsonOption ?? "compact";
-  if (jsonFormat !== "compact" && jsonFormat !== "pretty") {
-    throw new RangeError(`unsupported --json value "${jsonFormat}"`);
-  }
-  const pretty = args.pretty === true || jsonFormat === "pretty";
-  const indent = pretty ? 2 : 0;
+  const format = resolveOutputFormat(args);
+  const indent = format === "pretty" ? 2 : 0;
   process.stdout.write(JSON.stringify(res, null, indent) + "\n");
+}
+
+function resolveOutputFormat(args: ParsedArgs): OutputFormat {
+  const jsonOption = typeof args.json === "string" ? args.json : undefined;
+  const prettyFlag = args.pretty === true;
+  if (jsonOption === undefined) {
+    return prettyFlag ? "pretty" : "compact";
+  }
+  if (jsonOption === "compact" || jsonOption === "pretty") {
+    if (prettyFlag) {
+      return "pretty";
+    }
+    return jsonOption;
+  }
+  throw new RangeError(`unsupported --json value "${jsonOption}"`);
 }
 
 type ReadableStdin = typeof process.stdin & {
