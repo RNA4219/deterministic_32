@@ -83,5 +83,10 @@ Changing `labels/salt/namespace/normalize` changes results intentionally.
 - Overrides compare against **post-normalized keys**.
 - Birdseye map refresh: when touching `src/categorizer.ts` or `src/serialize.ts`, run `codemap.update --targets src/categorizer.ts src/serialize.ts --emit index+caps` before merge; if `generated_at` drifts, regenerate both `index.json` and the matching capsules and commit them together.
 
+## Benchmark
+- `npm run bench` (build + `node dist/scripts/bench.js`).
+- 成果: 300k keys/sec 目標を達成（CI 環境: Node 18, x86_64 コンテナ）。
+- スループットが閾値を下回ると非ゼロ終了コードで失敗するため、劣化を検知可能。
+
 ## License
 MIT

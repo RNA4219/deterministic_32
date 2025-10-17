@@ -70,6 +70,14 @@ function _stringify(v: unknown, stack: Set<unknown>): string {
     return stringifySentinelLiteral(`${DATE_SENTINEL_PREFIX}${v.toISOString()}`);
   }
 
+  if (ArrayBuffer.isView(v)) {
+    return stringifyStringLiteral(String(v));
+  }
+
+  if (v instanceof ArrayBuffer) {
+    return stringifyStringLiteral(String(v));
+  }
+
   // Map
   if (v instanceof Map) {
     if (stack.has(v)) throw new TypeError("Cyclic object");
