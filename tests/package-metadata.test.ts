@@ -6,6 +6,8 @@ const dynamicImport = new Function(
   "return import(specifier);",
 ) as (specifier: string) => Promise<unknown>;
 
+const expectedBenchScript = "npm run build && node dist/scripts/bench.js";
+
 test("package.json exposes a TypeScript dev dependency", async () => {
   const { readFile } = (await dynamicImport("node:fs/promises")) as {
     readFile: (path: string | URL, options: "utf8") => Promise<string>;
@@ -54,7 +56,7 @@ test("package.json declares a bench script targeting the compiled bench entry", 
   const benchScript = (packageJson.scripts!.bench as string).trim();
   assert.equal(
     benchScript,
-    "npm run build && node dist/scripts/bench.js",
+    expectedBenchScript,
     "expected bench script to execute the compiled bench entry",
   );
 
