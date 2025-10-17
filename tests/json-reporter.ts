@@ -28,6 +28,9 @@ function normalizeObject(value: object, seen: WeakSet<object>): JsonValue {
     if (value instanceof ArrayBuffer) {
       return Array.from(new Uint8Array(value, 0, value.byteLength));
     }
+    if (typeof SharedArrayBuffer !== "undefined" && value instanceof SharedArrayBuffer) {
+      return Array.from(new Uint8Array(value));
+    }
     const plain: JsonObject = {};
     for (const [key, entryValue] of Object.entries(value)) {
       plain[key] = normalizeUnknown(entryValue, seen);

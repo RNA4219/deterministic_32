@@ -99,6 +99,16 @@ test("JSON reporter serializes typed array views with byte offsets", () => {
   assert.deepEqual(normalized.data, [10, 15]);
 });
 
+test("JSON reporter serializes SharedArrayBuffer into byte arrays", () => {
+  const buffer = new SharedArrayBuffer(4);
+  new Uint8Array(buffer).set([7, 14, 21, 28]);
+  const event: TestEvent = { type: "test:data", data: buffer };
+
+  const normalized = toSerializableEvent(event);
+
+  assert.deepEqual(normalized.data, [7, 14, 21, 28]);
+});
+
 test("JSON reporter respects ArrayBuffer view offsets", () => {
   const source = new Uint8Array([10, 20, 30, 40]).buffer;
   const event: TestEvent = {
