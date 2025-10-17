@@ -927,6 +927,42 @@ test("cat32 binary accepts flag values separated by whitespace", async () => {
   assert.equal(parsed.key, expected.key);
 });
 
+test("cat32 binary exits with code 2 for unsupported --json value", async () => {
+  const { spawn } = (await dynamicImport("node:child_process")) as { spawn: SpawnFunction };
+
+  const child = spawn(process.argv[0], [CLI_BIN_PATH, "--json", "foo"], {
+    stdio: ["pipe", "pipe", "pipe"],
+  });
+
+  child.stdin.end();
+
+  let stdout = "";
+  child.stdout.setEncoding("utf8");
+  child.stdout.on("data", (chunk: string) => {
+    stdout += chunk;
+  });
+
+  let stderr = "";
+  child.stderr.setEncoding("utf8");
+  child.stderr.on("data", (chunk: string) => {
+    stderr += chunk;
+  });
+
+  const exitCode: number | null = await new Promise((resolve) => {
+    child.on("close", (code: number | null) => resolve(code));
+  });
+
+  assert.equal(
+    exitCode,
+    2,
+    `cat32 failed: exit code ${exitCode}\nstdout:\n${stdout}\nstderr:\n${stderr}`,
+  );
+  assert.ok(
+    stderr.includes('RangeError: unsupported --json value "foo"'),
+    `stderr missing unsupported --json value error\n${stderr}`,
+  );
+});
+
 test("cat32 binary outputs NDJSON by default", async () => {
   const { spawn } = (await dynamicImport("node:child_process")) as { spawn: SpawnFunction };
 

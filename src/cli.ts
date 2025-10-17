@@ -43,6 +43,16 @@ type ParsedArgs = Record<string, string | boolean | undefined> & {
 
 type OutputFormat = "compact" | "pretty";
 
+function assertAllowedFlagValue(
+  key: string,
+  value: string,
+  allowedValues: readonly string[] | undefined,
+): void {
+  if (allowedValues !== undefined && !allowedValues.includes(value)) {
+    throw new RangeError(`unsupported --${key} value "${value}"`);
+  }
+}
+
 function parseArgs(argv: string[]): ParsedArgs {
   const args: Record<string, string | boolean | undefined> = {};
   let positional: string | undefined;
@@ -72,12 +82,7 @@ function parseArgs(argv: string[]): ParsedArgs {
         let value: string;
         if (eq >= 0) {
           value = a.slice(eq + 1);
-          if (
-            spec.allowedValues !== undefined &&
-            !spec.allowedValues.includes(value)
-          ) {
-            throw new RangeError(`unsupported --${key} value "${value}"`);
-          }
+          assertAllowedFlagValue(key, value, spec.allowedValues);
         } else {
           const next = argv[i + 1];
           if (
@@ -85,12 +90,7 @@ function parseArgs(argv: string[]): ParsedArgs {
             next !== "--" &&
             !next.startsWith("--")
           ) {
-            if (
-              spec.allowedValues !== undefined &&
-              !spec.allowedValues.includes(next)
-            ) {
-              throw new RangeError(`unsupported --${key} value "${next}"`);
-            }
+            assertAllowedFlagValue(key, next, spec.allowedValues);
             value = next;
             i += 1;
           } else {
