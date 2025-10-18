@@ -142,7 +142,7 @@ def load_results() -> Tuple[list[str], list[int], list[str]]:
             parsed = parsed_event if parsed_event is not None else _load_from_legacy(obj)
             if parsed is None:
                 continue
-            name, duration, is_failure = entry
+            name, duration, is_failure = parsed
             tests.append(name)
             durs.append(duration)
             if is_failure:
@@ -175,5 +175,10 @@ def main() -> None:
             f.write("### 反省TODO\n")
             for name in set(fails):
                 f.write(f"- [ ] {name} の再現手順/前提/境界値を追加\n")
+    else:
+        try:
+            ISSUE_OUT.unlink()
+        except FileNotFoundError:
+            pass
 if __name__ == "__main__":
     main()
