@@ -3,6 +3,11 @@ from collections import Counter
 from typing import Optional, Tuple
 
 
+_DEFAULT_LOG = pathlib.Path("logs/test.jsonl")
+_DEFAULT_REPORT = pathlib.Path("reports/today.md")
+_DEFAULT_ISSUE = pathlib.Path("reports/issue_suggestions.md")
+
+
 def compute_p95(durations: list[int]) -> int:
     if not durations:
         return 0
@@ -18,9 +23,37 @@ def compute_p95(durations: list[int]) -> int:
     interpolated = ordered[lower_index] + (ordered[upper_index] - ordered[lower_index]) * fraction
     return int(math.ceil(interpolated))
 
-LOG = pathlib.Path(os.environ.get("ANALYZE_LOG_PATH", "logs/test.jsonl"))
-REPORT = pathlib.Path(os.environ.get("ANALYZE_REPORT_PATH", "reports/today.md"))
-ISSUE_OUT = pathlib.Path(os.environ.get("ANALYZE_ISSUE_PATH", "reports/issue_suggestions.md"))
+def _resolve_path(env_key: str, default: pathlib.Path) -> pathlib.Path:
+    value = os.environ.get(env_key)
+    if value is None:
+        return default
+    text = value.strip()
+    if not text:
+        return default
+    return pathlib.Path(text)
+
+
+LOG = _resolve_path("ANALYZE_LOG_PATH", _DEFAULT_LOG)
+REPORT = _resolve_path("ANALYZE_REPORT_PATH", _DEFAULT_REPORT)
+ISSUE_OUT = _resolve_path("ANALYZE_ISSUE_PATH", _DEFAULT_ISSUE)
+
+
+def _log_path() -> pathlib.Path:
+    global LOG
+    LOG = _resolve_path("ANALYZE_LOG_PATH", _DEFAULT_LOG)
+    return LOG
+
+
+def _report_path() -> pathlib.Path:
+    global REPORT
+    REPORT = _resolve_path("ANALYZE_REPORT_PATH", _DEFAULT_REPORT)
+    return REPORT
+
+
+def _issue_path() -> pathlib.Path:
+    global ISSUE_OUT
+    ISSUE_OUT = _resolve_path("ANALYZE_ISSUE_PATH", _DEFAULT_ISSUE)
+    return ISSUE_OUT
 
 def extract_duration(entry: dict[str, object]) -> int:
     duration = entry.get("duration_ms")
@@ -131,9 +164,10 @@ def load_results() -> Tuple[list[str], list[int], list[str]]:
     tests: list[str] = []
     durs: list[int] = []
     fails: list[str] = []
-    if not LOG.exists():
+    log_path = _log_path()
+    if not log_path.exists():
         return tests, durs, fails
-    with LOG.open(encoding="utf-8") as f:
+    with log_path.open(encoding="utf-8") as f:
         for raw_line in f:
             line = raw_line.strip()
             if not line:
@@ -162,8 +196,10 @@ def main() -> None:
         pass_rate_text = f"{pass_rate:.2%}"
     p95 = compute_p95(durs)
     now = datetime.datetime.utcnow().isoformat()
-    REPORT.parent.mkdir(parents=True, exist_ok=True)
-    with REPORT.open("w", encoding="utf-8") as f:
+    report_path = _report_path()
+    issue_path = _issue_path()
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    with report_path.open("w", encoding="utf-8") as f:
         f.write(f"# Reflection Report ({now})\n\n")
         f.write(f"- Total tests: {total}\n")
         f.write(f"- Pass rate: {pass_rate_text}\n")
@@ -174,14 +210,14 @@ def main() -> None:
             for name, cnt in Counter(fails).items():
                 f.write(f"- {name}: 仮説=前処理の不安定/依存の競合/境界値不足\n")
     if fails:
-        ISSUE_OUT.parent.mkdir(parents=True, exist_ok=True)
-        with ISSUE_OUT.open("w", encoding="utf-8") as f:
+        issue_path.parent.mkdir(parents=True, exist_ok=True)
+        with issue_path.open("w", encoding="utf-8") as f:
             f.write("### 反省TODO\n")
             for name in set(fails):
                 f.write(f"- [ ] {name} の再現手順/前提/境界値を追加\n")
     else:
         try:
-            ISSUE_OUT.unlink()
+            issue_path.unlink()
         except FileNotFoundError:
             pass
 if __name__ == "__main__":
