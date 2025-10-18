@@ -84,7 +84,10 @@ def _extract_duration(payload: dict[str, object]) -> int:
     return 0
 
 
-def _load_from_event(obj: dict[str, object]):
+ParsedEntry = Tuple[str, int, bool]
+
+
+def _load_from_event(obj: dict[str, object]) -> Optional[ParsedEntry]:
     event_type = obj.get("type")
     if not isinstance(event_type, str):
         return None
@@ -99,7 +102,7 @@ def _load_from_event(obj: dict[str, object]):
     return name, duration, is_failure
 
 
-def _load_from_legacy(obj: dict[str, object]):
+def _load_from_legacy(obj: dict[str, object]) -> Optional[ParsedEntry]:
     status = obj.get("status")
     if not isinstance(status, str):
         return None
@@ -122,7 +125,7 @@ def _load_entry(obj: object) -> Optional[Tuple[str, int, bool]]:
     return _load_from_legacy(obj)
 
 
-def load_results():
+def load_results() -> Tuple[list[str], list[int], list[str]]:
     tests: list[str] = []
     durs: list[int] = []
     fails: list[str] = []
@@ -135,20 +138,8 @@ def load_results():
             obj = json.loads(line)
             if not isinstance(obj, dict):
                 continue
-            event_type = obj.get("type")
-            if isinstance(event_type, str) and event_type in ALLOWED_EVENT_TYPES:
-                data = _unwrap_payload(_as_mapping(obj.get("data")))
-                name = data.get("name")
-                if not isinstance(name, str):
-                    name = ""
-                duration = _extract_duration(data)
-                is_failure = event_type == "test:fail"
-                tests.append(name)
-                durs.append(duration)
-                if is_failure:
-                    fails.append(name)
-                continue
-            parsed = _load_from_legacy(obj)
+            parsed_event = _load_from_event(obj)
+            parsed = parsed_event if parsed_event is not None else _load_from_legacy(obj)
             if parsed is None:
                 continue
             name, duration, is_failure = entry
@@ -158,7 +149,7 @@ def load_results():
                 fails.append(name)
     return tests, durs, fails
 
-def main():
+def main() -> None:
     tests, durs, fails = load_results()
     total = len(tests)
     if total == 0:
