@@ -6,6 +6,15 @@ import { pathToFileURL } from 'node:url';
 const DESTINATION_PREFIX = '--test-reporter-destination=';
 const DEFAULT_DESTINATION = 'logs/test.jsonl';
 const DEFAULT_TARGETS = ['dist/tests', 'dist/frontend/tests'];
+const OPTIONS_EXPECTING_VALUE = new Set([
+  '--import',
+  '--loader',
+  '--require',
+  '--test-ignore',
+  '--test-name-pattern',
+  '--test-reporter',
+  '--test-reporter-destination',
+]);
 
 const mapTargetArgument = (
   target,
@@ -57,6 +66,7 @@ const prepareRunnerOptions = (
   const resolvedDefaults = [];
   const seenTargets = new Set();
   let destinationOverride = null;
+  let pendingOption = null;
 
   const addTarget = (candidate) => {
     if (!candidate) {
@@ -78,6 +88,12 @@ const prepareRunnerOptions = (
       continue;
     }
 
+    if (pendingOption) {
+      passthroughArgs.push(argument);
+      pendingOption = null;
+      continue;
+    }
+
     if (argument.startsWith(DESTINATION_PREFIX)) {
       const candidateDestination = argument.slice(DESTINATION_PREFIX.length);
       destinationOverride = candidateDestination || null;
@@ -86,6 +102,13 @@ const prepareRunnerOptions = (
 
     if (argument.startsWith('--')) {
       passthroughArgs.push(argument);
+      const assignmentIndex = argument.indexOf('=');
+      if (assignmentIndex === -1) {
+        const optionName = argument;
+        if (OPTIONS_EXPECTING_VALUE.has(optionName)) {
+          pendingOption = optionName;
+        }
+      }
       continue;
     }
 
