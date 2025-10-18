@@ -150,8 +150,8 @@ export const prepareRunnerOptions = (argv, cwd) => {
     "--test",
     `--test-reporter=${reporterSpecifier}`,
     `--test-reporter-destination=${resolvedDestination}`,
-    ...targets,
     ...passthroughArgs,
+    ...targets,
   ];
 
   const env = { ...process.env };

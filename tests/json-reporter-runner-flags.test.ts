@@ -129,6 +129,11 @@ test("JSON reporter runner forwards CLI flags to spawned process", async () => {
   assert.deepEqual(exitCalls.at(-1), 0);
   assert.equal(spawnCalls.length, 1);
 
-  const forwardedArgs = spawnCalls[0]!.args.slice(-2);
-  assert.deepEqual(forwardedArgs, ["--test-name-pattern", "foo"]);
+  const forwardedArgs = spawnCalls[0]!.args;
+  const flagIndex = forwardedArgs.indexOf("--test-name-pattern");
+  assert.ok(flagIndex >= 0, "flag should be included in spawn args");
+  assert.equal(forwardedArgs.at(flagIndex + 1), "foo");
+
+  const distIndex = forwardedArgs.indexOf("dist/tests");
+  assert.ok(distIndex > flagIndex, "flags should precede default targets");
 });
