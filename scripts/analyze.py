@@ -104,6 +104,9 @@ def _load_from_event(obj: dict[str, object]):
 
 
 def _load_from_legacy(obj: dict[str, object]):
+    status = obj.get("status")
+    if not isinstance(status, str):
+        return None
     name = obj.get("name")
     if not isinstance(name, str):
         name = ""
