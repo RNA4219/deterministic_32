@@ -4,6 +4,7 @@ import { spawn } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 
 const DESTINATION_PREFIX = '--test-reporter-destination=';
+const DESTINATION_FLAG = '--test-reporter-destination';
 const DEFAULT_DESTINATION = 'logs/test.jsonl';
 const DEFAULT_TARGETS = ['dist/tests', 'dist/frontend/tests'];
 
@@ -19,9 +20,29 @@ const mapTargetArgument = (argument) => {
 const parseCliArguments = () => {
   const passthroughArgs = [];
   const targetArgs = [];
+  let reporterDestination;
 
-  for (const argument of process.argv.slice(2)) {
+  const argv = process.argv.slice(2);
+  for (let index = 0; index < argv.length; index += 1) {
+    const argument = argv[index];
     if (!argument) {
+      continue;
+    }
+
+    if (argument === DESTINATION_FLAG) {
+      const candidate = argv[index + 1];
+      if (typeof candidate === 'string' && candidate.length > 0) {
+        reporterDestination = candidate;
+        index += 1;
+      }
+      continue;
+    }
+
+    if (argument.startsWith(DESTINATION_PREFIX)) {
+      const suffix = argument.slice(DESTINATION_PREFIX.length);
+      if (suffix.length > 0) {
+        reporterDestination = suffix;
+      }
       continue;
     }
 
@@ -38,7 +59,7 @@ const parseCliArguments = () => {
     passthroughArgs.push(argument);
   }
 
-  return { passthroughArgs, targetArgs };
+  return { passthroughArgs, targetArgs, reporterDestination };
 };
 
 const resolveTargets = (explicitTargets) => {
@@ -53,7 +74,7 @@ const resolveTargets = (explicitTargets) => {
     if (!target) {
       continue;
     }
-    let candidate = argument;
+    let candidate = target;
     if (candidate.endsWith('.ts')) {
       const tsExtensionLength = path.extname(candidate).length;
       const withoutExtension = tsExtensionLength > 0
@@ -76,7 +97,10 @@ const resolveTargets = (explicitTargets) => {
   return targets;
 };
 
-const resolveDestination = () => {
+const resolveDestination = (explicitDestination) => {
+  if (explicitDestination) {
+    return explicitDestination;
+  }
   for (const entry of fs.readdirSync('.', { withFileTypes: true })) {
     if (!entry.name.startsWith(DESTINATION_PREFIX)) {
       continue;
@@ -97,17 +121,16 @@ const resolveDestination = () => {
   return DEFAULT_DESTINATION;
 };
 
-const destination = resolveDestination();
-const resolvedDestination = path.resolve(destination);
-fs.mkdirSync(path.dirname(resolvedDestination), { recursive: true });
+const { passthroughArgs, targetArgs, reporterDestination } = parseCliArguments();
+const destination = resolveDestination(reporterDestination);
+fs.mkdirSync(path.dirname(destination), { recursive: true });
 
-const { passthroughArgs, targetArgs } = parseCliArguments();
 const targets = resolveTargets(targetArgs);
 const reporterSpecifier = pathToFileURL(path.resolve('reporters/json/index.js')).href;
 const args = [
   '--test',
   `--test-reporter=${reporterSpecifier}`,
-  `--test-reporter-destination=${resolvedDestination}`,
+  `--test-reporter-destination=${destination}`,
   ...targets,
   ...passthroughArgs
 ];
