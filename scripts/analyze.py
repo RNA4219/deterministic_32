@@ -102,26 +102,36 @@ def _load_from_legacy(obj: dict[str, object]):
     name = obj.get("name")
     if not isinstance(name, str):
         name = ""
-    duration = _extract_numeric_duration(obj.get("duration_ms"))
+    duration = extract_duration(obj)
     status = obj.get("status")
     is_failure = status == "fail"
     return name, duration, is_failure
 
 
 def load_results():
-    tests, durs, fails = [], [], []
+    tests: list[str] = []
+    durations: list[int] = []
+    failures: list[str] = []
     if not LOG.exists():
-        return tests, durs, fails
+        return tests, durations, failures
     with LOG.open(encoding="utf-8") as f:
         for line in f:
             if not line.strip():
                 continue
-            obj = json.loads(line)
-            tests.append(obj.get("name"))
-            durs.append(extract_duration(obj))
-            if obj.get("status") == "fail":
-                fails.append(obj.get("name"))
-    return tests, durs, fails
+            payload = json.loads(line)
+            parsed = None
+            if "type" in payload:
+                parsed = _load_from_event(_as_mapping(payload))
+            else:
+                parsed = _load_from_legacy(_as_mapping(payload))
+            if parsed is None:
+                continue
+            name, duration, is_failure = parsed
+            tests.append(name)
+            durations.append(duration)
+            if is_failure:
+                failures.append(name)
+    return tests, durations, failures
 
 def main():
     tests, durs, fails = load_results()

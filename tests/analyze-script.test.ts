@@ -31,7 +31,7 @@ const dynamicImport = new Function(
   "return import(specifier);",
 ) as (specifier: string) => Promise<unknown>;
 
-const DATA_WRAPPED_LOG_CONTENT = `${JSON.stringify({
+const SINGLE_ENTRY_LOG_CONTENT = `${JSON.stringify({
   name: "sample::single",
   status: "pass",
   data: { duration_ms: 150 },
@@ -115,7 +115,7 @@ test("analyze.py はサンプルが少なくても p95 を計算できる", asyn
       rm(issuePath, { force: true }),
     ]);
 
-    await writeFile(logPath, DATA_WRAPPED_LOG_CONTENT, { encoding: "utf8" });
+    await writeFile(logPath, SINGLE_ENTRY_LOG_CONTENT, { encoding: "utf8" });
 
     await new Promise<void>((resolve, reject) => {
       execFile(
