@@ -1,10 +1,11 @@
-# Reflection Report (2025-10-18T07:37:13.508062)
+# Reflection Report (2025-10-18T07:48:48.609382)
 
 - Total tests: 163
-- Pass rate: 98.77%
-- Duration p95: 70 ms
-- Failures: 2
+- Pass rate: 98.16%
+- Duration p95: 82 ms
+- Failures: 3
 
 ## Why-Why (draft)
-- analyze.py は失敗後に成功すると issue_suggestions.md を片付ける: 仮説=前処理の不安定/依存の競合/境界値不足
-- analyze.py はテストが存在しない場合に 0 件として集計する: 仮説=前処理の不安定/依存の競合/境界値不足
+- load_results は test:pass/test:fail のみを集計する: 仮説=前処理の不安定/依存の競合/境界値不足
+- analyze.py は失敗ログと成功ログを順に処理すると issue_suggestions.md を片付ける: 仮説=前処理の不安定/依存の競合/境界値不足
+- analyze.py は失敗後の成功実行で issue_suggestions.md をクリアする: 仮説=前処理の不安定/依存の競合/境界値不足
