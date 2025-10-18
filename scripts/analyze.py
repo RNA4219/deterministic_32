@@ -1,4 +1,4 @@
-import json, statistics, pathlib, os, datetime
+import json, statistics, pathlib, os, datetime, math
 from collections import Counter
 from typing import Optional, Tuple
 
@@ -16,7 +16,7 @@ def compute_p95(durations: list[int]) -> int:
     upper_index = min(lower_index + 1, len(ordered) - 1)
     fraction = position - lower_index
     interpolated = ordered[lower_index] + (ordered[upper_index] - ordered[lower_index]) * fraction
-    return int(interpolated)
+    return int(math.ceil(interpolated))
 
 LOG = pathlib.Path(os.environ.get("ANALYZE_LOG_PATH", "logs/test.jsonl"))
 REPORT = pathlib.Path(os.environ.get("ANALYZE_REPORT_PATH", "reports/today.md"))
@@ -40,7 +40,7 @@ def extract_duration(entry: dict[str, object]) -> int:
     return 0
 
 
-ALLOWED_EVENT_TYPES = {"test:pass", "test:fail", "test:skip"}
+ALLOWED_EVENT_TYPES = {"test:pass", "test:fail"}
 _NESTED_DATA_KEYS: tuple[str, ...] = ("data", "test")
 
 
@@ -109,15 +109,20 @@ def _load_from_legacy(obj: dict[str, object]) -> Optional[ParsedEntry]:
     name = obj.get("name")
     if not isinstance(name, str):
         name = ""
-    duration = _extract_numeric_duration(obj.get("duration_ms"))
-    if duration == 0:
-        payload = _unwrap_payload(_as_mapping(obj.get("data")))
-        nested_name = payload.get("name")
-        if isinstance(nested_name, str) and not name:
-            name = nested_name
-        duration = _extract_duration(payload)
+    duration = extract_duration(obj)
+    status = obj.get("status")
     is_failure = status == "fail"
     return name, duration, is_failure
+    
+def _load_entry(obj: object) -> Optional[Tuple[str, int, bool]]:
+    if not isinstance(obj, dict):
+        return None
+    event_type = obj.get("type")
+    if isinstance(event_type, str):
+        if event_type not in ALLOWED_EVENT_TYPES:
+            return None
+        return _load_from_event(obj)
+    return _load_from_legacy(obj)
 
 
 def load_results() -> Tuple[list[str], list[int], list[str]]:
@@ -137,7 +142,7 @@ def load_results() -> Tuple[list[str], list[int], list[str]]:
             parsed = parsed_event if parsed_event is not None else _load_from_legacy(obj)
             if parsed is None:
                 continue
-            name, duration, is_failure = parsed
+            name, duration, is_failure = entry
             tests.append(name)
             durs.append(duration)
             if is_failure:
