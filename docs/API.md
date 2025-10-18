@@ -7,7 +7,7 @@ export interface CategorizerOptions {
   salt?: string;
   namespace?: string;
   labels?: string[];            // length === 32
-  normalize?: NormalizeMode;    // default "nfkc"
+  normalize?: NormalizeMode;    // default "nfkc"; accepts "none" | "nfc" | "nfkc" | "nfkd"
   overrides?: Record<string, number | string>;  // use Cat32.assign(...).key or stableStringify(...) for keys
 }
 
@@ -29,7 +29,7 @@ export class Cat32 {
 }
 ```
 
-`normalize` には Unicode 正規化モードとして `"none" | "nfc" | "nfkc" | "nfkd"` の 4 種類を指定できます（CLI の `--normalize` も同じ値を受け付けます）。
+`normalize` には Unicode 正規化モードとして `"none" | "nfc" | "nfkc" | "nfkd"` の 4 種類を指定できます（CLI の `--normalize` も同じ値を受け付けます）。既定値は `"nfkc"` です。
 
 ### 例
 ```ts
