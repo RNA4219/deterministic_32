@@ -99,17 +99,27 @@ def _load_from_event(obj: dict[str, object]):
 
 
 def _load_from_legacy(obj: dict[str, object]):
+    status = obj.get("status")
+    if not isinstance(status, str):
+        return None
     name = obj.get("name")
     if not isinstance(name, str):
         name = ""
     duration = _extract_numeric_duration(obj.get("duration_ms"))
-    status = obj.get("status")
+    if duration == 0:
+        payload = _unwrap_payload(_as_mapping(obj.get("data")))
+        nested_name = payload.get("name")
+        if isinstance(nested_name, str) and not name:
+            name = nested_name
+        duration = _extract_duration(payload)
     is_failure = status == "fail"
     return name, duration, is_failure
 
 
 def load_results():
-    tests, durs, fails = [], [], []
+    tests: list[str] = []
+    durs: list[int] = []
+    fails: list[str] = []
     if not LOG.exists():
         return tests, durs, fails
     with LOG.open(encoding="utf-8") as f:
@@ -117,10 +127,18 @@ def load_results():
             if not line.strip():
                 continue
             obj = json.loads(line)
-            tests.append(obj.get("name"))
-            durs.append(extract_duration(obj))
-            if obj.get("status") == "fail":
-                fails.append(obj.get("name"))
+            if not isinstance(obj, dict):
+                continue
+            parsed = _load_from_event(obj)
+            if parsed is None:
+                parsed = _load_from_legacy(obj)
+            if parsed is None:
+                continue
+            name, duration, is_failure = parsed
+            tests.append(name)
+            durs.append(duration)
+            if is_failure:
+                fails.append(name)
     return tests, durs, fails
 
 def main():
