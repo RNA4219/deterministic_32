@@ -142,7 +142,7 @@ test("load_results は空ログの場合に 0 件・パス率 0% を返す", asy
             "}",
             "summary['pass_rate'] = analyze.format_pass_rate(summary['total'], len(fails))",
             "print(json.dumps(summary, ensure_ascii=False))",
-          ].join("; "),
+          ].join("\n"),
         ],
         { cwd: repoRootPath, encoding: "utf8", env },
         (error: Error | null, stdoutValue: string, stderr: string) => {
