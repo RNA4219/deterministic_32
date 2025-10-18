@@ -47,9 +47,11 @@ test("analyze.py はサンプルが少なくても p95 を計算できる", asyn
   const repoRootPath = (process as unknown as { cwd(): string }).cwd();
   const logPath = join(repoRootPath, "logs", "test.jsonl");
   const reportPath = join(repoRootPath, "reports", "today.md");
+  const issuePath = join(repoRootPath, "reports", "issue_suggestions.md");
 
   const originalLog = await readFile(logPath, { encoding: "utf8" }).catch(() => null);
   const originalReport = await readFile(reportPath, { encoding: "utf8" }).catch(() => null);
+  const originalIssue = await readFile(issuePath, { encoding: "utf8" }).catch(() => null);
 
   try {
     await writeFile(logPath, TEST_LOG_CONTENT, { encoding: "utf8" });
@@ -85,6 +87,12 @@ test("analyze.py はサンプルが少なくても p95 を計算できる", asyn
     } else {
       await writeFile(reportPath, originalReport, { encoding: "utf8" });
     }
+
+    if (originalIssue === null) {
+      await rm(issuePath, { force: true });
+    } else {
+      await writeFile(issuePath, originalIssue, { encoding: "utf8" });
+    }
   }
 });
 
@@ -96,9 +104,11 @@ test("analyze.py は data フィールド内の情報を集計できる", async 
   const repoRootPath = (process as unknown as { cwd(): string }).cwd();
   const logPath = join(repoRootPath, "logs", "test.jsonl");
   const reportPath = join(repoRootPath, "reports", "today.md");
+  const issuePath = join(repoRootPath, "reports", "issue_suggestions.md");
 
   const originalLog = await readFile(logPath, { encoding: "utf8" }).catch(() => null);
   const originalReport = await readFile(reportPath, { encoding: "utf8" }).catch(() => null);
+  const originalIssue = await readFile(issuePath, { encoding: "utf8" }).catch(() => null);
 
   try {
     await writeFile(logPath, DATA_WRAPPED_LOG_CONTENT, { encoding: "utf8" });
@@ -135,6 +145,12 @@ test("analyze.py は data フィールド内の情報を集計できる", async 
       await rm(reportPath, { force: true });
     } else {
       await writeFile(reportPath, originalReport, { encoding: "utf8" });
+    }
+
+    if (originalIssue === null) {
+      await rm(issuePath, { force: true });
+    } else {
+      await writeFile(issuePath, originalIssue, { encoding: "utf8" });
     }
   }
 });
