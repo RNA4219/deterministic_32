@@ -62,6 +62,9 @@ test("JSON reporter runner uses dist target when invoked with TS input", async (
     createRequire: (specifier: string | URL) => (id: string) => unknown;
   };
   const require = createRequire(import.meta.url);
+  const { fileURLToPath } = (await dynamicImport("node:url")) as {
+    fileURLToPath: (url: string | URL) => string;
+  };
   const fsModule = require("node:fs") as {
     existsSync: (value: unknown) => boolean;
     mkdirSync: (path: unknown, options?: unknown) => unknown;
@@ -70,6 +73,8 @@ test("JSON reporter runner uses dist target when invoked with TS input", async (
     resolve: (...segments: string[]) => string;
     dirname: (value: string) => string;
   };
+
+  const projectRoot = pathModule.resolve(fileURLToPath(repoRootUrl));
 
   const cleanups: Array<() => void> = [];
   const spawnCalls: SpawnCall[] = [];
@@ -173,8 +178,11 @@ test("JSON reporter runner uses dist target when invoked with TS input", async (
   assert.equal(thrown, undefined);
   assert.equal(spawnCalls.length, 1);
   const invocation = spawnCalls[0]!;
+  assert.ok(invocation.options && typeof invocation.options === "object");
   assert.ok(Array.isArray(invocation.args));
   const args = invocation.args as ReadonlyArray<string>;
+  const options = invocation.options as { cwd?: unknown };
+  assert.equal(options.cwd, projectRoot);
   assert.ok(args.includes("dist/tests/example.test.js"));
   const destinationArgs = args.filter((value) =>
     value.startsWith("--test-reporter-destination="),
