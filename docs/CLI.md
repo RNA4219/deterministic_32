@@ -21,7 +21,7 @@ $ npx deterministic-32 <key?> [--salt=... --namespace=... --normalize=nfkc|nfkd|
   - `--json=pretty` と `--pretty` は同じ整形結果になる。
 - `--json` と `--pretty` を同時指定した場合も整形出力（インデント2）。
 - 整形モードは複数行の整形 JSON を返し、NDJSON ではない点に注意。
-- `--normalize` には `nfkc`（既定）、`nfkd`、`nfc`、`none` を指定できる。
+- `--normalize` には Unicode 正規化モードとして `nfkc`（既定）、`nfkd`、`nfc`、`none` の 4 種類を指定できる。
 - 終了コード:
 - `0` … 成功
 - `2` … 循環/labels長不正/override不正など仕様違反
