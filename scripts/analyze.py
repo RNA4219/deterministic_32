@@ -23,6 +23,18 @@ def compute_p95(durations: list[int]) -> int:
     interpolated = ordered[lower_index] + (ordered[upper_index] - ordered[lower_index]) * fraction
     return int(math.ceil(interpolated))
 
+
+def format_pass_rate(total_tests: int, failure_count: int) -> str:
+    if total_tests <= 0:
+        return "0%"
+    failures = max(failure_count, 0)
+    rate = (total_tests - failures) / total_tests
+    if rate < 0:
+        rate = 0.0
+    elif rate > 1:
+        rate = 1.0
+    return f"{rate:.2%}"
+
 def _resolve_path(env_key: str, default: pathlib.Path) -> pathlib.Path:
     value = os.environ.get(env_key)
     if value is None:
@@ -201,11 +213,8 @@ def load_results() -> Tuple[list[str], list[int], list[str]]:
 def main() -> None:
     tests, durs, fails = load_results()
     total = len(tests)
-    if total == 0:
-        pass_rate_text = "0%"
-    else:
-        pass_rate = (total - len(fails)) / total
-        pass_rate_text = f"{pass_rate:.2%}"
+    failure_count = len(fails)
+    pass_rate_text = format_pass_rate(total, failure_count)
     p95 = compute_p95(durs)
     now = datetime.datetime.utcnow().isoformat()
     report_path = _report_path()
@@ -216,7 +225,7 @@ def main() -> None:
         f.write(f"- Total tests: {total}\n")
         f.write(f"- Pass rate: {pass_rate_text}\n")
         f.write(f"- Duration p95: {p95} ms\n")
-        f.write(f"- Failures: {len(fails)}\n\n")
+        f.write(f"- Failures: {failure_count}\n\n")
         if fails:
             f.write("## Why-Why (draft)\n")
             for name, cnt in Counter(fails).items():

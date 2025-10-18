@@ -111,6 +111,67 @@ test("load_results は test:pass/test:fail のみを集計する", async () => {
   }
 });
 
+test("load_results は空ログの場合に 0 件・パス率 0% を返す", async () => {
+  const { execFile } = (await dynamicImport("node:child_process")) as { execFile: ExecFile };
+  const { readFile, rm, writeFile } = (await dynamicImport("node:fs/promises")) as FsPromisesModule;
+  const { join } = (await dynamicImport("node:path")) as PathModule;
+
+  const envProcess = process as unknown as ProcessLike;
+  const repoRootPath = envProcess.cwd();
+  const logPath = join(repoRootPath, "logs", "test.empty.jsonl");
+  const originalLog = await readFile(logPath, { encoding: "utf8" }).catch(() => null);
+  const env: Record<string, string | undefined> = {
+    ...envProcess.env,
+    ANALYZE_LOG_PATH: logPath,
+  };
+
+  try {
+    await writeFile(logPath, EMPTY_LOG_CONTENT, { encoding: "utf8" });
+
+    const stdout = await new Promise<string>((resolve, reject) => {
+      execFile(
+        "python3",
+        [
+          "-c",
+          [
+            "import json",
+            "from scripts import analyze",
+            "tests, durs, fails = analyze.load_results()",
+            "summary = {",
+            "  'total': len(tests)",
+            "}",
+            "summary['pass_rate'] = analyze.format_pass_rate(summary['total'], len(fails))",
+            "print(json.dumps(summary, ensure_ascii=False))",
+          ].join("; "),
+        ],
+        { cwd: repoRootPath, encoding: "utf8", env },
+        (error: Error | null, stdoutValue: string, stderr: string) => {
+          if (error) {
+            const message =
+              stderr.length > 0 ? `load_results execution failed: ${stderr}` : "load_results exited with a non-zero status";
+            reject(new Error(message, { cause: error }));
+            return;
+          }
+          resolve(stdoutValue);
+        },
+      );
+    });
+
+    const trimmed = stdout.trim();
+    assert.ok(trimmed.length > 0, "load_results の出力が必要");
+    const payload = JSON.parse(trimmed) as { pass_rate: string; total: number };
+
+    assert.equal(payload.total, 0, "空ログは合計 0 のはず");
+    assert.equal(payload.pass_rate, "0%", "空ログはパス率 0% のはず");
+  } finally {
+    if (originalLog === null) {
+      await rm(logPath, { force: true });
+    } else {
+      await writeFile(logPath, originalLog, { encoding: "utf8" });
+    }
+  }
+});
+
 const DATA_WRAPPED_LOG_CONTENT =
   [
     {
