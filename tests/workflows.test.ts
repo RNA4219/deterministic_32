@@ -25,6 +25,8 @@ const testWorkflowUrl = new URL(
   repositoryRoot,
 );
 
+const tsconfigUrl = new URL("tsconfig.json", repositoryRoot);
+
 type ReadFile = (path: URL, options: "utf8") => Promise<string>;
 
 const loadReadFile = async (): Promise<ReadFile> => {
@@ -94,5 +96,23 @@ test("JSON reporter runner covers frontend tests", async () => {
   assert.ok(
     runnerContent.includes("dist/frontend/tests"),
     "frontend test suite must be executed by JSON reporter runner",
+  );
+});
+
+test("tsconfig exposes DOM lib for service worker Request types", async () => {
+  const readFile = await loadReadFile();
+  const tsconfigContent = await readFile(tsconfigUrl, "utf8");
+
+  const config = JSON.parse(tsconfigContent) as {
+    readonly compilerOptions?: { readonly lib?: readonly unknown[] };
+  };
+
+  const libs = config.compilerOptions?.lib;
+  assert.ok(Array.isArray(libs), "tsconfig compilerOptions.lib must be defined");
+
+  const normalized = libs.map((lib) => String(lib).toLowerCase());
+  assert.ok(
+    normalized.includes("dom"),
+    "tsconfig must include the DOM lib to provide Request typings",
   );
 });

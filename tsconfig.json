@@ -8,6 +8,7 @@
     "strict": true,
     "skipLibCheck": true,
     "preserveConstEnums": true,
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "typeRoots": ["./types", "./node_modules/@types"]
   },
   "include": ["src", "tests", "scripts", "frontend/src", "frontend/tests"]
