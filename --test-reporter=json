@@ -90,6 +90,9 @@ const prepareRunnerOptions = (
 
     if (pendingOption) {
       passthroughArgs.push(argument);
+      if (pendingOption === '--test-reporter-destination') {
+        destinationOverride = argument || null;
+      }
       pendingOption = null;
       continue;
     }
@@ -103,11 +106,17 @@ const prepareRunnerOptions = (
     if (argument.startsWith('--')) {
       passthroughArgs.push(argument);
       const assignmentIndex = argument.indexOf('=');
+      const optionName = assignmentIndex === -1
+        ? argument
+        : argument.slice(0, assignmentIndex);
+
       if (assignmentIndex === -1) {
-        const optionName = argument;
         if (OPTIONS_EXPECTING_VALUE.has(optionName)) {
           pendingOption = optionName;
         }
+      } else if (optionName === '--test-reporter-destination') {
+        const value = argument.slice(assignmentIndex + 1);
+        destinationOverride = value || null;
       }
       continue;
     }
