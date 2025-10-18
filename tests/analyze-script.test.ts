@@ -31,11 +31,21 @@ const dynamicImport = new Function(
   "return import(specifier);",
 ) as (specifier: string) => Promise<unknown>;
 
-const DATA_WRAPPED_LOG_CONTENT = `${JSON.stringify({
+const SINGLE_DATA_LOG_CONTENT = `${JSON.stringify({
   name: "sample::single",
   status: "pass",
   data: { duration_ms: 150 },
 })}\n`;
+
+const SIMPLE_PASS_FAIL_LOG_CONTENT =
+  `${JSON.stringify({
+    type: "test:pass",
+    data: { name: "ok", duration_ms: 5 },
+  })}\n` +
+  `${JSON.stringify({
+    type: "test:fail",
+    data: { name: "ng", duration_ms: 7 },
+  })}\n`;
 
 const LOG_WITH_DIAGNOSTIC_CONTENT =
   `${JSON.stringify({
@@ -115,7 +125,7 @@ test("analyze.py はサンプルが少なくても p95 を計算できる", asyn
       rm(issuePath, { force: true }),
     ]);
 
-    await writeFile(logPath, DATA_WRAPPED_LOG_CONTENT, { encoding: "utf8" });
+    await writeFile(logPath, SINGLE_DATA_LOG_CONTENT, { encoding: "utf8" });
 
     await new Promise<void>((resolve, reject) => {
       execFile(
@@ -146,6 +156,96 @@ test("analyze.py はサンプルが少なくても p95 を計算できる", asyn
       rm(reportPath, { force: true }),
       rm(issuePath, { force: true }),
     ]);
+  }
+});
+
+test("analyze.py は test:pass/test:fail を集計対象にする", async () => {
+  const { execFile } = (await dynamicImport("node:child_process")) as { execFile: ExecFile };
+  const { readFile, rm, writeFile } = (await dynamicImport("node:fs/promises")) as FsPromisesModule;
+  const { join } = (await dynamicImport("node:path")) as PathModule;
+
+  const envProcess = process as unknown as ProcessLike;
+  const repoRootPath = envProcess.cwd();
+  const { env } = envProcess;
+
+  const logPath = join(repoRootPath, "logs", "simple.jsonl");
+  const reportPath = join(repoRootPath, "reports", "simple.md");
+  const issuePath = join(repoRootPath, "reports", "simple_issue.md");
+
+  const originalEnv = {
+    ANALYZE_LOG_PATH: env.ANALYZE_LOG_PATH,
+    ANALYZE_REPORT_PATH: env.ANALYZE_REPORT_PATH,
+    ANALYZE_ISSUE_PATH: env.ANALYZE_ISSUE_PATH,
+  };
+
+  const setEnv = (key: keyof typeof originalEnv, value: string | undefined) => {
+    if (value === undefined) {
+      delete env[key];
+    } else {
+      env[key] = value;
+    }
+  };
+
+  setEnv("ANALYZE_LOG_PATH", logPath);
+  setEnv("ANALYZE_REPORT_PATH", reportPath);
+  setEnv("ANALYZE_ISSUE_PATH", issuePath);
+
+  const originalLog = await readFile(logPath, { encoding: "utf8" }).catch(() => null);
+  const originalReport = await readFile(reportPath, { encoding: "utf8" }).catch(() => null);
+  const originalIssue = await readFile(issuePath, { encoding: "utf8" }).catch(() => null);
+
+  try {
+    await writeFile(logPath, SIMPLE_PASS_FAIL_LOG_CONTENT, { encoding: "utf8" });
+
+    await new Promise<void>((resolve, reject) => {
+      execFile(
+        "python3",
+        ["scripts/analyze.py"],
+        { cwd: repoRootPath, encoding: "utf8" },
+        (error: Error | null, _stdout: string, stderr: string) => {
+          if (error) {
+            const message =
+              stderr.length > 0 ? `analyze.py failed: ${stderr}` : "analyze.py exited with a non-zero status";
+            reject(new Error(message, { cause: error }));
+            return;
+          }
+          resolve();
+        },
+      );
+    });
+
+    const report = await readFile(reportPath, { encoding: "utf8" });
+    assert.ok(report.includes("- Total tests: 2"), "test:pass/test:fail の 2 件を集計するはず");
+    assert.ok(report.includes("- Failures: 1"), "test:fail が 1 件なので失敗数は 1 のはず");
+    const match = report.match(/- Duration p95: (\d+) ms/);
+    if (match === null) {
+      throw new Error("p95 の出力が含まれるはず");
+    }
+    const p95Value = Number(match[1]);
+    assert.ok(Number.isFinite(p95Value), "p95 は数値のはず");
+    assert.ok(p95Value >= 7, "p95 は 7 以上のはず");
+  } finally {
+    setEnv("ANALYZE_LOG_PATH", originalEnv.ANALYZE_LOG_PATH);
+    setEnv("ANALYZE_REPORT_PATH", originalEnv.ANALYZE_REPORT_PATH);
+    setEnv("ANALYZE_ISSUE_PATH", originalEnv.ANALYZE_ISSUE_PATH);
+
+    if (originalLog === null) {
+      await rm(logPath, { force: true });
+    } else {
+      await writeFile(logPath, originalLog, { encoding: "utf8" });
+    }
+
+    if (originalReport === null) {
+      await rm(reportPath, { force: true });
+    } else {
+      await writeFile(reportPath, originalReport, { encoding: "utf8" });
+    }
+
+    if (originalIssue === null) {
+      await rm(issuePath, { force: true });
+    } else {
+      await writeFile(issuePath, originalIssue, { encoding: "utf8" });
+    }
   }
 });
 

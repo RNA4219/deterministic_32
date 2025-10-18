@@ -1,4 +1,4 @@
-import json, statistics, pathlib, os, datetime
+import json, statistics, pathlib, os, datetime, math
 from collections import Counter
 
 
@@ -15,7 +15,7 @@ def compute_p95(durations: list[int]) -> int:
     upper_index = min(lower_index + 1, len(ordered) - 1)
     fraction = position - lower_index
     interpolated = ordered[lower_index] + (ordered[upper_index] - ordered[lower_index]) * fraction
-    return int(interpolated)
+    return math.ceil(interpolated)
 
 LOG = pathlib.Path(os.environ.get("ANALYZE_LOG_PATH", "logs/test.jsonl"))
 REPORT = pathlib.Path(os.environ.get("ANALYZE_REPORT_PATH", "reports/today.md"))
@@ -102,14 +102,16 @@ def _load_from_legacy(obj: dict[str, object]):
     name = obj.get("name")
     if not isinstance(name, str):
         name = ""
-    duration = _extract_numeric_duration(obj.get("duration_ms"))
+    duration = extract_duration(obj)
     status = obj.get("status")
     is_failure = status == "fail"
     return name, duration, is_failure
 
 
-def load_results():
-    tests, durs, fails = [], [], []
+def load_results() -> tuple[list[str], list[int], list[str]]:
+    tests: list[str] = []
+    durs: list[int] = []
+    fails: list[str] = []
     if not LOG.exists():
         return tests, durs, fails
     with LOG.open(encoding="utf-8") as f:
@@ -117,10 +119,19 @@ def load_results():
             if not line.strip():
                 continue
             obj = json.loads(line)
-            tests.append(obj.get("name"))
-            durs.append(extract_duration(obj))
-            if obj.get("status") == "fail":
-                fails.append(obj.get("name"))
+            if not isinstance(obj, dict):
+                continue
+            loaded = _load_from_event(obj)
+            if loaded is None:
+                if "type" in obj:
+                    continue
+                name, duration, is_failure = _load_from_legacy(obj)
+            else:
+                name, duration, is_failure = loaded
+            tests.append(name)
+            durs.append(duration)
+            if is_failure:
+                fails.append(name)
     return tests, durs, fails
 
 def main():
