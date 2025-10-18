@@ -33,9 +33,9 @@ def _resolve_path(env_key: str, default: pathlib.Path) -> pathlib.Path:
     return pathlib.Path(text)
 
 
-LOG = _DEFAULT_LOG
-REPORT = _DEFAULT_REPORT
-ISSUE_OUT = _DEFAULT_ISSUE
+LOG = _resolve_path("ANALYZE_LOG_PATH", _DEFAULT_LOG)
+REPORT = _resolve_path("ANALYZE_REPORT_PATH", _DEFAULT_REPORT)
+ISSUE_OUT = _resolve_path("ANALYZE_ISSUE_PATH", _DEFAULT_ISSUE)
 
 
 def _log_path() -> pathlib.Path:
