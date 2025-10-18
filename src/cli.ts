@@ -126,10 +126,10 @@ function parseNormalizeOption(value: string | undefined): NormalizeMode {
   if (value === undefined) {
     return "nfkc";
   }
-  if (value === "none" || value === "nfc" || value === "nfkc") {
+  if (value === "none" || value === "nfc" || value === "nfkc" || value === "nfkd") {
     return value;
   }
-  throw new RangeError("normalize must be one of \"none\", \"nfc\", or \"nfkc\"");
+  throw new RangeError("normalize must be one of \"none\", \"nfc\", \"nfkc\", or \"nfkd\"");
 }
 
 async function main() {
