@@ -1,4 +1,4 @@
-import json, statistics, pathlib, os, datetime
+import json, statistics, pathlib, os, datetime, math
 from collections import Counter
 
 
@@ -15,35 +15,32 @@ def compute_p95(durations: list[int]) -> int:
     upper_index = min(lower_index + 1, len(ordered) - 1)
     fraction = position - lower_index
     interpolated = ordered[lower_index] + (ordered[upper_index] - ordered[lower_index]) * fraction
-    return int(interpolated)
+    return math.ceil(interpolated)
 
 LOG = pathlib.Path("logs/test.jsonl")
 REPORT = pathlib.Path("reports/today.md")
 ISSUE_OUT = pathlib.Path("reports/issue_suggestions.md")
 
 def load_results():
-    tests, durs, fails = [], [], []
+    tests: list[str] = []
+    durs: list[int] = []
+    fails: list[str] = []
     if not LOG.exists():
         return tests, durs, fails
-    with LOG.open() as f:
+    with LOG.open(encoding="utf-8") as f:
         for line in f:
             obj = json.loads(line)
+            event_type = obj.get("type")
+            if event_type not in {"test:pass", "test:fail"}:
+                continue
+
             data = obj.get("data")
             if not isinstance(data, dict):
-                data = {}
+                continue
 
-            name = obj.get("name")
-            if name is None and data:
-                name = data.get("name")
-            if name is None:
-                name = obj.get("type")
-            tests.append(name)
-
-            duration = obj.get("duration_ms")
-            if duration is None and data:
-                duration = data.get("duration_ms")
-            if duration is None:
-                duration = 0
+            raw_name = data.get("name")
+            name = raw_name if isinstance(raw_name, str) else str(raw_name) if raw_name is not None else event_type
+            duration = data.get("duration_ms")
             if isinstance(duration, (int, float)):
                 duration_value = int(duration)
             else:
@@ -51,16 +48,10 @@ def load_results():
                     duration_value = int(duration)
                 except (TypeError, ValueError):
                     duration_value = 0
-            durs.append(duration_value)
 
-            status = obj.get("status")
-            if status is None and data:
-                status = data.get("status")
-            if status is None:
-                type_value = obj.get("type")
-                if isinstance(type_value, str) and type_value.startswith("test:"):
-                    status = type_value.split(":", 1)[1]
-            if status == "fail":
+            tests.append(name)
+            durs.append(duration_value)
+            if event_type == "test:fail":
                 fails.append(name)
     return tests, durs, fails
 
