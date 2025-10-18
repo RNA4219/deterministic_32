@@ -41,12 +41,23 @@ const createMockChildProcess = () => {
 const repoRootUrl = import.meta.url.includes("/dist/tests/")
   ? new URL("../..", import.meta.url)
   : new URL("..", import.meta.url);
+const runnerUrl = new URL("./--test-reporter=json", repoRootUrl);
 
-test("JSON reporter runner forwards CLI flags to spawned process", async () => {
-  const spawnCalls: Array<{
-    command: string;
-    args: string[];
-  }> = [];
+type RunnerInvocation = {
+  command: string;
+  args: string[];
+};
+
+type RunnerResult = {
+  spawnCalls: RunnerInvocation[];
+  exitCalls: Array<number | undefined>;
+};
+
+const runJsonReporterRunner = async (
+  forwardedArgs: readonly string[],
+): Promise<RunnerResult> => {
+  const spawnCalls: RunnerInvocation[] = [];
+  const exitCalls: Array<number | undefined> = [];
 
   const globalOverride = globalThis as {
     __CAT32_TEST_SPAWN__?: (
@@ -85,7 +96,6 @@ test("JSON reporter runner forwards CLI flags to spawned process", async () => {
     removeListener: (event: string, listener: Listener) => void;
   };
 
-  const runnerUrl = new URL("./--test-reporter=json", repoRootUrl);
   const runnerPath = decodeURIComponent(runnerUrl.pathname);
   const originalArgv = nodeProcess.argv;
   const trackedSignals: Signal[] = ["SIGINT", "SIGTERM", "SIGQUIT"];
@@ -96,18 +106,12 @@ test("JSON reporter runner forwards CLI flags to spawned process", async () => {
   }
 
   const originalExit = nodeProcess.exit;
-  const exitCalls: Array<number | undefined> = [];
   nodeProcess.exit = ((code?: number) => {
     exitCalls.push(code);
     return undefined as never;
   }) as (code?: number) => never;
 
-  nodeProcess.argv = [
-    nodeProcess.execPath,
-    runnerPath,
-    "--test-name-pattern",
-    "foo",
-  ];
+  nodeProcess.argv = [nodeProcess.execPath, runnerPath, ...forwardedArgs];
 
   try {
     await import(`${runnerUrl.href}?${Date.now()}`);
@@ -126,9 +130,38 @@ test("JSON reporter runner forwards CLI flags to spawned process", async () => {
     }
   }
 
+  return { spawnCalls, exitCalls };
+};
+
+test("JSON reporter runner forwards CLI flags to spawned process", async () => {
+  const { spawnCalls, exitCalls } = await runJsonReporterRunner([
+    "--test-name-pattern",
+    "foo",
+  ]);
+
   assert.deepEqual(exitCalls.at(-1), 0);
   assert.equal(spawnCalls.length, 1);
 
   const forwardedArgs = spawnCalls[0]!.args.slice(-2);
   assert.deepEqual(forwardedArgs, ["--test-name-pattern", "foo"]);
+});
+
+test("JSON reporter runner preserves flag values that resemble file paths", async () => {
+  const { spawnCalls, exitCalls } = await runJsonReporterRunner([
+    "--test-name-pattern",
+    "foo",
+    "--import",
+    "./scripts/run-tests.js",
+  ]);
+
+  assert.deepEqual(exitCalls.at(-1), 0);
+  assert.equal(spawnCalls.length, 1);
+
+  const forwardedArgs = spawnCalls[0]!.args.slice(-4);
+  assert.deepEqual(forwardedArgs, [
+    "--test-name-pattern",
+    "foo",
+    "--import",
+    "./scripts/run-tests.js",
+  ]);
 });

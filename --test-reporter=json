@@ -7,6 +7,47 @@ const DESTINATION_PREFIX = '--test-reporter-destination=';
 const DEFAULT_DESTINATION = 'logs/test.jsonl';
 const DEFAULT_TARGETS = ['dist/tests', 'dist/frontend/tests'];
 
+const parseCliArguments = (argv) => {
+  const entries = [];
+  let expectValueForFlag = false;
+  let passthroughRemainder = false;
+
+  for (const argument of argv) {
+    if (!argument) {
+      continue;
+    }
+
+    if (expectValueForFlag) {
+      entries.push({ value: argument, passthrough: true });
+      expectValueForFlag = false;
+      continue;
+    }
+
+    if (passthroughRemainder) {
+      entries.push({ value: argument, passthrough: true });
+      continue;
+    }
+
+    if (argument === '--') {
+      entries.push({ value: argument, passthrough: true });
+      passthroughRemainder = true;
+      continue;
+    }
+
+    if (argument.startsWith('--')) {
+      entries.push({ value: argument, passthrough: true });
+      if (!argument.includes('=')) {
+        expectValueForFlag = true;
+      }
+      continue;
+    }
+
+    entries.push({ value: argument, passthrough: false });
+  }
+
+  return entries;
+};
+
 const normalizeTarget = (target) => {
   if (!target.endsWith('.ts')) {
     return target;
@@ -47,18 +88,17 @@ const prepareRunnerOptions = (
     explicitTargets.push(normalized);
   };
 
-  for (const argument of argv.slice(2)) {
-    if (!argument) {
-      continue;
-    }
+  const parsedArguments = parseCliArguments(argv.slice(2));
 
+  for (const { value: argument, passthrough } of parsedArguments) {
+    
     if (argument.startsWith(DESTINATION_PREFIX)) {
       const candidateDestination = argument.slice(DESTINATION_PREFIX.length);
       destinationOverride = candidateDestination || null;
       continue;
     }
 
-    if (argument.startsWith('--')) {
+    if (passthrough) {
       passthroughArgs.push(argument);
       continue;
     }
