@@ -1,4 +1,4 @@
-import json, statistics, pathlib, os, datetime
+import json, statistics, pathlib, os, datetime, math
 from collections import Counter
 
 
@@ -15,7 +15,7 @@ def compute_p95(durations: list[int]) -> int:
     upper_index = min(lower_index + 1, len(ordered) - 1)
     fraction = position - lower_index
     interpolated = ordered[lower_index] + (ordered[upper_index] - ordered[lower_index]) * fraction
-    return int(interpolated)
+    return int(math.ceil(interpolated))
 
 LOG = pathlib.Path(os.environ.get("ANALYZE_LOG_PATH", "logs/test.jsonl"))
 REPORT = pathlib.Path(os.environ.get("ANALYZE_REPORT_PATH", "reports/today.md"))
@@ -39,7 +39,7 @@ def extract_duration(entry: dict[str, object]) -> int:
     return 0
 
 
-ALLOWED_EVENT_TYPES = {"test:pass", "test:fail", "test:skip"}
+ALLOWED_EVENT_TYPES = {"test:pass", "test:fail"}
 _NESTED_DATA_KEYS: tuple[str, ...] = ("data", "test")
 
 
@@ -129,9 +129,20 @@ def load_results():
             obj = json.loads(line)
             if not isinstance(obj, dict):
                 continue
-            parsed = _load_from_event(obj)
-            if parsed is None:
-                parsed = _load_from_legacy(obj)
+            event_type = obj.get("type")
+            if isinstance(event_type, str) and event_type in ALLOWED_EVENT_TYPES:
+                data = _unwrap_payload(_as_mapping(obj.get("data")))
+                name = data.get("name")
+                if not isinstance(name, str):
+                    name = ""
+                duration = _extract_duration(data)
+                is_failure = event_type == "test:fail"
+                tests.append(name)
+                durs.append(duration)
+                if is_failure:
+                    fails.append(name)
+                continue
+            parsed = _load_from_legacy(obj)
             if parsed is None:
                 continue
             name, duration, is_failure = parsed
