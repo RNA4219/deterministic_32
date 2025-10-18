@@ -50,52 +50,106 @@ const mapTargetArgument = (
     return target;
   }
 
-  const absolute = path.isAbsolute(target) ? target : path.resolve(target);
-  const relativePathFromProject = path.relative(projectRoot, absolute);
-  const normalizedRelative = path.normalize(relativePathFromProject);
-  const extension = path.extname(normalizedRelative);
-  const upwardPrefix = `..${path.sep}`;
+  const absoluteFromProject = path.isAbsolute(target)
+    ? target
+    : path.resolve(projectRoot, target);
+  const absoluteFromCwd = path.isAbsolute(target)
+    ? target
+    : path.resolve(target);
 
-  if (
-    normalizedRelative === '..' ||
-    normalizedRelative.startsWith(upwardPrefix)
-  ) {
-    return target;
+  const absoluteCandidates = [];
+  const pushCandidate = (candidate) => {
+    if (!absoluteCandidates.includes(candidate)) {
+      absoluteCandidates.push(candidate);
+    }
+  };
+
+  pushCandidate(absoluteFromCwd);
+  pushCandidate(absoluteFromProject);
+
+  const safeExists = (value) => {
+    if (!value || typeof existsSync !== 'function') {
+      return false;
+    }
+    try {
+      return existsSync(value);
+    } catch {
+      return false;
+    }
+  };
+
+  const evaluateCandidate = (absoluteCandidate) => {
+    const relativePathFromProject = path.relative(
+      projectRoot,
+      absoluteCandidate,
+    );
+    const normalizedRelative = path.normalize(relativePathFromProject);
+    const extension = path.extname(normalizedRelative);
+    const upwardPrefix = `..${path.sep}`;
+
+    if (
+      normalizedRelative === '..' ||
+      normalizedRelative.startsWith(upwardPrefix)
+    ) {
+      return { result: target, score: -1 };
+    }
+
+    if (extension === '.ts') {
+      const withoutExtension = extension.length > 0
+        ? normalizedRelative.slice(0, -extension.length)
+        : normalizedRelative;
+
+      const normalizedSegments = withoutExtension
+        .split(path.sep)
+        .filter((segment) => segment && segment !== '.' && segment !== '..');
+      const distPath = path.join('dist', ...normalizedSegments);
+      const mapped = `${distPath}.js`;
+      const mappedExists =
+        safeExists(mapped) || safeExists(path.resolve(projectRoot, mapped));
+
+      return { result: mapped, score: mappedExists ? 4 : 2 };
+    }
+
+    const inDistAlready =
+      normalizedRelative === 'dist' ||
+      normalizedRelative.startsWith(`dist${path.sep}`);
+
+    if (inDistAlready) {
+      return { result: target, score: 3 };
+    }
+
+    const distCandidate = path.join('dist', normalizedRelative);
+    const distCandidateAbsolute = path.resolve(projectRoot, distCandidate);
+    const distExists =
+      safeExists(distCandidate) || safeExists(distCandidateAbsolute);
+
+    if (mapDirectoriesToDist && extension.length === 0) {
+      return { result: distCandidate, score: distExists ? 3 : 1 };
+    }
+
+    if (distExists) {
+      return { result: distCandidate, score: 2 };
+    }
+
+    const targetExists =
+      safeExists(target) ||
+      safeExists(absoluteCandidate) ||
+      safeExists(path.resolve(projectRoot, target));
+
+    return { result: target, score: targetExists ? 1 : 0 };
+  };
+
+  let bestEvaluation = evaluateCandidate(absoluteCandidates[0]);
+
+  for (const candidate of absoluteCandidates.slice(1)) {
+    const evaluation = evaluateCandidate(candidate);
+
+    if (!bestEvaluation || evaluation.score > bestEvaluation.score) {
+      bestEvaluation = evaluation;
+    }
   }
 
-  if (extension === '.ts') {
-    const withoutExtension = extension.length > 0
-      ? normalizedRelative.slice(0, -extension.length)
-      : normalizedRelative;
-
-    const normalizedSegments = withoutExtension
-      .split(path.sep)
-      .filter((segment) => segment && segment !== '.' && segment !== '..');
-    const distPath = path.join('dist', ...normalizedSegments);
-
-    return `${distPath}.js`;
-  }
-
-  const inDistAlready =
-    normalizedRelative === 'dist' ||
-    normalizedRelative.startsWith(`dist${path.sep}`);
-
-  if (inDistAlready) {
-    return target;
-  }
-
-  const distCandidate = path.join('dist', normalizedRelative);
-  const distCandidateAbsolute = path.resolve(projectRoot, distCandidate);
-
-  if (mapDirectoriesToDist && extension.length === 0) {
-    return distCandidate;
-  }
-
-  if (existsSync(distCandidate) || existsSync(distCandidateAbsolute)) {
-    return distCandidate;
-  }
-
-  return target;
+  return bestEvaluation ? bestEvaluation.result : target;
 };
 
 const prepareRunnerOptions = (
@@ -135,28 +189,52 @@ const prepareRunnerOptions = (
       mapDirectoriesToDist: true,
     });
 
+    const candidateAbsoluteFromProject = path.resolve(projectRoot, candidate);
+    const candidateAbsoluteFromCwd = path.resolve(candidate);
+    const candidateExists = () => {
+      if (typeof existsSync !== 'function') {
+        return false;
+      }
+      try {
+        return (
+          existsSync(candidate) ||
+          existsSync(candidateAbsoluteFromProject) ||
+          existsSync(candidateAbsoluteFromCwd)
+        );
+      } catch {
+        return false;
+      }
+    };
+
     if (normalized && normalized !== candidate) {
       const normalizedAbsolute = path.resolve(projectRoot, normalized);
-      const candidateAbsolute = path.resolve(candidate);
+      const normalizedAbsoluteFromCwd = path.resolve(normalized);
 
       if (
         existsSync(normalized) ||
         existsSync(normalizedAbsolute) ||
-        existsSync(candidate) ||
-        existsSync(candidateAbsolute)
+        existsSync(normalizedAbsoluteFromCwd) ||
+        candidateExists()
       ) {
         return normalized;
       }
     }
 
-    if (existsSync(candidate)) {
-      return candidate;
-    }
+    if (candidateExists()) {
+      const projectRelative = path.relative(
+        projectRoot,
+        candidateAbsoluteFromProject,
+      );
 
-    const absoluteCandidate = path.resolve(candidate);
+      if (
+        projectRelative &&
+        projectRelative !== '..' &&
+        !projectRelative.startsWith(`..${path.sep}`)
+      ) {
+        return projectRelative;
+      }
 
-    if (existsSync(absoluteCandidate)) {
-      return absoluteCandidate;
+      return candidateAbsoluteFromProject;
     }
 
     return null;

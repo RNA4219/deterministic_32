@@ -161,6 +161,74 @@ test("JSON reporter runner uses dist target when invoked with TS input", async (
   assert.deepEqual(exitCodes, [0]);
 });
 
+test(
+  "prepareRunnerOptions normalizes default targets from subdirectories",
+  async () => {
+    const { createRequire } = (await dynamicImport("node:module")) as {
+      createRequire: (specifier: string | URL) => (id: string) => unknown;
+    };
+    const require = createRequire(import.meta.url);
+    const pathModule = require("node:path") as {
+      resolve: (...segments: string[]) => string;
+    };
+    const { fileURLToPath } = (await dynamicImport("node:url")) as {
+      fileURLToPath: (url: string | URL) => string;
+    };
+
+    const cleanups: Array<() => void> = [];
+    const projectRootPath = fileURLToPath(repoRootUrl);
+    const testsDirectory = fileURLToPath(new URL("./tests/", repoRootUrl));
+    const processWithCwd = process as typeof process & {
+      cwd: () => string;
+      chdir: (directory: string) => void;
+      env: Record<string, string | undefined>;
+      execPath: string;
+    };
+    const originalCwd = processWithCwd.cwd();
+    processWithCwd.chdir(testsDirectory);
+    cleanups.push(() => {
+      processWithCwd.chdir(originalCwd);
+    });
+
+    const originalSkip =
+      processWithCwd.env.__CAT32_SKIP_JSON_REPORTER_RUN__;
+    processWithCwd.env.__CAT32_SKIP_JSON_REPORTER_RUN__ = "1";
+    cleanups.push(() => {
+      if (originalSkip === undefined) {
+        delete processWithCwd.env.__CAT32_SKIP_JSON_REPORTER_RUN__;
+        return;
+      }
+      processWithCwd.env.__CAT32_SKIP_JSON_REPORTER_RUN__ = originalSkip;
+    });
+
+    const existingTargets = new Set([
+      pathModule.resolve(projectRootPath, "dist/tests"),
+      pathModule.resolve(projectRootPath, "dist/frontend/tests"),
+    ]);
+
+    let moduleExports: { prepareRunnerOptions: PrepareRunnerOptions } | undefined;
+    try {
+      moduleExports = (await dynamicImport(
+        `${runnerUrl.href}?t=${Date.now()}-${Math.random()}`,
+      )) as { prepareRunnerOptions: PrepareRunnerOptions };
+
+      const { targets } = moduleExports.prepareRunnerOptions(
+        [processWithCwd.execPath, "./--test-reporter=json"],
+        {
+          existsSync: (candidate) =>
+            typeof candidate === "string" && existingTargets.has(candidate),
+        },
+      );
+
+      assert.deepEqual(targets, ["dist/tests", "dist/frontend/tests"]);
+    } finally {
+      while (cleanups.length) {
+        cleanups.pop()?.();
+      }
+    }
+  },
+);
+
 test("JSON reporter runner resolves TS targets when invoked from tests directory", async () => {
   const { createRequire } = (await dynamicImport("node:module")) as {
     createRequire: (specifier: string | URL) => (id: string) => unknown;
