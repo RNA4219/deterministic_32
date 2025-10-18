@@ -344,6 +344,12 @@ test("prepareRunnerOptions prefers CLI targets when present", async () => {
     );
 
     assert.deepEqual(result.targets, ["dist/tests/json-reporter.test.js"]);
+
+    const directoryResult = prepareRunnerOptions(["node", "script", "tests"], {
+      existsSync: (candidate) => candidate === "tests",
+    });
+
+    assert.deepEqual(directoryResult.targets, ["dist/tests"]);
   } finally {
     if (previous === undefined) {
       delete processWithEnv.env.__CAT32_SKIP_JSON_REPORTER_RUN__;

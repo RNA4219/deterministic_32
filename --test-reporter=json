@@ -18,7 +18,7 @@ const OPTIONS_EXPECTING_VALUE = new Set([
 
 const mapTargetArgument = (
   target,
-  { existsSync = fs.existsSync } = {},
+  { existsSync = fs.existsSync, mapDirectoriesToDist = false } = {},
 ) => {
   if (!target) {
     return target;
@@ -47,6 +47,10 @@ const mapTargetArgument = (
 
   const distCandidate = path.join('dist', normalizedRelative);
 
+  if (mapDirectoriesToDist && extension.length === 0) {
+    return distCandidate;
+  }
+
   if (existsSync(distCandidate)) {
     return distCandidate;
   }
@@ -68,19 +72,40 @@ const prepareRunnerOptions = (
   let destinationOverride = null;
   let pendingOption = null;
 
-  const addTarget = (candidate) => {
+  const addResolvedTarget = (candidate, bucket) => {
     if (!candidate) {
       return;
     }
 
-    const normalized = mapTargetArgument(candidate, { existsSync });
-
-    if (seenTargets.has(normalized)) {
+    if (seenTargets.has(candidate)) {
       return;
     }
 
-    seenTargets.add(normalized);
-    explicitTargets.push(normalized);
+    seenTargets.add(candidate);
+    bucket.push(candidate);
+  };
+
+  const resolveTargetCandidate = (candidate) => {
+    if (!candidate) {
+      return null;
+    }
+
+    const normalized = mapTargetArgument(candidate, {
+      existsSync,
+      mapDirectoriesToDist: true,
+    });
+
+    if (normalized && normalized !== candidate) {
+      if (existsSync(normalized) || existsSync(candidate)) {
+        return normalized;
+      }
+    }
+
+    if (existsSync(candidate)) {
+      return candidate;
+    }
+
+    return null;
   };
 
   for (const argument of argv.slice(2)) {
@@ -112,15 +137,10 @@ const prepareRunnerOptions = (
       continue;
     }
 
-    const normalized = mapTargetArgument(argument, { existsSync });
+    const resolvedTarget = resolveTargetCandidate(argument);
 
-    if (existsSync(argument)) {
-      addTarget(normalized);
-      continue;
-    }
-
-    if (normalized !== argument && existsSync(normalized)) {
-      addTarget(normalized);
+    if (resolvedTarget) {
+      addResolvedTarget(resolvedTarget, explicitTargets);
       continue;
     }
 
@@ -132,28 +152,20 @@ const prepareRunnerOptions = (
       continue;
     }
 
-    const normalized = mapTargetArgument(candidate, { existsSync });
+    const resolvedTarget = resolveTargetCandidate(candidate);
 
-    if (!existsSync(normalized)) {
+    if (!resolvedTarget) {
       continue;
     }
 
-    if (seenTargets.has(normalized)) {
-      continue;
-    }
-
-    seenTargets.add(normalized);
-    resolvedDefaults.push(normalized);
+    addResolvedTarget(resolvedTarget, resolvedDefaults);
   }
 
   const targets = explicitTargets.length > 0 ? explicitTargets : resolvedDefaults;
 
   if (targets.length === 0 && defaultTargets.length > 0) {
-    const fallbackCandidate = mapTargetArgument(defaultTargets[0], { existsSync });
-    if (fallbackCandidate && !seenTargets.has(fallbackCandidate)) {
-      targets.push(fallbackCandidate);
-      seenTargets.add(fallbackCandidate);
-    }
+    const fallbackCandidate = resolveTargetCandidate(defaultTargets[0]);
+    addResolvedTarget(fallbackCandidate, targets);
   }
 
   return { passthroughArgs, targets, destinationOverride };
