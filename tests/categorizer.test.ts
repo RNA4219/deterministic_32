@@ -114,9 +114,13 @@ test("direct dist import exposes stableStringify", async () => {
     return;
   }
 
-  const distModule = (await import("../dist/index.js")) as {
-    stableStringify?: unknown;
-  };
+  const sourceImportMetaUrl = import.meta.url.includes("/dist/tests/")
+    ? new URL("../../tests/categorizer.test.ts", import.meta.url)
+    : import.meta.url;
+
+  const distModule = (await import(
+    new URL("../dist/index.js", sourceImportMetaUrl).href,
+  )) as { stableStringify?: unknown };
   assert.equal(typeof distModule.stableStringify, "function");
 });
 
