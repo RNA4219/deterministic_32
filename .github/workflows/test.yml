@@ -51,9 +51,39 @@ jobs:
 
           echo "build_status=${build_status} test_status=${test_status}"
           exit $(( build_status != 0 ? build_status : test_status ))
-      - name: Upload logs
+      - name: Summarize failing tests
+        if: failure()
+        run: |
+          node -e "
+          const fs=require('fs');
+          const p='logs/test.jsonl';
+          if(!fs.existsSync(p)){ console.log('logs/test.jsonl not found'); process.exit(0); }
+          const lines=fs.readFileSync(p,'utf8').trim().split(/\r?\n/);
+          const fails=[];
+          for(const L of lines){
+            try{
+              const o=JSON.parse(L);
+              if(o.type==='test' && o.data?.details?.error){
+                const e=o.data.details.error;
+                fails.push({
+                  file:o.data.file, name:o.data.name,
+                  message:e.message||String(e),
+                  stack:(e.stack||'').split('\n').slice(0,15).join('\n')
+                });
+              }
+            }catch{}
+          }
+          console.log('\nFailing tests:', fails.length);
+          for(const f of fails){
+            console.log(`\n--- ${f.file} :: ${f.name}\n${f.message}\n${f.stack}`);
+          }"
+      - name: Re-run tests in spec reporter (non-blocking)
+        if: failure()
+        continue-on-error: true
+        run: node --test dist/tests --test-reporter=spec
+      - name: Upload CI logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: test-logs
+          name: ci-logs
           path: logs/*

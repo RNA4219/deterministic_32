@@ -1,3 +1,7 @@
 node_modules/
 npm-debug.log*
 .DS_Store
+
+# stray from test runner
+--test-reporter=json
+--test-reporter-destination=logs
