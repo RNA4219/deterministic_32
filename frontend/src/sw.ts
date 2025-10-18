@@ -1,6 +1,6 @@
 import type { RefreshQueueStore } from "./sw/refreshQueueStore.js";
 
-export type RetryAttempt = () => Promise<void>;
+export type RetryAttempt = () => unknown | PromiseLike<unknown>;
 
 export const retryQueueEntry = async (
   store: RefreshQueueStore,
