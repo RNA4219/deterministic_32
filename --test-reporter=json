@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const DESTINATION_PREFIX = '--test-reporter-destination=';
 const DEFAULT_DESTINATION = 'logs/test.jsonl';
@@ -16,6 +16,8 @@ const OPTIONS_EXPECTING_VALUE = new Set([
   '--test-reporter-destination',
 ]);
 
+const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
+
 const mapTargetArgument = (
   target,
   { existsSync = fs.existsSync, mapDirectoriesToDist = false } = {},
@@ -25,8 +27,8 @@ const mapTargetArgument = (
   }
 
   const absolute = path.isAbsolute(target) ? target : path.resolve(target);
-  const relativePath = path.relative(process.cwd(), absolute);
-  const normalizedRelative = path.normalize(relativePath);
+  const relativePathFromScript = path.relative(scriptDirectory, absolute);
+  const normalizedRelative = path.normalize(relativePathFromScript);
   const extension = path.extname(normalizedRelative);
 
   if (extension === '.ts') {
