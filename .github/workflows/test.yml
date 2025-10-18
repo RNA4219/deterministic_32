@@ -49,24 +49,34 @@ jobs:
       - name: Install dependencies
         run: npm ci
       - name: Type check
-        run: npx tsc --noEmit
+        run: |
+          set -Eeuo pipefail
+          start=$(date +%s%3N)
+          if npx tsc --noEmit; then s=pass; else s=fail; fi
+          echo "{\"name\":\"typecheck\",\"status\":\"$s\",\"duration_ms\":$(( $(date +%s%3N)-start ))}" >> workflow-cookbook/logs/test.jsonl
+          if [ "$s" != pass ]; then
+            exit 1
+          fi
       - name: Prettier check
         run: npx --yes prettier@3.3.3 --check .
       - name: Run lint
         run: npm run lint
-      - name: Security audit
-        run: npm audit --audit-level=moderate
-      - name: Build and run tests
+      - name: Build
         run: |
           set -Eeuo pipefail
-          if [ -f tsconfig.json ]; then
-            start=$(date +%s%3N)
-            npm ci
-            if npx tsc -noEmit; then s=pass; else s=fail; fi
-            echo "{\"name\":\"typecheck\",\"status\":\"$s\",\"duration_ms\":$(( $(date +%s%3N)-start ))}" >> workflow-cookbook/logs/test.jsonl
-          else
-            echo "{\"name\":\"typecheck\",\"status\":\"skip\",\"duration_ms\":0}" >> workflow-cookbook/logs/test.jsonl
+          rm -rf dist
+          start=$(date +%s%3N)
+          if npm run build; then s=pass; else s=fail; fi
+          if [ "$s" = pass ] && [ ! -d dist ]; then
+            echo "dist/ directory was not created by build" >&2
+            s=fail
           fi
+          echo "{\"name\":\"build\",\"status\":\"$s\",\"duration_ms\":$(( $(date +%s%3N)-start ))}" >> workflow-cookbook/logs/test.jsonl
+          if [ "$s" != pass ]; then
+            exit 1
+          fi
+      - name: Security audit
+        run: npm audit --audit-level=moderate
       - uses: actions/upload-artifact@v4
         if: always()
         with: { name: 'test-logs-${{ github.job }}', path: workflow-cookbook/logs/* }
