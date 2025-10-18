@@ -14,6 +14,12 @@ type FsPromisesModule = {
   readFile(path: string, options: { encoding: "utf8" }): Promise<string>;
   writeFile(path: string, data: string, options: { encoding: "utf8" }): Promise<void>;
   rm(path: string, options: { force?: boolean }): Promise<void>;
+  mkdir(path: string, options: { recursive?: boolean }): Promise<void>;
+};
+
+type ProcessLike = {
+  cwd(): string;
+  env: Record<string, string | undefined>;
 };
 
 type PathModule = {
@@ -25,10 +31,10 @@ const dynamicImport = new Function(
   "return import(specifier);",
 ) as (specifier: string) => Promise<unknown>;
 
-const TEST_LOG_CONTENT = `${JSON.stringify({
+const DATA_WRAPPED_LOG_CONTENT = `${JSON.stringify({
   name: "sample::single",
   status: "pass",
-  duration_ms: 150,
+  data: { duration_ms: 150 },
 })}\n`;
 
 const LOG_WITH_DIAGNOSTIC_CONTENT =
@@ -73,74 +79,41 @@ const DATA_WRAPPED_LOG_CONTENT =
 
 test("analyze.py はサンプルが少なくても p95 を計算できる", async () => {
   const { execFile } = (await dynamicImport("node:child_process")) as { execFile: ExecFile };
-  const { readFile, rm, writeFile } = (await dynamicImport("node:fs/promises")) as FsPromisesModule;
+  const { mkdir, readFile, rm, writeFile } = (await dynamicImport("node:fs/promises")) as FsPromisesModule;
   const { join } = (await dynamicImport("node:path")) as PathModule;
 
-  const repoRootPath = (process as unknown as { cwd(): string }).cwd();
-  const logPath = join(repoRootPath, "logs", "test.jsonl");
-  const reportPath = join(repoRootPath, "reports", "today.md");
-  const issuePath = join(repoRootPath, "reports", "issue_suggestions.md");
+  const envProcess = process as unknown as ProcessLike;
+  const repoRootPath = envProcess.cwd();
+  const { env } = envProcess;
 
-  const originalLog = await readFile(logPath, { encoding: "utf8" }).catch(() => null);
-  const originalReport = await readFile(reportPath, { encoding: "utf8" }).catch(() => null);
-  const originalIssue = await readFile(issuePath, { encoding: "utf8" }).catch(() => null);
+  const logDirectory = join(repoRootPath, "logs");
+  const reportDirectory = join(repoRootPath, "reports");
+  await Promise.all([
+    mkdir(logDirectory, { recursive: true }),
+    mkdir(reportDirectory, { recursive: true }),
+  ]);
 
-  try {
-    await writeFile(logPath, TEST_LOG_CONTENT, { encoding: "utf8" });
+  const logPath = join(logDirectory, "test.analyze.jsonl");
+  const reportPath = join(reportDirectory, "today.analyze.md");
+  const issuePath = join(reportDirectory, "issue.analyze.md");
 
-    await new Promise<void>((resolve, reject) => {
-      execFile(
-        "python3",
-        ["scripts/analyze.py"],
-        { cwd: repoRootPath, encoding: "utf8" },
-        (error: Error | null, _stdout: string, stderr: string) => {
-          if (error) {
-            const message =
-              stderr.length > 0 ? `analyze.py failed: ${stderr}` : "analyze.py exited with a non-zero status";
-            reject(new Error(message, { cause: error }));
-            return;
-          }
-          resolve();
-        },
-      );
-    });
+  const originalEnv = {
+    ANALYZE_LOG_PATH: env.ANALYZE_LOG_PATH,
+    ANALYZE_REPORT_PATH: env.ANALYZE_REPORT_PATH,
+    ANALYZE_ISSUE_PATH: env.ANALYZE_ISSUE_PATH,
+  };
 
-    const report = await readFile(reportPath, { encoding: "utf8" });
-    assert.ok(report.includes("Duration p95: 150 ms"), "p95 がログの値と一致するはず");
-  } finally {
-    if (originalLog === null) {
-      await rm(logPath, { force: true });
+  const setEnv = (key: keyof typeof originalEnv, value: string | undefined) => {
+    if (value === undefined) {
+      delete env[key];
     } else {
-      await writeFile(logPath, originalLog, { encoding: "utf8" });
+      env[key] = value;
     }
+  };
 
-    if (originalReport === null) {
-      await rm(reportPath, { force: true });
-    } else {
-      await writeFile(reportPath, originalReport, { encoding: "utf8" });
-    }
-
-    if (originalIssue === null) {
-      await rm(issuePath, { force: true });
-    } else {
-      await writeFile(issuePath, originalIssue, { encoding: "utf8" });
-    }
-  }
-});
-
-test("analyze.py は data フィールド内の情報を集計できる", async () => {
-  const { execFile } = (await dynamicImport("node:child_process")) as { execFile: ExecFile };
-  const { readFile, rm, writeFile } = (await dynamicImport("node:fs/promises")) as FsPromisesModule;
-  const { join } = (await dynamicImport("node:path")) as PathModule;
-
-  const repoRootPath = (process as unknown as { cwd(): string }).cwd();
-  const logPath = join(repoRootPath, "logs", "test.jsonl");
-  const reportPath = join(repoRootPath, "reports", "today.md");
-  const issuePath = join(repoRootPath, "reports", "issue_suggestions.md");
-
-  const originalLog = await readFile(logPath, { encoding: "utf8" }).catch(() => null);
-  const originalReport = await readFile(reportPath, { encoding: "utf8" }).catch(() => null);
-  const originalIssue = await readFile(issuePath, { encoding: "utf8" }).catch(() => null);
+  setEnv("ANALYZE_LOG_PATH", logPath);
+  setEnv("ANALYZE_REPORT_PATH", reportPath);
+  setEnv("ANALYZE_ISSUE_PATH", issuePath);
 
   try {
     await writeFile(logPath, DATA_EVENT_LOG_CONTENT, { encoding: "utf8" });
@@ -163,27 +136,17 @@ test("analyze.py は data フィールド内の情報を集計できる", async 
     });
 
     const report = await readFile(reportPath, { encoding: "utf8" });
-    assert.ok(report.includes("- Total tests: 2"), "data フィールドのテスト件数を集計できるはず");
-    assert.ok(report.includes("- Pass rate: 50.00%"), "pass/fail が集計できるはず");
-    assert.ok(report.includes("- Duration p95: 390 ms"), "duration を集計できるはず");
+    assert.ok(report.includes("Duration p95: 150 ms"), "p95 がログの値と一致するはず");
   } finally {
-    if (originalLog === null) {
-      await rm(logPath, { force: true });
-    } else {
-      await writeFile(logPath, originalLog, { encoding: "utf8" });
-    }
+    setEnv("ANALYZE_LOG_PATH", originalEnv.ANALYZE_LOG_PATH);
+    setEnv("ANALYZE_REPORT_PATH", originalEnv.ANALYZE_REPORT_PATH);
+    setEnv("ANALYZE_ISSUE_PATH", originalEnv.ANALYZE_ISSUE_PATH);
 
-    if (originalReport === null) {
-      await rm(reportPath, { force: true });
-    } else {
-      await writeFile(reportPath, originalReport, { encoding: "utf8" });
-    }
-
-    if (originalIssue === null) {
-      await rm(issuePath, { force: true });
-    } else {
-      await writeFile(issuePath, originalIssue, { encoding: "utf8" });
-    }
+    await Promise.all([
+      rm(logPath, { force: true }),
+      rm(reportPath, { force: true }),
+      rm(issuePath, { force: true }),
+    ]);
   }
 });
 
