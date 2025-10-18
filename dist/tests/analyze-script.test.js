@@ -39,11 +39,13 @@ const EVENT_LOG_WITH_DIAGNOSTIC_CONTENT = [
     .concat("\n");
 test("load_results は test:pass/test:fail のみを集計する", async () => {
     const { execFile } = (await dynamicImport("node:child_process"));
-    const { readFile, rm, writeFile } = (await dynamicImport("node:fs/promises"));
+    const { mkdir, readFile, rm, writeFile } = (await dynamicImport("node:fs/promises"));
     const { join } = (await dynamicImport("node:path"));
     const envProcess = process;
     const repoRootPath = envProcess.cwd();
-    const logPath = join(repoRootPath, "logs", "test.jsonl");
+    const logDirectory = join(repoRootPath, "logs");
+    const logPath = join(logDirectory, "load-results.test.jsonl");
+    await mkdir(logDirectory, { recursive: true });
     const originalLog = await readFile(logPath, { encoding: "utf8" }).catch(() => null);
     const env = {
         ...envProcess.env,
