@@ -85,3 +85,14 @@ test("typecheck job runs lint before building", async () => {
     "lint should run before the build step",
   );
 });
+
+test("JSON reporter runner covers frontend tests", async () => {
+  const readFile = await loadReadFile();
+  const runnerUrl = new URL("--test-reporter=json", repositoryRoot);
+  const runnerContent = await readFile(runnerUrl, "utf8");
+
+  assert.ok(
+    runnerContent.includes("dist/frontend/tests"),
+    "frontend test suite must be executed by JSON reporter runner",
+  );
+});
