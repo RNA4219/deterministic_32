@@ -30,18 +30,31 @@ const prepareRunnerOptions = (
   const explicitTargets = [];
   const resolvedDefaults = [];
   const seenTargets = new Set();
+  let destinationOverride = null;
 
   const addTarget = (candidate) => {
-    if (!candidate || seenTargets.has(candidate)) {
+    if (!candidate) {
       return;
     }
 
-    seenTargets.add(candidate);
-    explicitTargets.push(candidate);
+    const normalized = normalizeTarget(candidate);
+
+    if (seenTargets.has(normalized)) {
+      return;
+    }
+
+    seenTargets.add(normalized);
+    explicitTargets.push(normalized);
   };
 
   for (const argument of argv.slice(2)) {
     if (!argument) {
+      continue;
+    }
+
+    if (argument.startsWith(DESTINATION_PREFIX)) {
+      const candidateDestination = argument.slice(DESTINATION_PREFIX.length);
+      destinationOverride = candidateDestination || null;
       continue;
     }
 
@@ -50,13 +63,15 @@ const prepareRunnerOptions = (
       continue;
     }
 
-    if (fs.existsSync(argument)) {
-      targetArgs.push(normalizeTarget(argument));
+    const normalized = normalizeTarget(argument);
+
+    if (existsSync(argument)) {
+      addTarget(normalized);
       continue;
     }
 
-    if (existsSync(argument)) {
-      addTarget(argument);
+    if (normalized !== argument && existsSync(normalized)) {
+      addTarget(normalized);
       continue;
     }
 
@@ -67,29 +82,39 @@ const prepareRunnerOptions = (
     if (!candidate) {
       continue;
     }
-    const candidate = normalizeTarget(target);
-    if (!fs.existsSync(candidate)) {
+
+    const normalized = normalizeTarget(candidate);
+
+    if (!existsSync(normalized)) {
       continue;
     }
 
-    seenTargets.add(candidate);
-    resolvedDefaults.push(candidate);
+    if (seenTargets.has(normalized)) {
+      continue;
+    }
+
+    seenTargets.add(normalized);
+    resolvedDefaults.push(normalized);
   }
 
   const targets = explicitTargets.length > 0 ? explicitTargets : resolvedDefaults;
 
   if (targets.length === 0 && defaultTargets.length > 0) {
-    const fallback = defaultTargets[0];
-    if (fallback && !seenTargets.has(fallback)) {
-      targets.push(fallback);
-      seenTargets.add(fallback);
+    const fallbackCandidate = normalizeTarget(defaultTargets[0]);
+    if (fallbackCandidate && !seenTargets.has(fallbackCandidate)) {
+      targets.push(fallbackCandidate);
+      seenTargets.add(fallbackCandidate);
     }
   }
 
-  return { passthroughArgs, targets };
+  return { passthroughArgs, targets, destinationOverride };
 };
 
-const resolveDestination = () => {
+const resolveDestination = (override) => {
+  if (override) {
+    return override;
+  }
+
   for (const entry of fs.readdirSync('.', { withFileTypes: true })) {
     if (!entry.name.startsWith(DESTINATION_PREFIX)) {
       continue;
@@ -113,11 +138,11 @@ const resolveDestination = () => {
 export { prepareRunnerOptions };
 
 const runJsonReporter = async () => {
-  const destination = resolveDestination();
+  const { passthroughArgs, targets, destinationOverride } = prepareRunnerOptions();
+  const destination = resolveDestination(destinationOverride);
   const resolvedDestination = path.resolve(destination);
   fs.mkdirSync(path.dirname(resolvedDestination), { recursive: true });
 
-  const { passthroughArgs, targets } = prepareRunnerOptions();
   const reporterSpecifier = pathToFileURL(path.resolve('reporters/json/index.js')).href;
   const args = [
     '--test',

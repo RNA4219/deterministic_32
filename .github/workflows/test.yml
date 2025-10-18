@@ -38,10 +38,9 @@ jobs:
           echo "::endgroup::"
 
           set +e
-          node --test \
-            --test-reporter=json \
-            --test-reporter-destination=logs/test.jsonl \
-            dist/tests 2>&1 | tee logs/test.log
+          node ./--test-reporter=json \
+            --test-reporter-destination=./logs/test.jsonl \
+            2>&1 | tee logs/test.log
           test_status=${PIPESTATUS[0]}
           set -e
 
@@ -80,7 +79,7 @@ jobs:
       - name: Re-run tests in spec reporter (non-blocking)
         if: failure()
         continue-on-error: true
-        run: node --test dist/tests --test-reporter=spec
+        run: node --test ./dist/tests ./dist/frontend/tests --test-reporter=spec
       - name: Upload CI logs
         if: always()
         uses: actions/upload-artifact@v4
