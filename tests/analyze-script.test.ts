@@ -94,7 +94,7 @@ test("analyze.py はサンプルが少なくても p95 を計算できる", asyn
       await writeFile(issuePath, originalIssue, { encoding: "utf8" });
     }
   }
-});
+}, { concurrency: false });
 
 test("analyze.py は空ログでも 0 件として集計する", async () => {
   const { execFile } = (await dynamicImport("node:child_process")) as { execFile: ExecFile };
@@ -152,7 +152,7 @@ test("analyze.py は空ログでも 0 件として集計する", async () => {
       await writeFile(issuePath, originalIssue, { encoding: "utf8" });
     }
   }
-});
+}, { concurrency: false });
 
 test("analyze.py は data フィールド内の情報を集計できる", async () => {
   const { execFile } = (await dynamicImport("node:child_process")) as { execFile: ExecFile };
@@ -211,4 +211,4 @@ test("analyze.py は data フィールド内の情報を集計できる", async 
       await writeFile(issuePath, originalIssue, { encoding: "utf8" });
     }
   }
-});
+}, { concurrency: false });
