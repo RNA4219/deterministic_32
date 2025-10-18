@@ -176,6 +176,9 @@ def load_results() -> Tuple[list[str], list[int], list[str]]:
                 obj = json.loads(line)
             except json.JSONDecodeError:
                 continue
+            event_type_value = obj.get("type")
+            if isinstance(event_type_value, str) and event_type_value not in ALLOWED_EVENT_TYPES:
+                continue
             loaded = _load_entry(obj)
             if loaded is None:
                 continue

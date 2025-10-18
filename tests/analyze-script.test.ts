@@ -53,6 +53,25 @@ const LOG_WITH_DIAGNOSTIC_CONTENT =
     data: { message: "informational" },
   })}\n`;
 
+const EVENT_LOG_WITH_DIAGNOSTIC_CONTENT =
+  [
+    {
+      type: "test:pass",
+      data: { name: "sample::event-pass", duration_ms: 110 },
+    },
+    {
+      type: "test:diagnostic",
+      data: { name: "sample::diagnostic", duration_ms: 999 },
+    },
+    {
+      type: "test:fail",
+      data: { name: "sample::event-fail", duration_ms: 210 },
+    },
+  ]
+    .map((entry) => JSON.stringify(entry))
+    .join("\n")
+    .concat("\n");
+
 test("load_results は test:pass/test:fail のみを集計する", async () => {
   const { execFile } = (await dynamicImport("node:child_process")) as { execFile: ExecFile };
   const { readFile, rm, writeFile } = (await dynamicImport("node:fs/promises")) as FsPromisesModule;
@@ -68,7 +87,7 @@ test("load_results は test:pass/test:fail のみを集計する", async () => {
   };
 
   try {
-    await writeFile(logPath, LOG_WITH_DIAGNOSTIC_CONTENT, { encoding: "utf8" });
+    await writeFile(logPath, EVENT_LOG_WITH_DIAGNOSTIC_CONTENT, { encoding: "utf8" });
 
     const stdout = await new Promise<string>((resolve, reject) => {
       execFile(
@@ -99,9 +118,9 @@ test("load_results は test:pass/test:fail のみを集計する", async () => {
     assert.ok(trimmed.length > 0, "load_results の出力が必要");
     const payload = JSON.parse(trimmed) as { fails: string[]; durs: number[]; tests: string[] };
 
-    assert.deepEqual(payload.tests, ["sample::pass", "sample::fail"], "test:diagnostic は集計対象外のはず");
-    assert.deepEqual(payload.durs, [100, 200], "pass/fail の duration が保持されるはず");
-    assert.deepEqual(payload.fails, ["sample::fail"], "fail のみが失敗リストに含まれるはず");
+    assert.deepEqual(payload.tests, ["sample::event-pass", "sample::event-fail"], "test:diagnostic は集計対象外のはず");
+    assert.deepEqual(payload.durs, [110, 210], "pass/fail の duration が保持されるはず");
+    assert.deepEqual(payload.fails, ["sample::event-fail"], "fail のみが失敗リストに含まれるはず");
   } finally {
     if (originalLog === null) {
       await rm(logPath, { force: true });
