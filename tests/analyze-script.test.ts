@@ -96,6 +96,64 @@ test("analyze.py はサンプルが少なくても p95 を計算できる", asyn
   }
 });
 
+test("analyze.py は空ログでも 0 件として集計する", async () => {
+  const { execFile } = (await dynamicImport("node:child_process")) as { execFile: ExecFile };
+  const { readFile, rm, writeFile } = (await dynamicImport("node:fs/promises")) as FsPromisesModule;
+  const { join } = (await dynamicImport("node:path")) as PathModule;
+
+  const repoRootPath = (process as unknown as { cwd(): string }).cwd();
+  const logPath = join(repoRootPath, "logs", "test.jsonl");
+  const reportPath = join(repoRootPath, "reports", "today.md");
+  const issuePath = join(repoRootPath, "reports", "issue_suggestions.md");
+
+  const originalLog = await readFile(logPath, { encoding: "utf8" }).catch(() => null);
+  const originalReport = await readFile(reportPath, { encoding: "utf8" }).catch(() => null);
+  const originalIssue = await readFile(issuePath, { encoding: "utf8" }).catch(() => null);
+
+  try {
+    await writeFile(logPath, "", { encoding: "utf8" });
+
+    await new Promise<void>((resolve, reject) => {
+      execFile(
+        "python3",
+        ["scripts/analyze.py"],
+        { cwd: repoRootPath, encoding: "utf8" },
+        (error: Error | null, _stdout: string, stderr: string) => {
+          if (error) {
+            const message =
+              stderr.length > 0 ? `analyze.py failed: ${stderr}` : "analyze.py exited with a non-zero status";
+            reject(new Error(message, { cause: error }));
+            return;
+          }
+          resolve();
+        },
+      );
+    });
+
+    const report = await readFile(reportPath, { encoding: "utf8" });
+    assert.ok(report.includes("- Total tests: 0"), "空ログは 0 件として扱うはず");
+    assert.ok(report.includes("- Pass rate: 0.00%"), "pass rate は 0% になるはず");
+  } finally {
+    if (originalLog === null) {
+      await rm(logPath, { force: true });
+    } else {
+      await writeFile(logPath, originalLog, { encoding: "utf8" });
+    }
+
+    if (originalReport === null) {
+      await rm(reportPath, { force: true });
+    } else {
+      await writeFile(reportPath, originalReport, { encoding: "utf8" });
+    }
+
+    if (originalIssue === null) {
+      await rm(issuePath, { force: true });
+    } else {
+      await writeFile(issuePath, originalIssue, { encoding: "utf8" });
+    }
+  }
+});
+
 test("analyze.py は data フィールド内の情報を集計できる", async () => {
   const { execFile } = (await dynamicImport("node:child_process")) as { execFile: ExecFile };
   const { readFile, rm, writeFile } = (await dynamicImport("node:fs/promises")) as FsPromisesModule;
