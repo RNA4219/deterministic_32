@@ -53,7 +53,7 @@ function handleFatalError(error) {
   console.error(
     `[build] failed (exit code ${exitCode}): ${formatError(error)}`,
   );
-  process.exitCode = exitCode;
+  process.exit(exitCode);
 }
 
 process.on('unhandledRejection', (error) => {

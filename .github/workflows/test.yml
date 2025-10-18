@@ -18,22 +18,42 @@ jobs:
         run: npm run lint
       - name: Build and run tests
         run: |
-          npm run build
+          set -Eeuo pipefail
           mkdir -p logs
+          echo "::group::env"
+          node -v
+          npm -v
+          pwd
+          echo "::endgroup::"
+
+          export NODE_OPTIONS="--enable-source-maps --trace-uncaught --unhandled-rejections=strict --trace-warnings"
+
+          set +e
+          node scripts/build.js 2>&1 | tee logs/build.log
+          build_status=${PIPESTATUS[0]}
+          set -e
+
+          echo "::group::dist tree"
+          (ls -la && echo && (ls -R dist || true)) | tee -a logs/build.log
+          echo "::endgroup::"
+
           set +e
           node --test \
             --test-reporter=json \
             --test-reporter-destination=logs/test.jsonl \
-            dist/tests
-          status=$?
+            dist/tests 2>&1 | tee logs/test.log
+          test_status=${PIPESTATUS[0]}
           set -e
+
           if [ ! -f logs/test.jsonl ]; then
-            touch logs/test.jsonl
+            : > logs/test.jsonl
           fi
-          exit $status
+
+          echo "build_status=${build_status} test_status=${test_status}"
+          exit $(( build_status != 0 ? build_status : test_status ))
       - name: Upload logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: test-logs
-          path: logs/test.jsonl
+          path: logs/*
