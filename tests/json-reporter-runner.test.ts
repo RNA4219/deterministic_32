@@ -17,6 +17,18 @@ type SpawnCall = {
   readonly options: unknown;
 };
 
+type PrepareRunnerOptions = (
+  argv: readonly string[],
+  overrides?: {
+    existsSync?: (candidate: string) => boolean;
+    defaultTargets?: readonly string[];
+  },
+) => {
+  passthroughArgs: string[];
+  targets: string[];
+  destinationOverride: string | null;
+};
+
 test("JSON reporter runner uses dist target when invoked with TS input", async () => {
   const { createRequire } = (await dynamicImport("node:module")) as {
     createRequire: (specifier: string | URL) => (id: string) => unknown;
@@ -467,18 +479,6 @@ test("JSON reporter runner maps absolute TS targets into dist", async () => {
 });
 
 test("prepareRunnerOptions prefers CLI targets when present", async () => {
-  type PrepareRunnerOptions = (
-    argv: readonly string[],
-    overrides?: {
-      existsSync?: (candidate: string) => boolean;
-      defaultTargets?: readonly string[];
-    },
-  ) => {
-    passthroughArgs: string[];
-    targets: string[];
-    destinationOverride: string | null;
-  };
-
   const processWithEnv = process as typeof process & {
     env: Record<string, string | undefined> & {
       __CAT32_SKIP_JSON_REPORTER_RUN__?: string;

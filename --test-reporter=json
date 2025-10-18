@@ -68,7 +68,12 @@ const mapTargetArgument = (
       ? normalizedRelative.slice(0, -extension.length)
       : normalizedRelative;
 
-    return path.join('dist', `${withoutExtension}.js`);
+    const normalizedSegments = withoutExtension
+      .split(path.sep)
+      .filter((segment) => segment && segment !== '.' && segment !== '..');
+    const distPath = path.join('dist', ...normalizedSegments);
+
+    return `${distPath}.js`;
   }
 
   const inDistAlready =
