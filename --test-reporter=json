@@ -53,9 +53,19 @@ const resolveTargets = (explicitTargets) => {
     if (!target) {
       continue;
     }
-
-    if (!targets.includes(target)) {
-      targets.push(target);
+    let candidate = argument;
+    if (candidate.endsWith('.ts')) {
+      const tsExtensionLength = path.extname(candidate).length;
+      const withoutExtension = tsExtensionLength > 0
+        ? candidate.slice(0, -tsExtensionLength)
+        : candidate;
+      candidate = `${path.join('dist', withoutExtension)}.js`;
+    }
+    if (!fs.existsSync(candidate)) {
+      continue;
+    }
+    if (!targets.includes(candidate)) {
+      targets.push(candidate);
     }
   }
 
