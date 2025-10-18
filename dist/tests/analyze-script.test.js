@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 const dynamicImport = new Function("specifier", "return import(specifier);");
-const LEGACY_LOG_CONTENT = `${JSON.stringify({
+const SINGLE_SAMPLE_LOG_CONTENT = `${JSON.stringify({
     name: "sample::single",
     status: "pass",
     data: { duration_ms: 150 },
@@ -20,6 +20,71 @@ const LOG_WITH_DIAGNOSTIC_CONTENT = `${JSON.stringify({
         type: "test:diagnostic",
         data: { message: "informational" },
     })}\n`;
+const EVENT_LOG_WITH_DIAGNOSTIC_CONTENT = [
+    {
+        type: "test:pass",
+        data: { name: "sample::event-pass", duration_ms: 110 },
+    },
+    {
+        type: "test:diagnostic",
+        data: { name: "sample::diagnostic", duration_ms: 999 },
+    },
+    {
+        type: "test:fail",
+        data: { name: "sample::event-fail", duration_ms: 210 },
+    },
+]
+    .map((entry) => JSON.stringify(entry))
+    .join("\n")
+    .concat("\n");
+test("load_results は test:pass/test:fail のみを集計する", async () => {
+    const { execFile } = (await dynamicImport("node:child_process"));
+    const { readFile, rm, writeFile } = (await dynamicImport("node:fs/promises"));
+    const { join } = (await dynamicImport("node:path"));
+    const envProcess = process;
+    const repoRootPath = envProcess.cwd();
+    const logPath = join(repoRootPath, "logs", "test.jsonl");
+    const originalLog = await readFile(logPath, { encoding: "utf8" }).catch(() => null);
+    const env = {
+        ...envProcess.env,
+        ANALYZE_LOG_PATH: logPath,
+    };
+    try {
+        await writeFile(logPath, EVENT_LOG_WITH_DIAGNOSTIC_CONTENT, { encoding: "utf8" });
+        const stdout = await new Promise((resolve, reject) => {
+            execFile("python3", [
+                "-c",
+                [
+                    "import json",
+                    "from scripts import analyze",
+                    "tests, durs, fails = analyze.load_results()",
+                    "print(json.dumps({'tests': tests, 'durs': durs, 'fails': fails}, ensure_ascii=False))",
+                ].join("; "),
+            ], { cwd: repoRootPath, encoding: "utf8", env }, (error, stdoutValue, stderr) => {
+                if (error) {
+                    const message = stderr.length > 0 ? `load_results execution failed: ${stderr}` : "load_results exited with a non-zero status";
+                    reject(new Error(message, { cause: error }));
+                    return;
+                }
+                resolve(stdoutValue);
+            });
+        });
+        const trimmed = stdout.trim();
+        assert.ok(trimmed.length > 0, "load_results の出力が必要");
+        const payload = JSON.parse(trimmed);
+        assert.deepEqual(payload.tests, ["sample::event-pass", "sample::event-fail"], "test:diagnostic は集計対象外のはず");
+        assert.deepEqual(payload.durs, [110, 210], "pass/fail の duration が保持されるはず");
+        assert.deepEqual(payload.fails, ["sample::event-fail"], "fail のみが失敗リストに含まれるはず");
+    }
+    finally {
+        if (originalLog === null) {
+            await rm(logPath, { force: true });
+        }
+        else {
+            await writeFile(logPath, originalLog, { encoding: "utf8" });
+        }
+    }
+});
 const DATA_WRAPPED_LOG_CONTENT = [
     {
         type: "test:pass",
@@ -41,7 +106,21 @@ const MINIMAL_JSONL_LOG_CONTENT = `${JSON.stringify({
         type: "test:fail",
         data: { name: "ng", duration_ms: 7 },
     })}\n`;
+const PASS_ONLY_LOG_CONTENT = `${JSON.stringify({
+    type: "test:pass",
+    data: { name: "recovered", duration_ms: 10 },
+})}\n`;
 const EMPTY_LOG_CONTENT = "";
+const FAILURE_LOG_CONTENT = `${JSON.stringify({
+    name: "sample::failing",
+    status: "fail",
+    duration_ms: 200,
+})}\n`;
+const SUCCESS_LOG_CONTENT = `${JSON.stringify({
+    name: "sample::passing",
+    status: "pass",
+    duration_ms: 120,
+})}\n`;
 test("analyze.py はサンプルが少なくても p95 を計算できる", async () => {
     const { execFile } = (await dynamicImport("node:child_process"));
     const { mkdir, readFile, rm, writeFile } = (await dynamicImport("node:fs/promises"));
@@ -80,7 +159,7 @@ test("analyze.py はサンプルが少なくても p95 を計算できる", asyn
             rm(reportPath, { force: true }),
             rm(issuePath, { force: true }),
         ]);
-        await writeFile(logPath, LEGACY_LOG_CONTENT, { encoding: "utf8" });
+        await writeFile(logPath, SINGLE_SAMPLE_LOG_CONTENT, { encoding: "utf8" });
         await new Promise((resolve, reject) => {
             execFile("python3", ["scripts/analyze.py"], { cwd: repoRootPath, encoding: "utf8" }, (error, _stdout, stderr) => {
                 if (error) {
@@ -103,6 +182,66 @@ test("analyze.py はサンプルが少なくても p95 を計算できる", asyn
             rm(reportPath, { force: true }),
             rm(issuePath, { force: true }),
         ]);
+    }
+});
+test("analyze.py は失敗後に成功すると issue_suggestions.md を片付ける", async () => {
+    const { execFile } = (await dynamicImport("node:child_process"));
+    const { readFile, rm, writeFile } = (await dynamicImport("node:fs/promises"));
+    const { join } = (await dynamicImport("node:path"));
+    const envProcess = process;
+    const repoRootPath = envProcess.cwd();
+    const logPath = join(repoRootPath, "logs", "test.jsonl");
+    const reportPath = join(repoRootPath, "reports", "today.md");
+    const issuePath = join(repoRootPath, "reports", "issue_suggestions.md");
+    const originalLog = await readFile(logPath, { encoding: "utf8" }).catch(() => null);
+    const originalReport = await readFile(reportPath, { encoding: "utf8" }).catch(() => null);
+    const originalIssue = await readFile(issuePath, { encoding: "utf8" }).catch(() => null);
+    const runAnalyze = async () => new Promise((resolve, reject) => {
+        execFile("python3", ["scripts/analyze.py"], { cwd: repoRootPath, encoding: "utf8" }, (error, _stdout, stderr) => {
+            if (error) {
+                const message = stderr.length > 0 ? `analyze.py failed: ${stderr}` : "analyze.py exited with a non-zero status";
+                reject(new Error(message, { cause: error }));
+                return;
+            }
+            resolve();
+        });
+    });
+    try {
+        await writeFile(logPath, LOG_WITH_DIAGNOSTIC_CONTENT, { encoding: "utf8" });
+        await runAnalyze();
+        const issueReportAfterFailure = await readFile(issuePath, { encoding: "utf8" });
+        assert.ok(issueReportAfterFailure.includes("- [ ]"), "失敗時は issue_suggestions.md が生成されるはず");
+        await writeFile(logPath, PASS_ONLY_LOG_CONTENT, { encoding: "utf8" });
+        await runAnalyze();
+        const issueReportAfterSuccess = await readFile(issuePath, { encoding: "utf8" }).catch((error) => {
+            if (typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT") {
+                return null;
+            }
+            throw error;
+        });
+        if (issueReportAfterSuccess !== null) {
+            assert.equal(issueReportAfterSuccess.trim(), "", "成功時は issue_suggestions.md が空になるはず");
+        }
+    }
+    finally {
+        if (originalLog === null) {
+            await rm(logPath, { force: true });
+        }
+        else {
+            await writeFile(logPath, originalLog, { encoding: "utf8" });
+        }
+        if (originalReport === null) {
+            await rm(reportPath, { force: true });
+        }
+        else {
+            await writeFile(reportPath, originalReport, { encoding: "utf8" });
+        }
+        if (originalIssue === null) {
+            await rm(issuePath, { force: true });
+        }
+        else {
+            await writeFile(issuePath, originalIssue, { encoding: "utf8" });
+        }
     }
 });
 test("analyze.py は非テストイベントを集計に含めない", async () => {
@@ -281,5 +420,57 @@ test("analyze.py はテストが存在しない場合に 0 件として集計す
         else {
             await writeFile(issuePath, originalIssue, { encoding: "utf8" });
         }
+    }
+});
+test("analyze.py は失敗後の成功実行で issue_suggestions.md をクリアする", async () => {
+    const { execFile } = (await dynamicImport("node:child_process"));
+    const { readFile, rm, writeFile } = (await dynamicImport("node:fs/promises"));
+    const { join } = (await dynamicImport("node:path"));
+    const repoRootPath = process.cwd();
+    const logPath = join(repoRootPath, "logs", "test.jsonl");
+    const reportPath = join(repoRootPath, "reports", "today.md");
+    const issuePath = join(repoRootPath, "reports", "issue_suggestions.md");
+    const originalLog = await readFile(logPath, { encoding: "utf8" }).catch(() => null);
+    const originalReport = await readFile(reportPath, { encoding: "utf8" }).catch(() => null);
+    const originalIssue = await readFile(issuePath, { encoding: "utf8" }).catch(() => null);
+    const runAnalyze = () => new Promise((resolve, reject) => {
+        execFile("python3", ["scripts/analyze.py"], { cwd: repoRootPath, encoding: "utf8" }, (error, _stdout, stderr) => {
+            if (error) {
+                const message = stderr.length > 0 ? `analyze.py failed: ${stderr}` : "analyze.py exited with a non-zero status";
+                reject(new Error(message, { cause: error }));
+                return;
+            }
+            resolve();
+        });
+    });
+    const restore = async (path, original) => {
+        if (original === null) {
+            await rm(path, { force: true });
+            return;
+        }
+        await writeFile(path, original, { encoding: "utf8" });
+    };
+    try {
+        await writeFile(logPath, FAILURE_LOG_CONTENT, { encoding: "utf8" });
+        await runAnalyze();
+        const issueAfterFailure = await readFile(issuePath, { encoding: "utf8" });
+        assert.ok(issueAfterFailure.includes("sample::failing"), "失敗後は issue_suggestions.md が生成されるはず");
+        await writeFile(logPath, SUCCESS_LOG_CONTENT, { encoding: "utf8" });
+        await runAnalyze();
+        const issueContent = await readFile(issuePath, { encoding: "utf8" }).catch((error) => {
+            if (typeof error === "object" && error !== null && "code" in error) {
+                const { code } = error;
+                if (code === "ENOENT") {
+                    return null;
+                }
+            }
+            throw error;
+        });
+        assert.ok(issueContent === null || issueContent.trim().length === 0, "成功時には issue_suggestions.md が削除されるか空になるはず");
+    }
+    finally {
+        await restore(logPath, originalLog);
+        await restore(reportPath, originalReport);
+        await restore(issuePath, originalIssue);
     }
 });
