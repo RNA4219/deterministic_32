@@ -36,8 +36,9 @@ def load_results():
 
 def main():
     tests, durs, fails = load_results()
-    total = len(tests) or 1
-    pass_rate = (total - len(fails)) / total
+    total = len(tests)
+    passed = max(total - len(fails), 0)
+    pass_rate = passed / total if total else 0.0
     p95 = compute_p95(durs)
     now = datetime.datetime.utcnow().isoformat()
     REPORT.parent.mkdir(parents=True, exist_ok=True)
