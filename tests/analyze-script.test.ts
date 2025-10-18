@@ -31,13 +31,36 @@ const TEST_LOG_CONTENT = `${JSON.stringify({
   duration_ms: 150,
 })}\n`;
 
+const LOG_WITH_DIAGNOSTIC_CONTENT =
+  `${JSON.stringify({
+    name: "sample::pass",
+    status: "pass",
+    duration_ms: 100,
+  })}\n` +
+  `${JSON.stringify({
+    name: "sample::fail",
+    status: "fail",
+    duration_ms: 200,
+  })}\n` +
+  `${JSON.stringify({
+    type: "test:diagnostic",
+    data: { message: "informational" },
+  })}\n`;
+
 const DATA_WRAPPED_LOG_CONTENT =
   [
-    { type: "test:pass", data: { name: "suite::alpha", status: "pass", duration_ms: 200 } },
-    { type: "test:fail", data: { name: "suite::beta", status: "fail", duration_ms: 400 } },
+    {
+      type: "test:pass",
+      data: { data: { name: "sample::wrapped-pass", duration_ms: 50 } },
+    },
+    {
+      type: "test:fail",
+      data: { data: { name: "sample::wrapped-fail", duration_ms: 150 } },
+    },
   ]
     .map((entry) => JSON.stringify(entry))
-    .join("\n") + "\n";
+    .join("\n")
+    .concat("\n");
 
 test("analyze.py はサンプルが少なくても p95 を計算できる", async () => {
   const { execFile } = (await dynamicImport("node:child_process")) as { execFile: ExecFile };
