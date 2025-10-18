@@ -1,5 +1,6 @@
 import json, statistics, pathlib, os, datetime
 from collections import Counter
+from typing import Optional, Tuple
 
 
 def compute_p95(durations: list[int]) -> int:
@@ -83,7 +84,10 @@ def _extract_duration(payload: dict[str, object]) -> int:
     return 0
 
 
-def _load_from_event(obj: dict[str, object]):
+ParsedEntry = Tuple[str, int, bool]
+
+
+def _load_from_event(obj: dict[str, object]) -> Optional[ParsedEntry]:
     event_type = obj.get("type")
     if not isinstance(event_type, str):
         return None
@@ -98,7 +102,7 @@ def _load_from_event(obj: dict[str, object]):
     return name, duration, is_failure
 
 
-def _load_from_legacy(obj: dict[str, object]):
+def _load_from_legacy(obj: dict[str, object]) -> Optional[ParsedEntry]:
     status = obj.get("status")
     if not isinstance(status, str):
         return None
@@ -116,7 +120,7 @@ def _load_from_legacy(obj: dict[str, object]):
     return name, duration, is_failure
 
 
-def load_results():
+def load_results() -> Tuple[list[str], list[int], list[str]]:
     tests: list[str] = []
     durs: list[int] = []
     fails: list[str] = []
@@ -129,9 +133,8 @@ def load_results():
             obj = json.loads(line)
             if not isinstance(obj, dict):
                 continue
-            parsed = _load_from_event(obj)
-            if parsed is None:
-                parsed = _load_from_legacy(obj)
+            parsed_event = _load_from_event(obj)
+            parsed = parsed_event if parsed_event is not None else _load_from_legacy(obj)
             if parsed is None:
                 continue
             name, duration, is_failure = parsed
@@ -141,7 +144,7 @@ def load_results():
                 fails.append(name)
     return tests, durs, fails
 
-def main():
+def main() -> None:
     tests, durs, fails = load_results()
     total = len(tests)
     if total == 0:
