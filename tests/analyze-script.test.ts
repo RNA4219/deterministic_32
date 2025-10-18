@@ -47,6 +47,15 @@ const LOG_WITH_DIAGNOSTIC_CONTENT =
     data: { message: "informational" },
   })}\n`;
 
+const DATA_EVENT_LOG_CONTENT =
+  [
+    { type: "test:pass", data: { name: "suite::alpha", status: "pass", duration_ms: 200 } },
+    { type: "test:fail", data: { name: "suite::beta", status: "fail", duration_ms: 400 } },
+  ]
+    .map((entry) => JSON.stringify(entry))
+    .join("\n")
+    .concat("\n");
+
 const DATA_WRAPPED_LOG_CONTENT =
   [
     {
@@ -134,7 +143,7 @@ test("analyze.py は data フィールド内の情報を集計できる", async 
   const originalIssue = await readFile(issuePath, { encoding: "utf8" }).catch(() => null);
 
   try {
-    await writeFile(logPath, DATA_WRAPPED_LOG_CONTENT, { encoding: "utf8" });
+    await writeFile(logPath, DATA_EVENT_LOG_CONTENT, { encoding: "utf8" });
 
     await new Promise<void>((resolve, reject) => {
       execFile(
