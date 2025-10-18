@@ -134,13 +134,15 @@ def load_results() -> Tuple[list[str], list[int], list[str]]:
     if not LOG.exists():
         return tests, durs, fails
     with LOG.open(encoding="utf-8") as f:
-        for line in f:
-            if not line.strip():
+        for raw_line in f:
+            line = raw_line.strip()
+            if not line:
                 continue
-            obj = json.loads(line)
-            loaded = _load_from_event(obj)
-            if loaded is None:
-                loaded = _load_from_legacy(obj)
+            try:
+                obj = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            loaded = _load_entry(obj)
             if loaded is None:
                 continue
             name, duration, is_failure = loaded
