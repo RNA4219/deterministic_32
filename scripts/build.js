@@ -9,6 +9,50 @@ import {
 } from 'node:fs';
 import { join, resolve } from 'node:path';
 
+class BuildError extends Error {
+  exitCode;
+
+  constructor(message, { cause, exitCode } = {}) {
+    super(message, cause ? { cause } : undefined);
+    this.name = 'BuildError';
+    this.exitCode = typeof exitCode === 'number' ? exitCode : 1;
+  }
+}
+
+function formatError(error) {
+  if (error instanceof Error) {
+    return error.stack ?? error.message;
+  }
+
+  if (typeof error === 'object' && error !== null) {
+    try {
+      return JSON.stringify(error);
+    } catch {
+      return String(error);
+    }
+  }
+
+  return String(error);
+}
+
+function handleFatalError(error) {
+  const exitCode =
+    error && typeof error === 'object' && 'exitCode' in error
+      ? (error.exitCode ?? 1)
+      : 1;
+
+  console.error('[build] failed:', formatError(error));
+  process.exit(typeof exitCode === 'number' ? exitCode : 1);
+}
+
+process.on('unhandledRejection', (error) => {
+  handleFatalError(error);
+});
+
+process.on('uncaughtException', (error) => {
+  handleFatalError(error);
+});
+
 function getForwardedArgs() {
   return process.argv.slice(2);
 }
@@ -22,12 +66,15 @@ function runTypeScriptBuild() {
   });
 
   if (result.error) {
-    throw result.error;
+    throw new BuildError('Failed to execute TypeScript compiler', {
+      cause: result.error,
+      exitCode: result.status ?? 1,
+    });
   }
 
   const exitCode = result.status ?? 1;
   if (exitCode !== 0) {
-    process.exit(exitCode);
+    throw new BuildError('TypeScript compilation failed', { exitCode });
   }
 }
 
@@ -71,9 +118,13 @@ function installJsonReporter() {
 }
 
 function main() {
-  runTypeScriptBuild();
-  copyCompiledSources();
-  installJsonReporter();
+  try {
+    runTypeScriptBuild();
+    copyCompiledSources();
+    installJsonReporter();
+  } catch (error) {
+    handleFatalError(error);
+  }
 }
 
 main();
