@@ -166,6 +166,35 @@ const prepareRunnerOptions = (
       return null;
     }
 
+    const candidateExists = (value) => {
+      if (!value || typeof value !== 'string') {
+        return false;
+      }
+
+      const queue = path.isAbsolute(value)
+        ? [path.normalize(value)]
+        : [
+            path.normalize(value),
+            path.normalize(path.resolve(value)),
+            path.normalize(path.resolve(projectRoot, value)),
+          ];
+      const seen = new Set();
+
+      for (const entry of queue) {
+        if (!entry || seen.has(entry)) {
+          continue;
+        }
+
+        seen.add(entry);
+
+        if (existsSync(entry)) {
+          return true;
+        }
+      }
+
+      return false;
+    };
+
     const normalized = mapTargetArgument(candidate, {
       existsSync,
       mapDirectoriesToDist: true,
