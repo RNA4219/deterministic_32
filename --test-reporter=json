@@ -1,50 +1,73 @@
-import fs from 'node:fs';
-import path from 'node:path';
-import { spawn } from 'node:child_process';
-import { pathToFileURL } from 'node:url';
+import fs from "node:fs";
+import path from "node:path";
+import { spawn } from "node:child_process";
+import { pathToFileURL } from "node:url";
 
-const DESTINATION_PREFIX = '--test-reporter-destination=';
-const DEFAULT_DESTINATION = 'logs/test.jsonl';
-const DEFAULT_TARGETS = ['dist/tests', 'dist/frontend/tests'];
+const DESTINATION_PREFIX = "--test-reporter-destination=";
+const DESTINATION_FLAG = "--test-reporter-destination";
+const DEFAULT_DESTINATION = "logs/test.jsonl";
+const DEFAULT_TARGETS = ["dist/tests", "dist/frontend/tests"];
 
 const mapTargetArgument = (argument) => {
-  if (!argument.endsWith('.ts')) {
+  const extension = path.extname(argument);
+  if (extension !== ".ts") {
     return argument;
   }
-
-  const withoutExtension = argument.slice(0, -3);
-  return path.join('dist', `${withoutExtension}.js`);
+  const withoutExtension = argument.slice(0, -extension.length);
+  return path.join("dist", `${withoutExtension}.js`);
 };
 
-const parseCliArguments = () => {
+const parseCliArguments = (argv, cwd) => {
   const passthroughArgs = [];
   const targetArgs = [];
+  let destinationOverride = null;
 
-  for (const argument of process.argv.slice(2)) {
+  for (let index = 2; index < argv.length; index += 1) {
+    const argument = argv[index];
     if (!argument) {
       continue;
     }
 
-    if (argument.startsWith('--')) {
+    if (argument.startsWith(`${DESTINATION_FLAG}=`)) {
+      const value = argument.slice(DESTINATION_PREFIX.length);
+      if (value) {
+        destinationOverride = value;
+      }
+      continue;
+    }
+
+    if (argument === DESTINATION_FLAG) {
+      const next = argv[index + 1] ?? "";
+      if (next) {
+        destinationOverride = next;
+      }
+      index += 1;
+      continue;
+    }
+
+    if (argument.startsWith("--")) {
       passthroughArgs.push(argument);
       continue;
     }
 
-    if (fs.existsSync(argument)) {
-      targetArgs.push(mapTargetArgument(argument));
+    const resolved = path.resolve(cwd, argument);
+    if (fs.existsSync(resolved)) {
+      targetArgs.push(argument);
       continue;
     }
 
     passthroughArgs.push(argument);
   }
 
-  return { passthroughArgs, targetArgs };
+  return { destinationOverride, passthroughArgs, targetArgs };
 };
 
-const resolveTargets = (explicitTargets) => {
+const resolveTargets = (cwd, explicitTargets) => {
   const targets = [];
+
   for (const candidate of DEFAULT_TARGETS) {
-    if (fs.existsSync(candidate)) {
+    const resolved = path.resolve(cwd, candidate);
+    if (fs.existsSync(resolved)) {
       targets.push(candidate);
     }
   }
@@ -53,19 +76,15 @@ const resolveTargets = (explicitTargets) => {
     if (!target) {
       continue;
     }
-    let candidate = argument;
-    if (candidate.endsWith('.ts')) {
-      const tsExtensionLength = path.extname(candidate).length;
-      const withoutExtension = tsExtensionLength > 0
-        ? candidate.slice(0, -tsExtensionLength)
-        : candidate;
-      candidate = `${path.join('dist', withoutExtension)}.js`;
-    }
-    if (!fs.existsSync(candidate)) {
+
+    const mapped = mapTargetArgument(target);
+    const resolved = path.resolve(cwd, mapped);
+    if (!fs.existsSync(resolved)) {
       continue;
     }
-    if (!targets.includes(candidate)) {
-      targets.push(candidate);
+
+    if (!targets.includes(mapped)) {
+      targets.push(mapped);
     }
   }
 
@@ -76,13 +95,15 @@ const resolveTargets = (explicitTargets) => {
   return targets;
 };
 
-const resolveDestination = () => {
-  for (const entry of fs.readdirSync('.', { withFileTypes: true })) {
+const resolveDestinationFromFilesystem = (cwd) => {
+  for (const entry of fs.readdirSync(cwd, { withFileTypes: true })) {
     if (!entry.name.startsWith(DESTINATION_PREFIX)) {
       continue;
     }
+
     let suffix = entry.name.slice(DESTINATION_PREFIX.length);
-    let current = entry.isDirectory() ? entry.name : null;
+    let current = entry.isDirectory() ? path.join(cwd, entry.name) : null;
+
     while (current) {
       const contents = fs.readdirSync(current, { withFileTypes: true });
       const next = contents.find((item) => item.isDirectory());
@@ -92,51 +113,102 @@ const resolveDestination = () => {
       suffix = path.join(suffix, next.name);
       current = path.join(current, next.name);
     }
+
     return suffix || DEFAULT_DESTINATION;
   }
+
   return DEFAULT_DESTINATION;
 };
 
-const destination = resolveDestination();
-const resolvedDestination = path.resolve(destination);
-fs.mkdirSync(path.dirname(resolvedDestination), { recursive: true });
+/**
+ * @param {string[]} argv
+ * @param {string} cwd
+ * @returns {{
+ *   readonly command: string;
+ *   readonly args: string[];
+ *   readonly options: import("node:child_process").SpawnOptions;
+ *   readonly destination: string;
+ *   readonly resolvedDestination: string;
+ * }}
+ */
+export const prepareRunnerOptions = (argv, cwd) => {
+  const { destinationOverride, passthroughArgs, targetArgs } = parseCliArguments(
+    argv,
+    cwd,
+  );
 
-const { passthroughArgs, targetArgs } = parseCliArguments();
-const targets = resolveTargets(targetArgs);
-const reporterSpecifier = pathToFileURL(path.resolve('reporters/json/index.js')).href;
-const args = [
-  '--test',
-  `--test-reporter=${reporterSpecifier}`,
-  `--test-reporter-destination=${resolvedDestination}`,
-  ...targets,
-  ...passthroughArgs
-];
+  const destination = destinationOverride ?? resolveDestinationFromFilesystem(cwd);
+  const resolvedDestination = path.resolve(cwd, destination);
+  fs.mkdirSync(path.dirname(resolvedDestination), { recursive: true });
 
-const childEnv = { ...process.env };
-delete childEnv.NODE_TEST_CONTEXT;
-const spawnOverride = globalThis.__CAT32_TEST_SPAWN__;
-const spawnFunction = typeof spawnOverride === 'function' ? spawnOverride : spawn;
-const child = spawnFunction(process.execPath, args, { stdio: 'inherit', env: childEnv });
-for (const signal of ['SIGINT', 'SIGTERM', 'SIGQUIT']) {
-  process.on(signal, () => {
-    if (!child.killed) {
-      child.kill(signal);
-    }
+  const targets = resolveTargets(cwd, targetArgs);
+  const reporterSpecifier = pathToFileURL(
+    path.resolve(cwd, "reporters/json/index.js"),
+  ).href;
+
+  const args = [
+    "--test",
+    `--test-reporter=${reporterSpecifier}`,
+    `--test-reporter-destination=${resolvedDestination}`,
+    ...targets,
+    ...passthroughArgs,
+  ];
+
+  const env = { ...process.env };
+  delete env.NODE_TEST_CONTEXT;
+
+  return {
+    command: process.execPath,
+    args,
+    options: { stdio: "inherit", env },
+    destination,
+    resolvedDestination,
+  };
+};
+
+const scriptUrl = (() => {
+  const entry = process.argv[1];
+  if (!entry) {
+    return null;
+  }
+  try {
+    return pathToFileURL(path.resolve(entry)).href;
+  } catch {
+    return null;
+  }
+})();
+
+if (scriptUrl && import.meta.url.startsWith(scriptUrl)) {
+  const { command, args, options } = prepareRunnerOptions(
+    process.argv,
+    process.cwd(),
+  );
+
+  const spawnOverride = globalThis.__CAT32_TEST_SPAWN__;
+  const spawnFunction = typeof spawnOverride === "function" ? spawnOverride : spawn;
+  const child = spawnFunction(command, args, options);
+
+  for (const signal of ["SIGINT", "SIGTERM", "SIGQUIT"]) {
+    process.on(signal, () => {
+      if (!child.killed) {
+        child.kill(signal);
+      }
+    });
+  }
+
+  const exitResult = await new Promise((resolve) => {
+    child.once("error", (error) => {
+      console.error(error);
+      resolve({ code: 1, signal: null });
+    });
+    child.once("exit", (code, signal) => {
+      resolve({ code, signal });
+    });
   });
-}
 
-const exitResult = await new Promise((resolve) => {
-  child.once('error', (error) => {
-    console.error(error);
-    resolve({ code: 1, signal: null });
-  });
-  child.once('exit', (code, signal) => {
-    resolve({ code, signal });
-  });
-});
-
-if (exitResult.signal) {
-  process.kill(process.pid, exitResult.signal);
-} else {
-  process.exit(exitResult.code ?? 1);
+  if (exitResult.signal) {
+    process.kill(process.pid, exitResult.signal);
+  } else {
+    process.exit(exitResult.code ?? 1);
+  }
 }

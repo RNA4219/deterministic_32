@@ -10,115 +10,115 @@ const repoRootUrl = import.meta.url.includes("/dist/tests/")
   ? new URL("../..", import.meta.url)
   : new URL("..", import.meta.url);
 const runnerUrl = new URL("--test-reporter=json", repoRootUrl);
-const SIGNALS = ["SIGINT", "SIGTERM", "SIGQUIT"] as const;
 
-type SpawnFunction = (...args: ReadonlyArray<unknown>) => unknown;
-
-const createMockChild = () => {
-  const exitListeners: Array<(code: number | null, signal: string | null) => void> = [];
-  let scheduled = false;
-  const child = {
-    killed: false,
-    kill: () => ((child.killed = true), true),
-    once: (event: unknown, listener: unknown) => {
-      if (event === "exit" && typeof listener === "function") {
-        exitListeners.push(
-          listener as (code: number | null, signal: string | null) => void,
-        );
-        if (!scheduled) {
-          scheduled = true;
-          queueMicrotask(() => {
-            while (exitListeners.length) {
-              exitListeners.shift()!(0, null);
-            }
-          });
-        }
-      }
-      return child;
-    },
-    on: () => child,
-  };
-  return child;
+const nodeProcess = process as unknown as {
+  readonly argv: readonly string[];
+  cwd(): string;
+  readonly execPath: string;
 };
 
-test("JSON reporter runner expands TS targets to dist JS paths", async () => {
-  const { createRequire } = (await dynamicImport("node:module")) as {
-    createRequire: (specifier: string | URL) => (id: string) => unknown;
-  };
-  const require = createRequire(import.meta.url);
-  const childProcessModule = require("node:child_process") as { spawn: SpawnFunction };
-  const fsModule = require("node:fs") as { existsSync: (value: unknown) => boolean };
-  const processWithSignals = process as typeof process & {
-    listeners: (signal: (typeof SIGNALS)[number]) => Array<(...args: unknown[]) => void>;
-    removeListener: (
-      signal: (typeof SIGNALS)[number],
-      listener: (...args: unknown[]) => void,
-    ) => void;
+test("prepareRunnerOptions expands TS targets to dist JS paths", async () => {
+  const module = (await dynamicImport(runnerUrl.href)) as {
+    readonly prepareRunnerOptions: (
+      argv: readonly string[],
+      cwd: string,
+    ) => { readonly args: readonly string[] };
   };
 
-  const cleanups: Array<() => void> = [];
-  const exitCodes: number[] = [];
-  const spawnCalls: Array<ReadonlyArray<unknown>> = [];
-
-  const originalArgv = process.argv;
-  process.argv = [process.argv[0]!, "./--test-reporter=json", "tests/categorizer.test.ts"];
-  cleanups.push(() => (process.argv = originalArgv));
-
-  const baseline = new Map(
-    SIGNALS.map((signal) => [signal, new Set(processWithSignals.listeners(signal))]),
+  const result = module.prepareRunnerOptions(
+    [nodeProcess.argv[0]!, "./--test-reporter=json", "tests/categorizer.test.ts"],
+    nodeProcess.cwd(),
   );
-  cleanups.push(() => {
-    for (const signal of SIGNALS) {
-      const known = baseline.get(signal)!;
-      for (const listener of processWithSignals.listeners(signal)) {
-        if (!known.has(listener)) {
-          processWithSignals.removeListener(signal, listener);
-        }
+
+  assert.ok(result.args.includes("dist/tests/categorizer.test.js"));
+  assert.ok(!result.args.includes("tests/categorizer.test.ts"));
+});
+
+test("prepareRunnerOptions prioritizes --test-reporter-destination flag", async () => {
+  const module = (await dynamicImport(runnerUrl.href)) as {
+    readonly prepareRunnerOptions: (
+      argv: readonly string[],
+      cwd: string,
+    ) => { readonly args: readonly string[]; readonly destination: string };
+  };
+
+  const { resolve } = (await dynamicImport("node:path")) as {
+    resolve: (cwd: string, path: string) => string;
+  };
+
+  const cwd = nodeProcess.cwd();
+  const result = module.prepareRunnerOptions(
+    ["node", "script", "--test-reporter-destination=tmp/out.jsonl"],
+    cwd,
+  );
+
+  assert.equal(result.destination, "tmp/out.jsonl");
+  assert.ok(
+    result.args.includes(
+      `--test-reporter-destination=${resolve(cwd, "tmp/out.jsonl")}`,
+    ),
+  );
+});
+
+test("prepareRunnerOptions default behavior snapshot", async () => {
+  const module = (await dynamicImport(runnerUrl.href)) as {
+    readonly prepareRunnerOptions: (
+      argv: readonly string[],
+      cwd: string,
+    ) => {
+      readonly command: string;
+      readonly args: readonly string[];
+      readonly destination: string;
+      readonly resolvedDestination: string;
+      readonly options: {
+        readonly stdio?: unknown;
+        readonly env?: Record<string, unknown> | undefined;
+      };
+    };
+  };
+
+  const { basename, relative } = (await dynamicImport("node:path")) as {
+    basename: (value: string) => string;
+    relative: (from: string, to: string) => string;
+  };
+
+  const cwd = nodeProcess.cwd();
+  const result = module.prepareRunnerOptions(["node", "script"], cwd);
+
+  const sanitized = {
+    command: basename(result.command),
+    destination: result.destination,
+    resolvedDestination: relative(cwd, result.resolvedDestination),
+    args: result.args.map((argument) => {
+      if (argument.startsWith("--test-reporter=")) {
+        return "--test-reporter=<json-reporter>";
       }
-    }
-  });
+      if (argument.startsWith("--test-reporter-destination=")) {
+        const value = argument.slice("--test-reporter-destination=".length);
+        return `--test-reporter-destination=${relative(cwd, value)}`;
+      }
+      return argument;
+    }),
+    options: {
+      stdio: result.options.stdio,
+      hasNodeTestContext: Boolean(result.options.env?.NODE_TEST_CONTEXT),
+    },
+  };
 
-  const originalSpawn = childProcessModule.spawn;
-  (childProcessModule as { spawn: SpawnFunction }).spawn = ((...args) => {
-    spawnCalls.push(args);
-    return createMockChild();
-  }) as SpawnFunction;
-  cleanups.push(() => {
-    (childProcessModule as { spawn: SpawnFunction }).spawn = originalSpawn;
+  assert.deepEqual(sanitized, {
+    command: basename(nodeProcess.execPath),
+    destination: "logs/test.jsonl",
+    resolvedDestination: "logs/test.jsonl",
+    args: [
+      "--test",
+      "--test-reporter=<json-reporter>",
+      "--test-reporter-destination=logs/test.jsonl",
+      "dist/tests",
+      "dist/frontend/tests",
+    ],
+    options: {
+      stdio: "inherit",
+      hasNodeTestContext: false,
+    },
   });
-
-  const originalExit = process.exit;
-  (process as { exit: (code?: number) => never }).exit = ((code?: number) => {
-    exitCodes.push(code ?? 0);
-    return undefined as never;
-  }) as typeof originalExit;
-  cleanups.push(() => {
-    (process as { exit: typeof originalExit }).exit = originalExit;
-  });
-
-  const knownPaths = new Set([
-    "dist/tests",
-    "tests/categorizer.test.ts",
-    "dist/tests/categorizer.test.js",
-  ]);
-  const originalExistsSync = fsModule.existsSync;
-  (fsModule as { existsSync: (value: unknown) => boolean }).existsSync = (candidate) =>
-    typeof candidate === "string" && knownPaths.has(candidate);
-  cleanups.push(() => {
-    (fsModule as { existsSync: (value: unknown) => boolean }).existsSync = originalExistsSync;
-  });
-
-  try {
-    await import(`${runnerUrl.href}?test=${Date.now()}`);
-    assert.equal(spawnCalls.length, 1);
-    const spawnArgs = spawnCalls[0]![1] as ReadonlyArray<string>;
-    assert.ok(Array.isArray(spawnArgs));
-    assert.ok(spawnArgs.includes("dist/tests/categorizer.test.js"));
-    assert.ok(!spawnArgs.includes("tests/categorizer.test.ts"));
-    assert.deepEqual(exitCodes, [0]);
-  } finally {
-    while (cleanups.length) {
-      cleanups.pop()?.();
-    }
-  }
 });
