@@ -6,7 +6,7 @@ type ExecFileCallback = (error: Error | null, stdout: string, stderr: string) =>
 type ExecFile = (
   file: string,
   args: readonly string[],
-  options: { cwd?: string; encoding?: string },
+  options: { cwd?: string; encoding?: string; env?: Record<string, string | undefined> },
   callback: ExecFileCallback,
 ) => void;
 
@@ -52,6 +52,64 @@ const LOG_WITH_DIAGNOSTIC_CONTENT =
     type: "test:diagnostic",
     data: { message: "informational" },
   })}\n`;
+
+test("load_results は test:pass/test:fail のみを集計する", async () => {
+  const { execFile } = (await dynamicImport("node:child_process")) as { execFile: ExecFile };
+  const { readFile, rm, writeFile } = (await dynamicImport("node:fs/promises")) as FsPromisesModule;
+  const { join } = (await dynamicImport("node:path")) as PathModule;
+
+  const envProcess = process as unknown as ProcessLike;
+  const repoRootPath = envProcess.cwd();
+  const logPath = join(repoRootPath, "logs", "test.jsonl");
+  const originalLog = await readFile(logPath, { encoding: "utf8" }).catch(() => null);
+  const env: Record<string, string | undefined> = {
+    ...envProcess.env,
+    ANALYZE_LOG_PATH: logPath,
+  };
+
+  try {
+    await writeFile(logPath, LOG_WITH_DIAGNOSTIC_CONTENT, { encoding: "utf8" });
+
+    const stdout = await new Promise<string>((resolve, reject) => {
+      execFile(
+        "python3",
+        [
+          "-c",
+          [
+            "import json",
+            "from scripts import analyze",
+            "tests, durs, fails = analyze.load_results()",
+            "print(json.dumps({'tests': tests, 'durs': durs, 'fails': fails}, ensure_ascii=False))",
+          ].join("; "),
+        ],
+        { cwd: repoRootPath, encoding: "utf8", env },
+        (error: Error | null, stdoutValue: string, stderr: string) => {
+          if (error) {
+            const message =
+              stderr.length > 0 ? `load_results execution failed: ${stderr}` : "load_results exited with a non-zero status";
+            reject(new Error(message, { cause: error }));
+            return;
+          }
+          resolve(stdoutValue);
+        },
+      );
+    });
+
+    const trimmed = stdout.trim();
+    assert.ok(trimmed.length > 0, "load_results の出力が必要");
+    const payload = JSON.parse(trimmed) as { fails: string[]; durs: number[]; tests: string[] };
+
+    assert.deepEqual(payload.tests, ["sample::pass", "sample::fail"], "test:diagnostic は集計対象外のはず");
+    assert.deepEqual(payload.durs, [100, 200], "pass/fail の duration が保持されるはず");
+    assert.deepEqual(payload.fails, ["sample::fail"], "fail のみが失敗リストに含まれるはず");
+  } finally {
+    if (originalLog === null) {
+      await rm(logPath, { force: true });
+    } else {
+      await writeFile(logPath, originalLog, { encoding: "utf8" });
+    }
+  }
+});
 
 const DATA_WRAPPED_LOG_CONTENT =
   [
