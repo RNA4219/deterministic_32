@@ -23,22 +23,25 @@ ISSUE_OUT = pathlib.Path("reports/issue_suggestions.md")
 
 def load_results():
     tests, durs, fails = [], [], []
+    passes = 0
     if not LOG.exists():
-        return tests, durs, fails
+        return tests, durs, fails, passes
     with LOG.open() as f:
         for line in f:
             obj = json.loads(line)
+            status = obj.get("status")
             tests.append(obj.get("name"))
             durs.append(obj.get("duration_ms", 0))
-            if obj.get("status") == "fail":
+            if status == "fail":
                 fails.append(obj.get("name"))
-    return tests, durs, fails
+            elif status == "pass":
+                passes += 1
+    return tests, durs, fails, passes
 
 def main():
-    tests, durs, fails = load_results()
+    tests, durs, fails, passes = load_results()
     total = len(tests)
-    passed = max(total - len(fails), 0)
-    pass_rate = passed / total if total else 0.0
+    pass_rate = passes / total if total else 0.0
     p95 = compute_p95(durs)
     now = datetime.datetime.utcnow().isoformat()
     REPORT.parent.mkdir(parents=True, exist_ok=True)
