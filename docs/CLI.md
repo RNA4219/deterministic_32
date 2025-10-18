@@ -1,7 +1,7 @@
 # CLI 仕様
 
 ```
-$ npx deterministic-32 <key?> [--salt=... --namespace=... --normalize=nfkc|nfc|none --json[=compact|pretty] --pretty]
+$ npx deterministic-32 <key?> [--salt=... --namespace=... --normalize=nfkc|nfkd|nfc|none --json[=compact|pretty] --pretty]
 ```
 
 - `<key>` が無い場合は **stdin** を読み取る。
@@ -19,11 +19,12 @@ $ npx deterministic-32 <key?> [--salt=... --namespace=... --normalize=nfkc|nfc|n
   - `--json=compact`/既定モードのみ **NDJSON**（1行1 JSON オブジェクト、末尾改行あり）の制約が掛かる。
   - `--json=pretty` または `--pretty` はインデント2の複数行 JSON を出力し、複雑なキーでも可読性を優先して確認できる。
   - `--json=pretty` と `--pretty` は同じ整形結果になる。
-  - `--json` と `--pretty` を同時指定した場合も整形出力（インデント2）。
-  - 整形モードは複数行の整形 JSON を返し、NDJSON ではない点に注意。
-  - 終了コード:
-  - `0` … 成功
-  - `2` … 循環/labels長不正/override不正など仕様違反
+- `--json` と `--pretty` を同時指定した場合も整形出力（インデント2）。
+- 整形モードは複数行の整形 JSON を返し、NDJSON ではない点に注意。
+- `--normalize` には `nfkc`（既定）、`nfkd`、`nfc`、`none` を指定できる。
+- 終了コード:
+- `0` … 成功
+- `2` … 循環/labels長不正/override不正など仕様違反
   - `1` … その他の例外
 
 ## 出力例
