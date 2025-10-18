@@ -3,12 +3,6 @@
   "role": "utility",
   "summary": "Stable stringify, normalization helpers, and canonical key helpers shared across Cat32 APIs.",
   "deps_out": [],
-  "deps_in": [
-    "src/categorizer.ts",
-    "src/index.ts",
-    "tests/categorizer.test.ts"
-  ],
-  "tests": [
-    "tests/categorizer.test.ts"
-  ]
+  "deps_in": ["src/categorizer.ts", "src/index.ts", "tests/categorizer.test.ts"],
+  "tests": ["tests/categorizer.test.ts"]
 }
