@@ -17,9 +17,27 @@ def compute_p95(durations: list[int]) -> int:
     interpolated = ordered[lower_index] + (ordered[upper_index] - ordered[lower_index]) * fraction
     return int(interpolated)
 
-LOG = pathlib.Path("logs/test.jsonl")
-REPORT = pathlib.Path("reports/today.md")
-ISSUE_OUT = pathlib.Path("reports/issue_suggestions.md")
+LOG = pathlib.Path(os.environ.get("ANALYZE_LOG_PATH", "logs/test.jsonl"))
+REPORT = pathlib.Path(os.environ.get("ANALYZE_REPORT_PATH", "reports/today.md"))
+ISSUE_OUT = pathlib.Path(os.environ.get("ANALYZE_ISSUE_PATH", "reports/issue_suggestions.md"))
+
+def extract_duration(entry: dict[str, object]) -> int:
+    duration = entry.get("duration_ms")
+    if duration is None:
+        data = entry.get("data")
+        if isinstance(data, dict):
+            duration = data.get("duration_ms")
+    if duration is None:
+        return 0
+    if isinstance(duration, (int, float)):
+        return int(duration)
+    if isinstance(duration, str):
+        try:
+            return int(float(duration))
+        except ValueError:
+            return 0
+    return 0
+
 
 ALLOWED_EVENT_TYPES = {"test:pass", "test:fail", "test:skip"}
 _NESTED_DATA_KEYS: tuple[str, ...] = ("data", "test")
@@ -99,19 +117,10 @@ def load_results():
             if not line.strip():
                 continue
             obj = json.loads(line)
-            if not isinstance(obj, dict):
-                continue
-            if "type" in obj:
-                parsed = _load_from_event(obj)
-            else:
-                parsed = _load_from_legacy(obj)
-            if parsed is None:
-                continue
-            name, duration, is_failure = parsed
-            tests.append(name)
-            durs.append(duration)
-            if is_failure:
-                fails.append(name)
+            tests.append(obj.get("name"))
+            durs.append(extract_duration(obj))
+            if obj.get("status") == "fail":
+                fails.append(obj.get("name"))
     return tests, durs, fails
 
 def main():
@@ -132,6 +141,7 @@ def main():
             for name, cnt in Counter(fails).items():
                 f.write(f"- {name}: 仮説=前処理の不安定/依存の競合/境界値不足\n")
     if fails:
+        ISSUE_OUT.parent.mkdir(parents=True, exist_ok=True)
         with ISSUE_OUT.open("w", encoding="utf-8") as f:
             f.write("### 反省TODO\n")
             for name in set(fails):
