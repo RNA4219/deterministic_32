@@ -10,7 +10,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22.x"
+      - run: node -v
       - name: Install dependencies
         run: npm ci
       - name: Run lint
@@ -21,9 +22,9 @@ jobs:
           mkdir -p logs
           set +e
           node --test \
-            dist/tests \
             --test-reporter=json \
-            --test-reporter-destination=logs/test.jsonl
+            --test-reporter-destination=logs/test.jsonl \
+            dist/tests
           status=$?
           set -e
           if [ ! -f logs/test.jsonl ]; then
