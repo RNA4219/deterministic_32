@@ -7,21 +7,42 @@ const DESTINATION_PREFIX = '--test-reporter-destination=';
 const DEFAULT_DESTINATION = 'logs/test.jsonl';
 const DEFAULT_TARGETS = ['dist/tests', 'dist/frontend/tests'];
 
-const mapTargetArgument = (target) => {
-  if (!target.endsWith('.ts')) {
+const mapTargetArgument = (
+  target,
+  { existsSync = fs.existsSync } = {},
+) => {
+  if (!target) {
     return target;
   }
 
   const absolute = path.isAbsolute(target) ? target : path.resolve(target);
   const relativePath = path.relative(process.cwd(), absolute);
   const normalizedRelative = path.normalize(relativePath);
+  const extension = path.extname(normalizedRelative);
 
-  const tsExtensionLength = path.extname(normalizedRelative).length;
-  const withoutExtension = tsExtensionLength > 0
-    ? normalizedRelative.slice(0, -tsExtensionLength)
-    : normalizedRelative;
+  if (extension === '.ts') {
+    const withoutExtension = extension.length > 0
+      ? normalizedRelative.slice(0, -extension.length)
+      : normalizedRelative;
 
-  return path.join('dist', `${withoutExtension}.js`);
+    return path.join('dist', `${withoutExtension}.js`);
+  }
+
+  const inDistAlready =
+    normalizedRelative === 'dist' ||
+    normalizedRelative.startsWith(`dist${path.sep}`);
+
+  if (inDistAlready) {
+    return target;
+  }
+
+  const distCandidate = path.join('dist', normalizedRelative);
+
+  if (existsSync(distCandidate)) {
+    return distCandidate;
+  }
+
+  return target;
 };
 
 const prepareRunnerOptions = (
@@ -42,7 +63,7 @@ const prepareRunnerOptions = (
       return;
     }
 
-    const normalized = mapTargetArgument(candidate);
+    const normalized = mapTargetArgument(candidate, { existsSync });
 
     if (seenTargets.has(normalized)) {
       return;
@@ -68,7 +89,7 @@ const prepareRunnerOptions = (
       continue;
     }
 
-    const normalized = mapTargetArgument(argument);
+    const normalized = mapTargetArgument(argument, { existsSync });
 
     if (existsSync(argument)) {
       addTarget(normalized);
@@ -88,7 +109,7 @@ const prepareRunnerOptions = (
       continue;
     }
 
-    const normalized = mapTargetArgument(candidate);
+    const normalized = mapTargetArgument(candidate, { existsSync });
 
     if (!existsSync(normalized)) {
       continue;
@@ -105,7 +126,7 @@ const prepareRunnerOptions = (
   const targets = explicitTargets.length > 0 ? explicitTargets : resolvedDefaults;
 
   if (targets.length === 0 && defaultTargets.length > 0) {
-    const fallbackCandidate = mapTargetArgument(defaultTargets[0]);
+    const fallbackCandidate = mapTargetArgument(defaultTargets[0], { existsSync });
     if (fallbackCandidate && !seenTargets.has(fallbackCandidate)) {
       targets.push(fallbackCandidate);
       seenTargets.add(fallbackCandidate);
