@@ -102,8 +102,10 @@ def _load_from_legacy(obj: dict[str, object]):
     name = obj.get("name")
     if not isinstance(name, str):
         name = ""
-    duration = _extract_numeric_duration(obj.get("duration_ms"))
     status = obj.get("status")
+    if status not in {"pass", "fail", "skip"}:
+        return None
+    duration = extract_duration(obj)
     is_failure = status == "fail"
     return name, duration, is_failure
 
@@ -117,10 +119,16 @@ def load_results():
             if not line.strip():
                 continue
             obj = json.loads(line)
-            tests.append(obj.get("name"))
-            durs.append(extract_duration(obj))
-            if obj.get("status") == "fail":
-                fails.append(obj.get("name"))
+            loaded = _load_from_event(obj)
+            if loaded is None:
+                loaded = _load_from_legacy(obj)
+            if loaded is None:
+                continue
+            name, duration, is_failure = loaded
+            tests.append(name)
+            durs.append(duration)
+            if is_failure:
+                fails.append(name)
     return tests, durs, fails
 
 def main():
@@ -149,5 +157,10 @@ def main():
             f.write("### 反省TODO\n")
             for name in set(fails):
                 f.write(f"- [ ] {name} の再現手順/前提/境界値を追加\n")
+    else:
+        try:
+            ISSUE_OUT.unlink()
+        except FileNotFoundError:
+            pass
 if __name__ == "__main__":
     main()
