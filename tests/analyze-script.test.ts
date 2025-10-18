@@ -6,7 +6,7 @@ type ExecFileCallback = (error: Error | null, stdout: string, stderr: string) =>
 type ExecFile = (
   file: string,
   args: readonly string[],
-  options: { cwd?: string; encoding?: string },
+  options: { cwd?: string; encoding?: string; env?: Record<string, string | undefined> },
   callback: ExecFileCallback,
 ) => void;
 
@@ -53,6 +53,64 @@ const LOG_WITH_DIAGNOSTIC_CONTENT =
     data: { message: "informational" },
   })}\n`;
 
+test("load_results は test:pass/test:fail のみを集計する", async () => {
+  const { execFile } = (await dynamicImport("node:child_process")) as { execFile: ExecFile };
+  const { readFile, rm, writeFile } = (await dynamicImport("node:fs/promises")) as FsPromisesModule;
+  const { join } = (await dynamicImport("node:path")) as PathModule;
+
+  const envProcess = process as unknown as ProcessLike;
+  const repoRootPath = envProcess.cwd();
+  const logPath = join(repoRootPath, "logs", "test.jsonl");
+  const originalLog = await readFile(logPath, { encoding: "utf8" }).catch(() => null);
+  const env: Record<string, string | undefined> = {
+    ...envProcess.env,
+    ANALYZE_LOG_PATH: logPath,
+  };
+
+  try {
+    await writeFile(logPath, LOG_WITH_DIAGNOSTIC_CONTENT, { encoding: "utf8" });
+
+    const stdout = await new Promise<string>((resolve, reject) => {
+      execFile(
+        "python3",
+        [
+          "-c",
+          [
+            "import json",
+            "from scripts import analyze",
+            "tests, durs, fails = analyze.load_results()",
+            "print(json.dumps({'tests': tests, 'durs': durs, 'fails': fails}, ensure_ascii=False))",
+          ].join("; "),
+        ],
+        { cwd: repoRootPath, encoding: "utf8", env },
+        (error: Error | null, stdoutValue: string, stderr: string) => {
+          if (error) {
+            const message =
+              stderr.length > 0 ? `load_results execution failed: ${stderr}` : "load_results exited with a non-zero status";
+            reject(new Error(message, { cause: error }));
+            return;
+          }
+          resolve(stdoutValue);
+        },
+      );
+    });
+
+    const trimmed = stdout.trim();
+    assert.ok(trimmed.length > 0, "load_results の出力が必要");
+    const payload = JSON.parse(trimmed) as { fails: string[]; durs: number[]; tests: string[] };
+
+    assert.deepEqual(payload.tests, ["sample::pass", "sample::fail"], "test:diagnostic は集計対象外のはず");
+    assert.deepEqual(payload.durs, [100, 200], "pass/fail の duration が保持されるはず");
+    assert.deepEqual(payload.fails, ["sample::fail"], "fail のみが失敗リストに含まれるはず");
+  } finally {
+    if (originalLog === null) {
+      await rm(logPath, { force: true });
+    } else {
+      await writeFile(logPath, originalLog, { encoding: "utf8" });
+    }
+  }
+});
+
 const DATA_WRAPPED_LOG_CONTENT =
   [
     {
@@ -77,6 +135,11 @@ const MINIMAL_JSONL_LOG_CONTENT =
     type: "test:fail",
     data: { name: "ng", duration_ms: 7 },
   })}\n`;
+
+const PASS_ONLY_LOG_CONTENT = `${JSON.stringify({
+  type: "test:pass",
+  data: { name: "recovered", duration_ms: 10 },
+})}\n`;
 
 const EMPTY_LOG_CONTENT = "";
 
@@ -168,6 +231,77 @@ test("analyze.py はサンプルが少なくても p95 を計算できる", asyn
       rm(reportPath, { force: true }),
       rm(issuePath, { force: true }),
     ]);
+  }
+});
+
+test("analyze.py は失敗後に成功すると issue_suggestions.md を片付ける", async () => {
+  const { execFile } = (await dynamicImport("node:child_process")) as { execFile: ExecFile };
+  const { readFile, rm, writeFile } = (await dynamicImport("node:fs/promises")) as FsPromisesModule;
+  const { join } = (await dynamicImport("node:path")) as PathModule;
+
+  const envProcess = process as unknown as ProcessLike;
+  const repoRootPath = envProcess.cwd();
+  const logPath = join(repoRootPath, "logs", "test.jsonl");
+  const reportPath = join(repoRootPath, "reports", "today.md");
+  const issuePath = join(repoRootPath, "reports", "issue_suggestions.md");
+
+  const originalLog = await readFile(logPath, { encoding: "utf8" }).catch(() => null);
+  const originalReport = await readFile(reportPath, { encoding: "utf8" }).catch(() => null);
+  const originalIssue = await readFile(issuePath, { encoding: "utf8" }).catch(() => null);
+
+  const runAnalyze = async () =>
+    new Promise<void>((resolve, reject) => {
+      execFile(
+        "python3",
+        ["scripts/analyze.py"],
+        { cwd: repoRootPath, encoding: "utf8" },
+        (error: Error | null, _stdout: string, stderr: string) => {
+          if (error) {
+            const message =
+              stderr.length > 0 ? `analyze.py failed: ${stderr}` : "analyze.py exited with a non-zero status";
+            reject(new Error(message, { cause: error }));
+            return;
+          }
+          resolve();
+        },
+      );
+    });
+
+  try {
+    await writeFile(logPath, LOG_WITH_DIAGNOSTIC_CONTENT, { encoding: "utf8" });
+    await runAnalyze();
+
+    const issueReportAfterFailure = await readFile(issuePath, { encoding: "utf8" });
+    assert.ok(issueReportAfterFailure.includes("- [ ]"), "失敗時は issue_suggestions.md が生成されるはず");
+
+    await writeFile(logPath, PASS_ONLY_LOG_CONTENT, { encoding: "utf8" });
+    await runAnalyze();
+
+    const issueReportAfterSuccess = await readFile(issuePath, { encoding: "utf8" }).catch((error: unknown) => {
+      if (typeof error === "object" && error !== null && "code" in error && (error as { code?: string }).code === "ENOENT") {
+        return null;
+      }
+      throw error;
+    });
+    if (issueReportAfterSuccess !== null) {
+      assert.equal(issueReportAfterSuccess.trim(), "", "成功時は issue_suggestions.md が空になるはず");
+    }
+  } finally {
+    if (originalLog === null) {
+      await rm(logPath, { force: true });
+    } else {
+      await writeFile(logPath, originalLog, { encoding: "utf8" });
+    }
+    if (originalReport === null) {
+      await rm(reportPath, { force: true });
+    } else {
+      await writeFile(reportPath, originalReport, { encoding: "utf8" });
+    }
+    if (originalIssue === null) {
+      await rm(issuePath, { force: true });
+    } else {
+      await writeFile(issuePath, originalIssue, { encoding: "utf8" });
+    }
   }
 });
 
