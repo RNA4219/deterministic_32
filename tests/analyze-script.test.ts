@@ -68,6 +68,16 @@ const DATA_WRAPPED_LOG_CONTENT =
     .join("\n")
     .concat("\n");
 
+const MINIMAL_JSONL_LOG_CONTENT =
+  `${JSON.stringify({
+    type: "test:pass",
+    data: { name: "ok", duration_ms: 5 },
+  })}\n` +
+  `${JSON.stringify({
+    type: "test:fail",
+    data: { name: "ng", duration_ms: 7 },
+  })}\n`;
+
 const EMPTY_LOG_CONTENT = "";
 
 const FAILURE_LOG_CONTENT = `${JSON.stringify({
@@ -197,6 +207,62 @@ test("analyze.py は非テストイベントを集計に含めない", async () 
     assert.ok(report.includes("- Total tests: 2"), "非テストイベントを除外すれば件数は 2 のはず");
     assert.ok(report.includes("- Pass rate: 50.00%"), "1 件失敗なら成功率は 50% のはず");
     assert.ok(report.includes("- Duration p95: 195 ms"), "診断イベントを除外すれば p95 は 195 ms のはず");
+  } finally {
+    if (originalLog === null) {
+      await rm(logPath, { force: true });
+    } else {
+      await writeFile(logPath, originalLog, { encoding: "utf8" });
+    }
+
+    if (originalReport === null) {
+      await rm(reportPath, { force: true });
+    } else {
+      await writeFile(reportPath, originalReport, { encoding: "utf8" });
+    }
+  }
+});
+
+test("analyze.py は JSONL ログから pass/fail を集計する", async () => {
+  const { execFile } = (await dynamicImport("node:child_process")) as { execFile: ExecFile };
+  const { readFile, rm, writeFile } = (await dynamicImport("node:fs/promises")) as FsPromisesModule;
+  const { join } = (await dynamicImport("node:path")) as PathModule;
+
+  const repoRootPath = (process as unknown as { cwd(): string }).cwd();
+  const logPath = join(repoRootPath, "logs", "test.jsonl");
+  const reportPath = join(repoRootPath, "reports", "today.md");
+
+  const originalLog = await readFile(logPath, { encoding: "utf8" }).catch(() => null);
+  const originalReport = await readFile(reportPath, { encoding: "utf8" }).catch(() => null);
+
+  try {
+    await writeFile(logPath, MINIMAL_JSONL_LOG_CONTENT, { encoding: "utf8" });
+
+    await new Promise<void>((resolve, reject) => {
+      execFile(
+        "python3",
+        ["scripts/analyze.py"],
+        { cwd: repoRootPath, encoding: "utf8" },
+        (error: Error | null, _stdout: string, stderr: string) => {
+          if (error) {
+            const message =
+              stderr.length > 0 ? `analyze.py failed: ${stderr}` : "analyze.py exited with a non-zero status";
+            reject(new Error(message, { cause: error }));
+            return;
+          }
+          resolve();
+        },
+      );
+    });
+
+    const report = await readFile(reportPath, { encoding: "utf8" });
+    assert.ok(report.includes("- Total tests: 2"), "件数は 2 のはず");
+    assert.ok(report.includes("- Failures: 1"), "失敗数は 1 のはず");
+    const match = report.match(/- Duration p95: (\d+) ms/);
+    if (match === null) {
+      throw new Error("p95 の行が出力されるはず");
+    }
+    const duration = Number.parseInt(match[1], 10);
+    assert.ok(Number.isFinite(duration) && duration >= 7, "p95 は 7 以上のはず");
   } finally {
     if (originalLog === null) {
       await rm(logPath, { force: true });

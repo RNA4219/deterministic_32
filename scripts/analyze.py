@@ -1,8 +1,4 @@
-import datetime
-import json
-import os
-import pathlib
-import statistics
+import json, statistics, pathlib, os, datetime, math
 from collections import Counter
 from typing import Optional, Tuple
 
@@ -20,7 +16,7 @@ def compute_p95(durations: list[int]) -> int:
     upper_index = min(lower_index + 1, len(ordered) - 1)
     fraction = position - lower_index
     interpolated = ordered[lower_index] + (ordered[upper_index] - ordered[lower_index]) * fraction
-    return int(interpolated)
+    return int(math.ceil(interpolated))
 
 LOG = pathlib.Path(os.environ.get("ANALYZE_LOG_PATH", "logs/test.jsonl"))
 REPORT = pathlib.Path(os.environ.get("ANALYZE_REPORT_PATH", "reports/today.md"))
@@ -44,7 +40,7 @@ def extract_duration(entry: dict[str, object]) -> int:
     return 0
 
 
-ALLOWED_EVENT_TYPES = {"test:pass", "test:fail", "test:skip"}
+ALLOWED_EVENT_TYPES = {"test:pass", "test:fail"}
 _NESTED_DATA_KEYS: tuple[str, ...] = ("data", "test")
 
 
@@ -88,7 +84,10 @@ def _extract_duration(payload: dict[str, object]) -> int:
     return 0
 
 
-def _load_from_event(obj: dict[str, object]):
+ParsedEntry = Tuple[str, int, bool]
+
+
+def _load_from_event(obj: dict[str, object]) -> Optional[ParsedEntry]:
     event_type = obj.get("type")
     if not isinstance(event_type, str):
         return None
@@ -103,7 +102,7 @@ def _load_from_event(obj: dict[str, object]):
     return name, duration, is_failure
 
 
-def _load_from_legacy(obj: dict[str, object]):
+def _load_from_legacy(obj: dict[str, object]) -> Optional[ParsedEntry]:
     status = obj.get("status")
     if not isinstance(status, str):
         return None
@@ -128,7 +127,7 @@ def _load_entry(obj: object) -> Optional[Tuple[str, int, bool]]:
     return _load_from_legacy(obj)
 
 
-def load_results():
+def load_results() -> Tuple[list[str], list[int], list[str]]:
     tests: list[str] = []
     durs: list[int] = []
     fails: list[str] = []
@@ -151,7 +150,7 @@ def load_results():
                 fails.append(name)
     return tests, durs, fails
 
-def main():
+def main() -> None:
     tests, durs, fails = load_results()
     total = len(tests)
     if total == 0:
