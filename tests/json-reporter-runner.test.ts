@@ -1110,3 +1110,55 @@ test(
     }
   },
 );
+
+test(
+  "prepareRunnerOptions keeps default dist targets when existsSync only reports dist entries from frontend directory",
+  async () => {
+    const processWithEnv = process as typeof process & {
+      env: Record<string, string | undefined> & {
+        __CAT32_SKIP_JSON_REPORTER_RUN__?: string;
+      };
+    };
+    const previousEnv = processWithEnv.env.__CAT32_SKIP_JSON_REPORTER_RUN__;
+    processWithEnv.env.__CAT32_SKIP_JSON_REPORTER_RUN__ = "1";
+
+    const processWithCwd = process as typeof process & {
+      cwd: () => string;
+      chdir: (directory: string) => void;
+    };
+    const originalCwd = processWithCwd.cwd();
+
+    try {
+      const moduleExports = (await import(
+        `${runnerUrl.href}?frontend-relative=${Date.now()}`,
+      )) as { prepareRunnerOptions: PrepareRunnerOptions };
+
+      const { prepareRunnerOptions } = moduleExports;
+      assert.equal(typeof prepareRunnerOptions, "function");
+
+      const { fileURLToPath } = (await dynamicImport("node:url")) as {
+        fileURLToPath: (url: string | URL) => string;
+      };
+
+      const frontendDirectory = fileURLToPath(new URL("./frontend/", repoRootUrl));
+      processWithCwd.chdir(frontendDirectory);
+
+      const relativeDistEntries = new Set(["dist/tests", "dist/frontend/tests"]);
+
+      const result = prepareRunnerOptions(["node", "script"], {
+        existsSync: (candidate) =>
+          typeof candidate === "string" && relativeDistEntries.has(candidate),
+      });
+
+      assert.deepEqual(result.targets, ["dist/tests", "dist/frontend/tests"]);
+    } finally {
+      processWithCwd.chdir(originalCwd);
+
+      if (previousEnv === undefined) {
+        delete processWithEnv.env.__CAT32_SKIP_JSON_REPORTER_RUN__;
+      } else {
+        processWithEnv.env.__CAT32_SKIP_JSON_REPORTER_RUN__ = previousEnv;
+      }
+    }
+  },
+);

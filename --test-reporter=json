@@ -46,38 +46,48 @@ const mapTargetArgument = (
   target,
   { existsSync = fs.existsSync, mapDirectoriesToDist = false } = {},
 ) => {
-  if (!target) {
+  if (!target || typeof target !== 'string') {
     return target;
   }
 
+  const normalizedTarget = path.normalize(target);
+  const preferProjectAbsolute =
+    !path.isAbsolute(target) &&
+    (normalizedTarget === 'dist' || normalizedTarget.startsWith(`dist${path.sep}`));
+
   const absoluteFromCwd = path.isAbsolute(target)
-    ? target
-    : path.resolve(target);
+    ? path.normalize(target)
+    : path.normalize(path.resolve(target));
   const absoluteFromProject = path.isAbsolute(target)
-    ? target
-    : path.resolve(projectRoot, target);
+    ? path.normalize(target)
+    : path.normalize(path.resolve(projectRoot, target));
 
   const absolute = (() => {
     if (path.isAbsolute(target)) {
-      return target;
+      return absoluteFromProject;
     }
 
     const existsFromCwd = existsSync(absoluteFromCwd);
     const existsFromProject = existsSync(absoluteFromProject);
-    const currentDirectory = process.cwd();
-    const cwdContainsCandidate = absoluteFromCwd.startsWith(`${currentDirectory}${path.sep}`) ||
-      absoluteFromCwd === currentDirectory;
-
-    if (existsFromCwd && !existsFromProject) {
-      return absoluteFromCwd;
-    }
+    const currentDirectory = path.normalize(process.cwd());
+    const cwdContainsCandidate =
+      absoluteFromCwd === currentDirectory ||
+      absoluteFromCwd.startsWith(`${currentDirectory}${path.sep}`);
 
     if (existsFromProject && !existsFromCwd) {
       return absoluteFromProject;
     }
 
-    if (existsFromCwd && existsFromProject) {
+    if (existsFromCwd && !existsFromProject) {
+      return absoluteFromCwd;
+    }
+
+    if (existsFromProject && existsFromCwd) {
       return cwdContainsCandidate ? absoluteFromCwd : absoluteFromProject;
+    }
+
+    if (preferProjectAbsolute) {
+      return absoluteFromProject;
     }
 
     if (cwdContainsCandidate) {
@@ -171,23 +181,25 @@ const prepareRunnerOptions = (
         return false;
       }
 
-      const queue = path.isAbsolute(value)
-        ? [path.normalize(value)]
-        : [
-            path.normalize(value),
-            path.normalize(path.resolve(value)),
-            path.normalize(path.resolve(projectRoot, value)),
-          ];
-      const seen = new Set();
+      const normalizedValue = path.normalize(value);
+      const candidates = new Set();
 
-      for (const entry of queue) {
-        if (!entry || seen.has(entry)) {
-          continue;
-        }
+      const projectAbsolute = path.normalize(
+        path.isAbsolute(normalizedValue)
+          ? normalizedValue
+          : path.resolve(projectRoot, normalizedValue),
+      );
+      candidates.add(projectAbsolute);
 
-        seen.add(entry);
+      if (path.isAbsolute(normalizedValue)) {
+        candidates.add(normalizedValue);
+      } else {
+        candidates.add(normalizedValue);
+        candidates.add(path.normalize(path.resolve(normalizedValue)));
+      }
 
-        if (existsSync(entry)) {
+      for (const entry of candidates) {
+        if (entry && existsSync(entry)) {
           return true;
         }
       }
