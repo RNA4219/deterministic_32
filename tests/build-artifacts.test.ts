@@ -30,6 +30,31 @@ const runTest = test as unknown as (
   fn: () => Promise<void>,
 ) => void;
 
+const { env: baseEnv = {}, platform = "linux" } = (process as unknown as ProcessLike) ?? {};
+
+const getNpmExecutable = (): string => (platform === "win32" ? "npm.cmd" : "npm");
+
+const runBuild = async (
+  execFile: ExecFile,
+  repoRootPath: string,
+  env: Record<string, string | undefined>,
+  args: readonly string[] = [],
+): Promise<void> =>
+  await new Promise<void>((resolve, reject) => {
+    execFile(
+      getNpmExecutable(),
+      ["run", "build", ...args],
+      { cwd: repoRootPath, env },
+      (error) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+        resolve();
+      },
+    );
+  });
+
 runTest("build copies nested source files", { timeout: 60_000 }, async () => {
   const { mkdir, writeFile, rm, access } = (await dynamicImport("node:fs/promises")) as {
     mkdir: Mkdir;
@@ -59,25 +84,10 @@ runTest("build copies nested source files", { timeout: 60_000 }, async () => {
   await mkdir(tempSourceDirUrl, { recursive: true });
   await writeFile(nestedSourceFileUrl, "export const nestedValue: number = 42;\n");
 
-  const { env: baseEnv = {}, platform = "linux" } = (process as unknown as ProcessLike) ?? {};
-  const npmExecutable = platform === "win32" ? "npm.cmd" : "npm";
   const env = { ...baseEnv, CI: "1" };
 
   try {
-    await new Promise<void>((resolve, reject) => {
-      execFile(
-        npmExecutable,
-        ["run", "build"],
-        { cwd: repoRootPath, env },
-        (error) => {
-          if (error) {
-            reject(error);
-            return;
-          }
-          resolve();
-        },
-      );
-    });
+    await runBuild(execFile, repoRootPath, env);
 
     const fileIsPresent = await access(nestedDistFileUrl)
       .then(() => true)
@@ -99,4 +109,19 @@ runTest("build copies nested source files", { timeout: 60_000 }, async () => {
     await rm(nestedDistDirUrl, { recursive: true, force: true });
     await rm(nestedDistSourceDirUrl, { recursive: true, force: true });
   }
+});
+
+runTest("build forwards additional CLI arguments to TypeScript", {}, async () => {
+  const { execFile } = (await dynamicImport("node:child_process")) as {
+    execFile: ExecFile;
+  };
+  const { fileURLToPath } = (await dynamicImport("node:url")) as {
+    fileURLToPath: (input: URL) => string;
+  };
+
+  const repoRootUrl = new URL("../..", import.meta.url);
+  const repoRootPath = fileURLToPath(repoRootUrl);
+  const env = { ...baseEnv, CI: "1" };
+
+  await runBuild(execFile, repoRootPath, env, ["--", "--pretty", "false"]);
 });
