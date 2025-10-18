@@ -7,12 +7,15 @@ const DESTINATION_PREFIX = '--test-reporter-destination=';
 const DEFAULT_DESTINATION = 'logs/test.jsonl';
 const DEFAULT_TARGETS = ['dist/tests', 'dist/frontend/tests'];
 
-const mapTargetArgument = (argument) => {
-  if (!argument.endsWith('.ts')) {
-    return argument;
+const normalizeTarget = (target) => {
+  if (!target.endsWith('.ts')) {
+    return target;
   }
 
-  const withoutExtension = argument.slice(0, -3);
+  const tsExtensionLength = path.extname(target).length;
+  const withoutExtension = tsExtensionLength > 0
+    ? target.slice(0, -tsExtensionLength)
+    : target;
   return path.join('dist', `${withoutExtension}.js`);
 };
 
@@ -31,7 +34,7 @@ const parseCliArguments = () => {
     }
 
     if (fs.existsSync(argument)) {
-      targetArgs.push(mapTargetArgument(argument));
+      targetArgs.push(normalizeTarget(argument));
       continue;
     }
 
@@ -53,14 +56,7 @@ const resolveTargets = (explicitTargets) => {
     if (!target) {
       continue;
     }
-    let candidate = argument;
-    if (candidate.endsWith('.ts')) {
-      const tsExtensionLength = path.extname(candidate).length;
-      const withoutExtension = tsExtensionLength > 0
-        ? candidate.slice(0, -tsExtensionLength)
-        : candidate;
-      candidate = `${path.join('dist', withoutExtension)}.js`;
-    }
+    const candidate = normalizeTarget(target);
     if (!fs.existsSync(candidate)) {
       continue;
     }
