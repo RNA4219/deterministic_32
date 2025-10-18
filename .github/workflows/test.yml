@@ -44,10 +44,19 @@ jobs:
       - run: mkdir -p workflow-cookbook/logs
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
-          cache: npm
-          cache-dependency-path: '**/package-lock.json'
-      - name: TypeScript (if exists)
+          node-version: "22.x"
+      - run: node -v
+      - name: Install dependencies
+        run: npm ci
+      - name: Type check
+        run: npx tsc --noEmit
+      - name: Prettier check
+        run: npx --yes prettier@3.3.3 --check .
+      - name: Run lint
+        run: npm run lint
+      - name: Security audit
+        run: npm audit --audit-level=moderate
+      - name: Build and run tests
         run: |
           set -Eeuo pipefail
           if [ -f tsconfig.json ]; then
