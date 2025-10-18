@@ -5,7 +5,34 @@ import { pathToFileURL } from 'node:url';
 
 const DESTINATION_PREFIX = '--test-reporter-destination=';
 const DEFAULT_DESTINATION = 'logs/test.jsonl';
-const DEFAULT_TARGET = 'dist/tests';
+const DEFAULT_TARGETS = ['dist/tests', 'dist/frontend/tests'];
+
+const resolveTargets = () => {
+  const targets = [];
+  for (const candidate of DEFAULT_TARGETS) {
+    if (fs.existsSync(candidate)) {
+      targets.push(candidate);
+    }
+  }
+
+  for (const argument of process.argv.slice(2)) {
+    if (!argument || argument.startsWith('--')) {
+      continue;
+    }
+    if (!fs.existsSync(argument)) {
+      continue;
+    }
+    if (!targets.includes(argument)) {
+      targets.push(argument);
+    }
+  }
+
+  if (targets.length === 0) {
+    targets.push(DEFAULT_TARGETS[0]);
+  }
+
+  return targets;
+};
 
 const resolveDestination = () => {
   for (const entry of fs.readdirSync('.', { withFileTypes: true })) {
@@ -32,12 +59,13 @@ const destination = resolveDestination();
 const resolvedDestination = path.resolve(destination);
 fs.mkdirSync(path.dirname(resolvedDestination), { recursive: true });
 
+const targets = resolveTargets();
 const reporterSpecifier = pathToFileURL(path.resolve('reporters/json/index.js')).href;
 const args = [
   '--test',
   `--test-reporter=${reporterSpecifier}`,
   `--test-reporter-destination=${resolvedDestination}`,
-  DEFAULT_TARGET
+  ...targets
 ];
 
 const childEnv = { ...process.env };

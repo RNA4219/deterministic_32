@@ -37,6 +37,14 @@ const DATA_WRAPPED_LOG_CONTENT = `${JSON.stringify({
   data: { duration_ms: 150 },
 })}\n`;
 
+const DATA_WRAPPED_LOG_CONTENT =
+  [
+    { type: "test:pass", data: { name: "suite::alpha", status: "pass", duration_ms: 200 } },
+    { type: "test:fail", data: { name: "suite::beta", status: "fail", duration_ms: 400 } },
+  ]
+    .map((entry) => JSON.stringify(entry))
+    .join("\n") + "\n";
+
 test("analyze.py はサンプルが少なくても p95 を計算できる", async () => {
   const { execFile } = (await dynamicImport("node:child_process")) as { execFile: ExecFile };
   const { mkdir, readFile, rm, writeFile } = (await dynamicImport("node:fs/promises")) as FsPromisesModule;
