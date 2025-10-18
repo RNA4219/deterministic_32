@@ -24,10 +24,16 @@ test("JSON reporter runner uses dist target when invoked with TS input", async (
   const require = createRequire(import.meta.url);
   const fsModule = require("node:fs") as {
     existsSync: (value: unknown) => boolean;
+    mkdirSync: (path: unknown, options?: unknown) => unknown;
+  };
+  const pathModule = require("node:path") as {
+    resolve: (...segments: string[]) => string;
+    dirname: (value: string) => string;
   };
 
   const cleanups: Array<() => void> = [];
   const spawnCalls: SpawnCall[] = [];
+  const mkdirCalls: string[] = [];
   const exitCodes: number[] = [];
   let thrown: unknown;
 
@@ -44,10 +50,27 @@ test("JSON reporter runner uses dist target when invoked with TS input", async (
       originalExistsSync;
   });
 
+  const originalMkdirSync = fsModule.mkdirSync;
+  (fsModule as {
+    mkdirSync: (path: string, options?: { recursive?: boolean }) => void;
+  }).mkdirSync = (directory) => {
+    mkdirCalls.push(directory);
+  };
+  cleanups.push(() => {
+    (fsModule as {
+      mkdirSync: (
+        path: string,
+        options?: { recursive?: boolean },
+      ) => void;
+    }).mkdirSync = originalMkdirSync;
+  });
+
   const originalArgv = process.argv;
   process.argv = [
     process.argv[0]!,
     "./--test-reporter=json",
+    "--test-reporter-destination",
+    "tmp/out.jsonl",
     "tests/example.test.ts",
   ];
   cleanups.push(() => {
@@ -111,6 +134,16 @@ test("JSON reporter runner uses dist target when invoked with TS input", async (
   assert.ok(Array.isArray(invocation.args));
   const args = invocation.args as ReadonlyArray<string>;
   assert.ok(args.includes("dist/tests/example.test.js"));
+  const destinationArgs = args.filter((value) =>
+    value.startsWith("--test-reporter-destination="),
+  );
+  assert.equal(destinationArgs.length, 1);
+  const resolvedDestination = `--test-reporter-destination=${pathModule.resolve(
+    "tmp/out.jsonl",
+  )}`;
+  assert.equal(destinationArgs[0], resolvedDestination);
+  const expectedDirectory = pathModule.dirname(pathModule.resolve("tmp/out.jsonl"));
+  assert.ok(mkdirCalls.includes(expectedDirectory));
   assert.deepEqual(exitCodes, [0]);
 });
 
@@ -312,7 +345,11 @@ test("prepareRunnerOptions prefers CLI targets when present", async () => {
       existsSync?: (candidate: string) => boolean;
       defaultTargets?: readonly string[];
     },
-  ) => { passthroughArgs: string[]; targets: string[] };
+  ) => {
+    passthroughArgs: string[];
+    targets: string[];
+    destinationOverride: string | null;
+  };
 
   const processWithEnv = process as typeof process & {
     env: Record<string, string | undefined> & {
@@ -350,6 +387,14 @@ test("prepareRunnerOptions prefers CLI targets when present", async () => {
     });
 
     assert.deepEqual(directoryResult.targets, ["dist/tests"]);
+
+    const destinationResult = prepareRunnerOptions(
+      ["node", "script", "--test-reporter-destination", "tmp/out.jsonl"],
+      { defaultTargets: [] },
+    );
+
+    assert.equal(destinationResult.destinationOverride, "tmp/out.jsonl");
+    assert.deepEqual(destinationResult.passthroughArgs, []);
   } finally {
     if (previous === undefined) {
       delete processWithEnv.env.__CAT32_SKIP_JSON_REPORTER_RUN__;
