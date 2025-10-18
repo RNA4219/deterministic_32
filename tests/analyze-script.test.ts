@@ -31,7 +31,7 @@ const dynamicImport = new Function(
   "return import(specifier);",
 ) as (specifier: string) => Promise<unknown>;
 
-const DATA_WRAPPED_LOG_CONTENT = `${JSON.stringify({
+const SINGLE_SAMPLE_LOG_CONTENT = `${JSON.stringify({
   name: "sample::single",
   status: "pass",
   data: { duration_ms: 150 },
@@ -53,7 +53,7 @@ const LOG_WITH_DIAGNOSTIC_CONTENT =
     data: { message: "informational" },
   })}\n`;
 
-const DATA_WRAPPED_LOG_CONTENT =
+const WRAPPED_EVENTS_LOG_CONTENT =
   [
     {
       type: "test:pass",
@@ -115,7 +115,7 @@ test("analyze.py はサンプルが少なくても p95 を計算できる", asyn
       rm(issuePath, { force: true }),
     ]);
 
-    await writeFile(logPath, DATA_WRAPPED_LOG_CONTENT, { encoding: "utf8" });
+    await writeFile(logPath, SINGLE_SAMPLE_LOG_CONTENT, { encoding: "utf8" });
 
     await new Promise<void>((resolve, reject) => {
       execFile(
@@ -210,7 +210,7 @@ test("analyze.py は data.data のようなラップ構造から値を抽出す�
   const originalLog = await readFile(logPath, { encoding: "utf8" }).catch(() => null);
   const originalReport = await readFile(reportPath, { encoding: "utf8" }).catch(() => null);
   try {
-    await writeFile(logPath, DATA_WRAPPED_LOG_CONTENT, { encoding: "utf8" });
+    await writeFile(logPath, WRAPPED_EVENTS_LOG_CONTENT, { encoding: "utf8" });
     await new Promise<void>((resolve, reject) => {
       execFile(
         "python3",
