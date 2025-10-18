@@ -17,6 +17,18 @@ type SpawnCall = {
   readonly options: unknown;
 };
 
+type PrepareRunnerOptions = (
+  argv: readonly string[],
+  overrides?: {
+    existsSync?: (candidate: string) => boolean;
+    defaultTargets?: readonly string[];
+  },
+) => {
+  passthroughArgs: string[];
+  targets: string[];
+  destinationOverride: string | null;
+};
+
 test("JSON reporter runner uses dist target when invoked with TS input", async () => {
   const { createRequire } = (await dynamicImport("node:module")) as {
     createRequire: (specifier: string | URL) => (id: string) => unknown;
@@ -450,18 +462,6 @@ test("JSON reporter runner maps absolute TS targets into dist", async () => {
 });
 
 test("prepareRunnerOptions prefers CLI targets when present", async () => {
-  type PrepareRunnerOptions = (
-    argv: readonly string[],
-    overrides?: {
-      existsSync?: (candidate: string) => boolean;
-      defaultTargets?: readonly string[];
-    },
-  ) => {
-    passthroughArgs: string[];
-    targets: string[];
-    destinationOverride: string | null;
-  };
-
   const processWithEnv = process as typeof process & {
     env: Record<string, string | undefined> & {
       __CAT32_SKIP_JSON_REPORTER_RUN__?: string;
@@ -511,6 +511,55 @@ test("prepareRunnerOptions prefers CLI targets when present", async () => {
       delete processWithEnv.env.__CAT32_SKIP_JSON_REPORTER_RUN__;
     } else {
       processWithEnv.env.__CAT32_SKIP_JSON_REPORTER_RUN__ = previous;
+    }
+  }
+});
+
+test("prepareRunnerOptions resolves TS targets from script directory", async () => {
+  const processWithEnv = process as typeof process & {
+    env: Record<string, string | undefined> & {
+      __CAT32_SKIP_JSON_REPORTER_RUN__?: string;
+    };
+    chdir: (directory: string) => void;
+    cwd: () => string;
+  };
+  const { fileURLToPath } = (await dynamicImport("node:url")) as {
+    fileURLToPath: (value: string | URL) => string;
+  };
+  const previousEnv = processWithEnv.env.__CAT32_SKIP_JSON_REPORTER_RUN__;
+  const previousCwd = processWithEnv.cwd();
+  const testsDirectory = fileURLToPath(new URL("./tests", repoRootUrl));
+
+  processWithEnv.env.__CAT32_SKIP_JSON_REPORTER_RUN__ = "1";
+  processWithEnv.chdir(testsDirectory);
+
+  try {
+    const moduleExports = (await import(
+      `${runnerUrl.href}?cwd=${Date.now()}`
+    )) as { prepareRunnerOptions: PrepareRunnerOptions };
+
+    const { prepareRunnerOptions } = moduleExports;
+    assert.equal(typeof prepareRunnerOptions, "function");
+
+    const existingPaths = new Set([
+      "json-reporter.test.ts",
+      "dist/tests/json-reporter.test.js",
+    ]);
+
+    const result = prepareRunnerOptions(
+      ["node", "script", "json-reporter.test.ts"],
+      {
+        existsSync: (candidate) => existingPaths.has(candidate),
+      },
+    );
+
+    assert.deepEqual(result.targets, ["dist/tests/json-reporter.test.js"]);
+  } finally {
+    processWithEnv.chdir(previousCwd);
+    if (previousEnv === undefined) {
+      delete processWithEnv.env.__CAT32_SKIP_JSON_REPORTER_RUN__;
+    } else {
+      processWithEnv.env.__CAT32_SKIP_JSON_REPORTER_RUN__ = previousEnv;
     }
   }
 });
