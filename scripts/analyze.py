@@ -18,9 +18,19 @@ def compute_p95(durations: list[int]) -> int:
     interpolated = ordered[lower_index] + (ordered[upper_index] - ordered[lower_index]) * fraction
     return int(math.ceil(interpolated))
 
-LOG = pathlib.Path(os.environ.get("ANALYZE_LOG_PATH", "logs/test.jsonl"))
-REPORT = pathlib.Path(os.environ.get("ANALYZE_REPORT_PATH", "reports/today.md"))
-ISSUE_OUT = pathlib.Path(os.environ.get("ANALYZE_ISSUE_PATH", "reports/issue_suggestions.md"))
+def _resolve_path(env_key: str, default: str) -> pathlib.Path:
+    value = os.environ.get(env_key)
+    if value is None:
+        return pathlib.Path(default)
+    text = value.strip()
+    if not text:
+        return pathlib.Path(default)
+    return pathlib.Path(text)
+
+
+LOG = _resolve_path("ANALYZE_LOG_PATH", "logs/test.jsonl")
+REPORT = _resolve_path("ANALYZE_REPORT_PATH", "reports/today.md")
+ISSUE_OUT = _resolve_path("ANALYZE_ISSUE_PATH", "reports/issue_suggestions.md")
 
 def extract_duration(entry: dict[str, object]) -> int:
     duration = entry.get("duration_ms")
@@ -131,6 +141,8 @@ def load_results() -> Tuple[list[str], list[int], list[str]]:
     tests: list[str] = []
     durs: list[int] = []
     fails: list[str] = []
+    global LOG
+    LOG = _resolve_path("ANALYZE_LOG_PATH", "logs/test.jsonl")
     if not LOG.exists():
         return tests, durs, fails
     with LOG.open(encoding="utf-8") as f:
@@ -162,6 +174,9 @@ def main() -> None:
         pass_rate_text = f"{pass_rate:.2%}"
     p95 = compute_p95(durs)
     now = datetime.datetime.utcnow().isoformat()
+    global REPORT, ISSUE_OUT
+    REPORT = _resolve_path("ANALYZE_REPORT_PATH", "reports/today.md")
+    ISSUE_OUT = _resolve_path("ANALYZE_ISSUE_PATH", "reports/issue_suggestions.md")
     REPORT.parent.mkdir(parents=True, exist_ok=True)
     with REPORT.open("w", encoding="utf-8") as f:
         f.write(f"# Reflection Report ({now})\n\n")
