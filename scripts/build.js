@@ -9,6 +9,61 @@ import {
 } from 'node:fs';
 import { join, resolve } from 'node:path';
 
+class BuildError extends Error {
+  exitCode;
+
+  constructor(message, { cause, exitCode } = {}) {
+    super(message, cause ? { cause } : undefined);
+    this.name = 'BuildError';
+    this.exitCode = typeof exitCode === 'number' ? exitCode : 1;
+  }
+}
+
+function formatError(error) {
+  if (error instanceof Error) {
+    return error.stack ?? error.message;
+  }
+
+  if (typeof error === 'object' && error !== null) {
+    try {
+      return JSON.stringify(error);
+    } catch {
+      return String(error);
+    }
+  }
+
+  return String(error);
+}
+
+function normalizeExitCode(value) {
+  if (typeof value === 'number' && Number.isInteger(value) && value >= 0) {
+    return value;
+  }
+
+  return 1;
+}
+
+function handleFatalError(error) {
+  const exitCode = normalizeExitCode(
+    error && typeof error === 'object' && 'exitCode' in error
+      ? error.exitCode
+      : undefined,
+  );
+
+  console.error(
+    `[build] failed (exit code ${exitCode}): ${formatError(error)}`,
+  );
+  process.exitCode = exitCode;
+}
+
+process.on('unhandledRejection', (error) => {
+  handleFatalError(error);
+});
+
+process.on('uncaughtException', (error) => {
+  handleFatalError(error);
+});
+
 function getForwardedArgs() {
   return process.argv.slice(2);
 }
@@ -22,13 +77,28 @@ function runTypeScriptBuild() {
   });
 
   if (result.error) {
-    throw result.error;
+    throw new BuildError('Failed to execute TypeScript compiler', {
+      cause: result.error,
+      exitCode: result.status ?? 1,
+    });
   }
 
-  const exitCode = result.status ?? 1;
-  if (exitCode !== 0) {
-    process.exit(exitCode);
+  if (typeof result.status === 'number') {
+    if (result.status !== 0) {
+      throw new BuildError('TypeScript compilation failed', {
+        exitCode: result.status,
+      });
+    }
+
+    return;
   }
+
+  const reason =
+    typeof result.signal === 'string' && result.signal.length > 0
+      ? `TypeScript compilation terminated by signal ${result.signal}`
+      : 'TypeScript compilation failed for an unknown reason';
+
+  throw new BuildError(reason, { exitCode: 1 });
 }
 
 function shouldCopy(source, srcRoot) {
@@ -71,9 +141,13 @@ function installJsonReporter() {
 }
 
 function main() {
-  runTypeScriptBuild();
-  copyCompiledSources();
-  installJsonReporter();
+  try {
+    runTypeScriptBuild();
+    copyCompiledSources();
+    installJsonReporter();
+  } catch (error) {
+    handleFatalError(error);
+  }
 }
 
 main();

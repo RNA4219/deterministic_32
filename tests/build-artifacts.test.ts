@@ -45,9 +45,9 @@ const runBuild = async (
       getNpmExecutable(),
       ["run", "build", ...args],
       { cwd: repoRootPath, env },
-      (error) => {
+      (error, stdout, stderr) => {
         if (error) {
-          reject(error);
+          reject(Object.assign(error ?? {}, { stdout, stderr }));
           return;
         }
         resolve();
@@ -170,6 +170,43 @@ runTest("build respects CLI overrides when npm metadata is unavailable", {}, asy
     }
 
     assert.ok(failure, "expected custom project compilation to fail");
+
+    assert.ok(
+      failure && typeof failure === "object",
+      "expected build failure to expose output",
+    );
+
+    const { stderr, stdout } = failure as {
+      stderr?: unknown;
+      stdout?: unknown;
+    };
+
+    const output =
+      typeof stderr === "string" && stderr.length > 0
+        ? stderr
+        : typeof stdout === "string"
+          ? stdout
+          : undefined;
+
+    if (typeof output !== "string") {
+      throw new Error("expected failure output to be a string");
+    }
+
+    const failurePrefixMatch = output.match(/\[build] failed \(exit code (\d+)\):/);
+
+    if (!failurePrefixMatch) {
+      throw new Error(
+        "expected failure output to include build failure prefix with exit code",
+      );
+    }
+
+    const [, exitCodeText] = failurePrefixMatch;
+    const exitCodeFromOutput = Number(exitCodeText);
+
+    assert.ok(
+      Number.isInteger(exitCodeFromOutput) && exitCodeFromOutput > 0,
+      "expected failure exit code to be a positive integer",
+    );
   } finally {
     await rm(tempTsconfigUrl, { recursive: true, force: true });
   }
