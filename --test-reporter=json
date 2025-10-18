@@ -18,6 +18,30 @@ const OPTIONS_EXPECTING_VALUE = new Set([
 
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 
+const projectRoot = (() => {
+  let current = scriptDirectory;
+
+  while (true) {
+    if (path.basename(current) === 'dist') {
+      const parent = path.dirname(current);
+
+      if (parent !== current) {
+        return parent;
+      }
+
+      return current;
+    }
+
+    const parent = path.dirname(current);
+
+    if (parent === current) {
+      return scriptDirectory;
+    }
+
+    current = parent;
+  }
+})();
+
 const mapTargetArgument = (
   target,
   { existsSync = fs.existsSync, mapDirectoriesToDist = false } = {},
@@ -27,9 +51,17 @@ const mapTargetArgument = (
   }
 
   const absolute = path.isAbsolute(target) ? target : path.resolve(target);
-  const relativePathFromScript = path.relative(scriptDirectory, absolute);
-  const normalizedRelative = path.normalize(relativePathFromScript);
+  const relativePathFromProject = path.relative(projectRoot, absolute);
+  const normalizedRelative = path.normalize(relativePathFromProject);
   const extension = path.extname(normalizedRelative);
+  const upwardPrefix = `..${path.sep}`;
+
+  if (
+    normalizedRelative === '..' ||
+    normalizedRelative.startsWith(upwardPrefix)
+  ) {
+    return target;
+  }
 
   if (extension === '.ts') {
     const withoutExtension = extension.length > 0
@@ -48,12 +80,13 @@ const mapTargetArgument = (
   }
 
   const distCandidate = path.join('dist', normalizedRelative);
+  const distCandidateAbsolute = path.resolve(projectRoot, distCandidate);
 
   if (mapDirectoriesToDist && extension.length === 0) {
     return distCandidate;
   }
 
-  if (existsSync(distCandidate)) {
+  if (existsSync(distCandidate) || existsSync(distCandidateAbsolute)) {
     return distCandidate;
   }
 
@@ -88,7 +121,7 @@ const prepareRunnerOptions = (
   };
 
   const resolveTargetCandidate = (candidate) => {
-    if (!candidate) {
+    if (!candidate || typeof candidate !== 'string') {
       return null;
     }
 
@@ -98,13 +131,27 @@ const prepareRunnerOptions = (
     });
 
     if (normalized && normalized !== candidate) {
-      if (existsSync(normalized) || existsSync(candidate)) {
+      const normalizedAbsolute = path.resolve(projectRoot, normalized);
+      const candidateAbsolute = path.resolve(candidate);
+
+      if (
+        existsSync(normalized) ||
+        existsSync(normalizedAbsolute) ||
+        existsSync(candidate) ||
+        existsSync(candidateAbsolute)
+      ) {
         return normalized;
       }
     }
 
     if (existsSync(candidate)) {
       return candidate;
+    }
+
+    const absoluteCandidate = path.resolve(candidate);
+
+    if (existsSync(absoluteCandidate)) {
+      return absoluteCandidate;
     }
 
     return null;
