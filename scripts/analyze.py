@@ -55,6 +55,18 @@ def _issue_path() -> pathlib.Path:
     ISSUE_OUT = _resolve_path("ANALYZE_ISSUE_PATH", _DEFAULT_ISSUE)
     return ISSUE_OUT
 
+
+def _clear_issue_report(issue_path: pathlib.Path) -> None:
+    try:
+        issue_path.unlink()
+    except FileNotFoundError:
+        return
+    except OSError:
+        try:
+            issue_path.write_text("", encoding="utf-8")
+        except OSError:
+            pass
+
 def extract_duration(entry: dict[str, object]) -> int:
     duration = entry.get("duration_ms")
     if duration is None:
@@ -216,9 +228,6 @@ def main() -> None:
             for name in set(fails):
                 f.write(f"- [ ] {name} の再現手順/前提/境界値を追加\n")
     else:
-        try:
-            issue_path.unlink()
-        except FileNotFoundError:
-            pass
+        _clear_issue_report(issue_path)
 if __name__ == "__main__":
     main()
