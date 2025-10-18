@@ -1,8 +1,8 @@
-# Reflection Report (2025-10-18T09:14:46.061993)
+# Reflection Report (2025-10-18T09:18:53.259349)
 
 - Total tests: 1
 - Pass rate: 0.00%
-- Duration p95: 28 ms
+- Duration p95: 27 ms
 - Failures: 1
 
 ## Why-Why (draft)
