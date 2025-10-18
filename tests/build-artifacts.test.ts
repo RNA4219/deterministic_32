@@ -1,4 +1,4 @@
-import assert from "node:assert";
+import assert from "node:assert/strict";
 import test from "node:test";
 
 const dynamicImport = new Function(
@@ -124,4 +124,53 @@ runTest("build forwards additional CLI arguments to TypeScript", {}, async () =>
   const env = { ...baseEnv, CI: "1" };
 
   await runBuild(execFile, repoRootPath, env, ["--", "--pretty", "false"]);
+});
+
+runTest("build respects CLI overrides when npm metadata is unavailable", {}, async () => {
+  const { execFile } = (await dynamicImport("node:child_process")) as {
+    execFile: ExecFile;
+  };
+  const { fileURLToPath } = (await dynamicImport("node:url")) as {
+    fileURLToPath: (input: URL) => string;
+  };
+  const { writeFile, rm } = (await dynamicImport("node:fs/promises")) as {
+    writeFile: WriteFile;
+    rm: Rm;
+  };
+
+  const repoRootUrl = new URL("../..", import.meta.url);
+  const repoRootPath = fileURLToPath(repoRootUrl);
+  const uniqueSuffix = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+  const tempTsconfigUrl = new URL(`tsconfig.build-metadata-${uniqueSuffix}.json`, repoRootUrl);
+
+  await writeFile(
+    tempTsconfigUrl,
+    `${JSON.stringify(
+      {
+        extends: "./tsconfig.json",
+        files: ["./src/does-not-exist.ts"],
+      },
+      null,
+      2,
+    )}\n`,
+  );
+
+  const env = { ...baseEnv, CI: "1", npm_config_argv: "{}" };
+
+  try {
+    let failure: unknown;
+    try {
+      await runBuild(execFile, repoRootPath, env, [
+        "--",
+        "--project",
+        fileURLToPath(tempTsconfigUrl),
+      ]);
+    } catch (error) {
+      failure = error;
+    }
+
+    assert.ok(failure, "expected custom project compilation to fail");
+  } finally {
+    await rm(tempTsconfigUrl, { recursive: true, force: true });
+  }
 });
