@@ -159,16 +159,17 @@ def main() -> None:
     tests, durs, fails = load_results()
     total = len(tests)
     if total == 0:
-        pass_rate = 0.0
+        pass_rate_text = "0%"
     else:
         pass_rate = (total - len(fails)) / total
+        pass_rate_text = f"{pass_rate:.2%}"
     p95 = compute_p95(durs)
     now = datetime.datetime.utcnow().isoformat()
     REPORT.parent.mkdir(parents=True, exist_ok=True)
     with REPORT.open("w", encoding="utf-8") as f:
         f.write(f"# Reflection Report ({now})\n\n")
         f.write(f"- Total tests: {total}\n")
-        f.write(f"- Pass rate: {pass_rate:.2%}\n")
+        f.write(f"- Pass rate: {pass_rate_text}\n")
         f.write(f"- Duration p95: {p95} ms\n")
         f.write(f"- Failures: {len(fails)}\n\n")
         if fails:

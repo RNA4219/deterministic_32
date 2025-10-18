@@ -481,7 +481,7 @@ test("analyze.py はテストが存在しない場合に 0 件として集計す
 
     const report = await readFile(reportPath, { encoding: "utf8" });
     assert.ok(report.includes("- Total tests: 0"), "テスト件数が 0 と表示されるはず");
-    assert.ok(report.includes("- Pass rate: 0.00%"), "テストがない場合はパス率 0% と表示されるはず");
+    assert.ok(report.includes("- Pass rate: 0%"), "テストがない場合はパス率 0% と表示されるはず");
     assert.ok(report.includes("- Duration p95: 0 ms"), "テストがない場合は p95 が 0 と表示されるはず");
     assert.ok(report.includes("- Failures: 0"), "テストがない場合は失敗数が 0 と表示されるはず");
   } finally {
