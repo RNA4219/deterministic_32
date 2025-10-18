@@ -190,6 +190,134 @@ test("JSON reporter runner uses dist target when invoked with TS input", async (
 });
 
 test(
+  "JSON reporter runner maps default targets from nested directory to dist",
+  async () => {
+    const { createRequire } = (await dynamicImport("node:module")) as {
+      createRequire: (specifier: string | URL) => (id: string) => unknown;
+    };
+    const require = createRequire(import.meta.url);
+    const fsModule = require("node:fs") as {
+      mkdirSync: (path: unknown, options?: unknown) => unknown;
+      mkdtempSync: (prefix: string) => string;
+      rmdirSync: (path: string) => void;
+    };
+    const pathModule = require("node:path") as {
+      join: (...segments: string[]) => string;
+      resolve: (...segments: string[]) => string;
+      dirname: (value: string) => string;
+    };
+    const { fileURLToPath } = (await dynamicImport("node:url")) as {
+      fileURLToPath: (url: string | URL) => string;
+    };
+
+    const projectRoot = fileURLToPath(repoRootUrl);
+    const cleanups: Array<() => void> = [];
+    const spawnCalls: SpawnCall[] = [];
+    const mkdirCalls: string[] = [];
+    const exitCodes: number[] = [];
+    let thrown: unknown;
+
+    const originalMkdirSync = fsModule.mkdirSync;
+    (fsModule as {
+      mkdirSync: (path: string, options?: { recursive?: boolean }) => void;
+    }).mkdirSync = (directory) => {
+      mkdirCalls.push(directory);
+    };
+    cleanups.push(() => {
+      (fsModule as {
+        mkdirSync: (path: string, options?: { recursive?: boolean }) => void;
+      }).mkdirSync = originalMkdirSync;
+    });
+
+    const processWithCwd = process as typeof process & {
+      cwd: () => string;
+      chdir: (directory: string) => void;
+    };
+    const originalCwd = processWithCwd.cwd();
+    const testsDirectory = fileURLToPath(new URL("./tests/", repoRootUrl));
+    const temporaryDirectory = fsModule.mkdtempSync(
+      pathModule.join(testsDirectory, "json-runner-"),
+    );
+    processWithCwd.chdir(temporaryDirectory);
+    cleanups.push(() => {
+      processWithCwd.chdir(originalCwd);
+      fsModule.rmdirSync(temporaryDirectory);
+    });
+
+    const originalArgv = process.argv;
+    process.argv = [process.argv[0]!, "./--test-reporter=json"];
+    cleanups.push(() => {
+      process.argv = originalArgv;
+    });
+
+    const originalExit = process.exit;
+    (process as { exit: (code?: number) => never }).exit = ((code?: number) => {
+      exitCodes.push(code ?? 0);
+      return undefined as never;
+    }) as typeof originalExit;
+    cleanups.push(() => {
+      (process as { exit: typeof originalExit }).exit = originalExit;
+    });
+
+    const spawnOverride = (
+      command: unknown,
+      args: unknown,
+      options: unknown,
+    ) => {
+      const child = {
+        killed: false,
+        kill: () => {
+          child.killed = true;
+          return true;
+        },
+        once: (event: unknown, listener: unknown) => {
+          if (event === "exit" && typeof listener === "function") {
+            queueMicrotask(() => {
+              (listener as (code: number, signal: string | null) => void)(0, null);
+            });
+          }
+          return child;
+        },
+      };
+      spawnCalls.push({ command, args, options });
+      return child;
+    };
+    (globalThis as { __CAT32_TEST_SPAWN__?: typeof spawnOverride }).__CAT32_TEST_SPAWN__ =
+      spawnOverride;
+    cleanups.push(() => {
+      delete (globalThis as { __CAT32_TEST_SPAWN__?: typeof spawnOverride })
+        .__CAT32_TEST_SPAWN__;
+    });
+
+    try {
+      await import(`${runnerUrl.href}?nested=${Date.now()}`);
+    } catch (error) {
+      thrown = error;
+    } finally {
+      while (cleanups.length) {
+        cleanups.pop()?.();
+      }
+    }
+
+    assert.equal(thrown, undefined);
+    assert.equal(spawnCalls.length, 1);
+    const invocation = spawnCalls[0]!;
+    assert.ok(Array.isArray(invocation.args));
+    const args = invocation.args as ReadonlyArray<string>;
+    const normalizedTargets = args
+      .filter((value) => typeof value === "string" && !value.startsWith("--"))
+      .map((value) => value.replace(/\\+/g, "/"));
+    assert.ok(normalizedTargets.includes("dist/tests"));
+    assert.ok(normalizedTargets.includes("dist/frontend/tests"));
+    const expectedDirectory = pathModule.dirname(
+      pathModule.resolve(projectRoot, "logs/test.jsonl"),
+    );
+    assert.ok(mkdirCalls.includes(expectedDirectory));
+    assert.deepEqual(exitCodes, [0]);
+  },
+);
+
+test(
   "JSON reporter runner resolves destination from project root when invoked in subdirectory",
   async () => {
     const { createRequire } = (await dynamicImport("node:module")) as {

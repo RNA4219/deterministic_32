@@ -50,7 +50,40 @@ const mapTargetArgument = (
     return target;
   }
 
-  const absolute = path.isAbsolute(target) ? target : path.resolve(target);
+  const safeExists = (candidate) =>
+    typeof candidate === 'string' && existsSync(candidate);
+
+  const resolveAbsoluteCandidate = (candidate) => {
+    if (path.isAbsolute(candidate)) {
+      return path.normalize(candidate);
+    }
+
+    const resolvedFromCwd = path.resolve(candidate);
+
+    const relativeFromCwd = path.relative(projectRoot, resolvedFromCwd);
+    const isWithinProjectFromCwd =
+      relativeFromCwd &&
+      relativeFromCwd !== '..' &&
+      !relativeFromCwd.startsWith(`..${path.sep}`);
+    const candidateExtension = path.extname(candidate);
+
+    if (
+      safeExists(resolvedFromCwd) ||
+      (candidateExtension && isWithinProjectFromCwd)
+    ) {
+      return path.normalize(resolvedFromCwd);
+    }
+
+    const resolvedFromProject = path.resolve(projectRoot, candidate);
+
+    if (safeExists(resolvedFromProject)) {
+      return path.normalize(resolvedFromProject);
+    }
+
+    return path.normalize(resolvedFromProject);
+  };
+
+  const absolute = resolveAbsoluteCandidate(target);
   const relativePathFromProject = path.relative(projectRoot, absolute);
   const normalizedRelative = path.normalize(relativePathFromProject);
   const extension = path.extname(normalizedRelative);
@@ -130,33 +163,54 @@ const prepareRunnerOptions = (
       return null;
     }
 
+    const candidateExists = (value) => {
+      if (!value || typeof value !== 'string') {
+        return false;
+      }
+
+      const queue = path.isAbsolute(value)
+        ? [path.normalize(value)]
+        : [
+            path.normalize(value),
+            path.normalize(path.resolve(value)),
+            path.normalize(path.resolve(projectRoot, value)),
+          ];
+      const seen = new Set();
+
+      for (const entry of queue) {
+        if (!entry || seen.has(entry)) {
+          continue;
+        }
+
+        seen.add(entry);
+
+        if (existsSync(entry)) {
+          return true;
+        }
+      }
+
+      return false;
+    };
+
     const normalized = mapTargetArgument(candidate, {
       existsSync,
       mapDirectoriesToDist: true,
     });
 
     if (normalized && normalized !== candidate) {
-      const normalizedAbsolute = path.resolve(projectRoot, normalized);
-      const candidateAbsolute = path.resolve(candidate);
-
-      if (
-        existsSync(normalized) ||
-        existsSync(normalizedAbsolute) ||
-        existsSync(candidate) ||
-        existsSync(candidateAbsolute)
-      ) {
+      if (candidateExists(normalized) || candidateExists(candidate)) {
         return normalized;
       }
     }
 
-    if (existsSync(candidate)) {
+    if (candidateExists(candidate)) {
       return candidate;
     }
 
-    const absoluteCandidate = path.resolve(candidate);
+    const absoluteCandidate = mapTargetArgument(candidate, { existsSync });
 
-    if (existsSync(absoluteCandidate)) {
-      return absoluteCandidate;
+    if (absoluteCandidate && path.isAbsolute(absoluteCandidate)) {
+      return candidateExists(absoluteCandidate) ? absoluteCandidate : null;
     }
 
     return null;
