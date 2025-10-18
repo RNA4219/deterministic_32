@@ -138,8 +138,14 @@ def load_results() -> Tuple[list[str], list[int], list[str]]:
             obj = json.loads(line)
             if not isinstance(obj, dict):
                 continue
-            parsed_event = _load_from_event(obj)
-            parsed = parsed_event if parsed_event is not None else _load_from_legacy(obj)
+            event_type = obj.get("type")
+            parsed: Optional[ParsedEntry]
+            if isinstance(event_type, str):
+                if event_type not in ALLOWED_EVENT_TYPES:
+                    continue
+                parsed = _load_from_event(obj)
+            else:
+                parsed = _load_from_legacy(obj)
             if parsed is None:
                 continue
             name, duration, is_failure = parsed
@@ -176,5 +182,10 @@ def main() -> None:
             f.write("### 反省TODO\n")
             for name in set(fails):
                 f.write(f"- [ ] {name} の再現手順/前提/境界値を追加\n")
+    else:
+        try:
+            ISSUE_OUT.unlink()
+        except FileNotFoundError:
+            pass
 if __name__ == "__main__":
     main()
