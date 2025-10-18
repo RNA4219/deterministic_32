@@ -1,11 +1,9 @@
-# Reflection Report (2025-10-18T08:33:02.363023)
+# Reflection Report (2025-10-18T08:37:21.416394)
 
-- Total tests: 162
-- Pass rate: 98.15%
-- Duration p95: 88 ms
-- Failures: 3
+- Total tests: 160
+- Pass rate: 99.38%
+- Duration p95: 79 ms
+- Failures: 1
 
 ## Why-Why (draft)
-- sample::fail: 仮説=前処理の不安定/依存の競合/境界値不足
-- analyze.py はサンプルが少なくても p95 を計算できる: 仮説=前処理の不安定/依存の競合/境界値不足
-- analyze.py は失敗後の成功実行で issue_suggestions.md をクリアする: 仮説=前処理の不安定/依存の競合/境界値不足
+- sample::failing: 仮説=前処理の不安定/依存の競合/境界値不足
