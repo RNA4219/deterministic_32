@@ -1,5 +1,10 @@
-import json, statistics, pathlib, os, datetime
+import datetime
+import json
+import os
+import pathlib
+import statistics
 from collections import Counter
+from typing import Optional, Tuple
 
 
 def compute_p95(durations: list[int]) -> int:
@@ -105,15 +110,20 @@ def _load_from_legacy(obj: dict[str, object]):
     name = obj.get("name")
     if not isinstance(name, str):
         name = ""
-    duration = _extract_numeric_duration(obj.get("duration_ms"))
-    if duration == 0:
-        payload = _unwrap_payload(_as_mapping(obj.get("data")))
-        nested_name = payload.get("name")
-        if isinstance(nested_name, str) and not name:
-            name = nested_name
-        duration = _extract_duration(payload)
+    duration = extract_duration(obj)
+    status = obj.get("status")
     is_failure = status == "fail"
     return name, duration, is_failure
+    
+def _load_entry(obj: object) -> Optional[Tuple[str, int, bool]]:
+    if not isinstance(obj, dict):
+        return None
+    event_type = obj.get("type")
+    if isinstance(event_type, str):
+        if event_type not in ALLOWED_EVENT_TYPES:
+            return None
+        return _load_from_event(obj)
+    return _load_from_legacy(obj)
 
 
 def load_results():
@@ -127,14 +137,10 @@ def load_results():
             if not line.strip():
                 continue
             obj = json.loads(line)
-            if not isinstance(obj, dict):
+            entry = _load_entry(obj)
+            if entry is None:
                 continue
-            parsed = _load_from_event(obj)
-            if parsed is None:
-                parsed = _load_from_legacy(obj)
-            if parsed is None:
-                continue
-            name, duration, is_failure = parsed
+            name, duration, is_failure = entry
             tests.append(name)
             durs.append(duration)
             if is_failure:
