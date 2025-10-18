@@ -138,11 +138,17 @@ def load_results() -> Tuple[list[str], list[int], list[str]]:
             obj = json.loads(line)
             if not isinstance(obj, dict):
                 continue
-            parsed_event = _load_from_event(obj)
-            parsed = parsed_event if parsed_event is not None else _load_from_legacy(obj)
+            event_type = obj.get("type")
+            parsed: Optional[ParsedEntry]
+            if isinstance(event_type, str):
+                if event_type not in ALLOWED_EVENT_TYPES:
+                    continue
+                parsed = _load_from_event(obj)
+            else:
+                parsed = _load_from_legacy(obj)
             if parsed is None:
                 continue
-            name, duration, is_failure = entry
+            name, duration, is_failure = parsed
             tests.append(name)
             durs.append(duration)
             if is_failure:
