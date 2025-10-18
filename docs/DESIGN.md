@@ -36,6 +36,7 @@ tests/
 
 ## 6. CLI（cli.ts）
 - 引数: `--salt=... --namespace=... --normalize=nfkc|nfkd|nfc|none`
+- 正規化モード: `nfkc`（既定）、`nfkd`、`nfc`、`none` の 4 種類を許可。
 - 入力: 引数 `<key>` がなければ **stdin** を読む。
 - 出力: 既定/`compact` モードは **NDJSON**（1 行 1 JSON）で `Assignment` を出力。
 - 整形モード（`--json=pretty`/`--pretty`/`--json --pretty`）は複数行の整形 JSON を返し、NDJSON とは異なる。
