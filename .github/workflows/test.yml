@@ -35,7 +35,10 @@ jobs:
           fi
       - uses: actions/upload-artifact@v4
         if: always()
-        with: { name: test-logs, path: workflow-cookbook/logs/* }
+        with:
+          name: test-logs-${{ github.job }}
+          path: workflow-cookbook/logs/*
+          if-no-files-found: warn
 
   typecheck:
     runs-on: ubuntu-24.04
@@ -60,7 +63,10 @@ jobs:
           fi
       - uses: actions/upload-artifact@v4
         if: always()
-        with: { name: test-logs, path: workflow-cookbook/logs/* }
+        with:
+          name: test-logs-${{ github.job }}
+          path: workflow-cookbook/logs/*
+          if-no-files-found: warn
 
   unit:
     runs-on: ubuntu-24.04
@@ -141,7 +147,10 @@ jobs:
       - name: Upload logs
         if: always()
         uses: actions/upload-artifact@v4
-        with: { name: test-logs, path: workflow-cookbook/logs/* }
+        with:
+          name: test-logs-${{ github.job }}
+          path: workflow-cookbook/logs/*
+          if-no-files-found: warn
 
   build:
     needs: [lint, typecheck, unit]
@@ -173,7 +182,10 @@ jobs:
           if-no-files-found: ignore
       - uses: actions/upload-artifact@v4
         if: always()
-        with: { name: test-logs, path: workflow-cookbook/logs/* }
+        with:
+          name: test-logs-${{ github.job }}
+          path: workflow-cookbook/logs/*
+          if-no-files-found: warn
 
   e2e:
     needs: [build]
@@ -197,28 +209,34 @@ jobs:
           fi
       - uses: actions/upload-artifact@v4
         if: always()
-        with: { name: test-logs, path: workflow-cookbook/logs/* }
+        with:
+          name: test-logs-${{ github.job }}
+          path: workflow-cookbook/logs/*
+          if-no-files-found: warn
 
   report:
     needs: [lint, typecheck, unit, build, e2e]
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/download-artifact@v4
-        with: { name: test-logs, path: . }
+        with:
+          pattern: test-logs-*
+          path: logs
       - name: Summarize & STRICT gate (optional)
         run: |
           set -Eeuo pipefail
-          # 可能性のあるファイル名に対応
-          src=""
-          [ -f test.jsonl ] && src="test.jsonl"
-          [ -z "$src" ] && [ -f logs/test.jsonl ] && src="logs/test.jsonl"
-          if [ -z "$src" ]; then src=$(ls -1 **/test.jsonl | head -n1 || true); fi
-          if [ -z "$src" ]; then echo "No JSONL found"; exit 0; fi
+          files=$(find . -name 'test.jsonl' -print | sort)
+          if [ -z "$files" ]; then echo "No JSONL found"; exit 0; fi
 
           echo "=== CI Summary (raw JSONL) ==="
-          cat "$src" || true
+          fails=0
+          for file in $files; do
+            echo "--- $file ---"
+            cat "$file" || true
+            count=$(grep -c '"status":"fail"' "$file" || true)
+            fails=$((fails + count))
+          done
 
-          fails=$(grep -c '"status":"fail"' "$src" || true)
           echo "Fail count: $fails"
 
           if [ "${CI_STRICT:-}" = "true" ] && [ "$fails" -gt 0 ]; then
