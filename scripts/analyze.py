@@ -109,8 +109,10 @@ def _load_from_legacy(obj: dict[str, object]) -> Optional[ParsedEntry]:
     name = obj.get("name")
     if not isinstance(name, str):
         name = ""
-    duration = extract_duration(obj)
     status = obj.get("status")
+    if status not in {"pass", "fail", "skip"}:
+        return None
+    duration = extract_duration(obj)
     is_failure = status == "fail"
     return name, duration, is_failure
     
@@ -136,19 +138,12 @@ def load_results() -> Tuple[list[str], list[int], list[str]]:
             if not line.strip():
                 continue
             obj = json.loads(line)
-            if not isinstance(obj, dict):
+            loaded = _load_from_event(obj)
+            if loaded is None:
+                loaded = _load_from_legacy(obj)
+            if loaded is None:
                 continue
-            event_type = obj.get("type")
-            parsed: Optional[ParsedEntry]
-            if isinstance(event_type, str):
-                if event_type not in ALLOWED_EVENT_TYPES:
-                    continue
-                parsed = _load_from_event(obj)
-            else:
-                parsed = _load_from_legacy(obj)
-            if parsed is None:
-                continue
-            name, duration, is_failure = parsed
+            name, duration, is_failure = loaded
             tests.append(name)
             durs.append(duration)
             if is_failure:

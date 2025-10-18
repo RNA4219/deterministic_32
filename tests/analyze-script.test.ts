@@ -31,7 +31,7 @@ const dynamicImport = new Function(
   "return import(specifier);",
 ) as (specifier: string) => Promise<unknown>;
 
-const LEGACY_LOG_CONTENT = `${JSON.stringify({
+const SINGLE_SAMPLE_LOG_CONTENT = `${JSON.stringify({
   name: "sample::single",
   status: "pass",
   data: { duration_ms: 150 },
@@ -143,6 +143,18 @@ const PASS_ONLY_LOG_CONTENT = `${JSON.stringify({
 
 const EMPTY_LOG_CONTENT = "";
 
+const FAILURE_LOG_CONTENT = `${JSON.stringify({
+  name: "sample::failing",
+  status: "fail",
+  duration_ms: 200,
+})}\n`;
+
+const SUCCESS_LOG_CONTENT = `${JSON.stringify({
+  name: "sample::passing",
+  status: "pass",
+  duration_ms: 120,
+})}\n`;
+
 test("analyze.py はサンプルが少なくても p95 を計算できる", async () => {
   const { execFile } = (await dynamicImport("node:child_process")) as { execFile: ExecFile };
   const { mkdir, readFile, rm, writeFile } = (await dynamicImport("node:fs/promises")) as FsPromisesModule;
@@ -188,7 +200,7 @@ test("analyze.py はサンプルが少なくても p95 を計算できる", asyn
       rm(issuePath, { force: true }),
     ]);
 
-    await writeFile(logPath, LEGACY_LOG_CONTENT, { encoding: "utf8" });
+    await writeFile(logPath, SINGLE_SAMPLE_LOG_CONTENT, { encoding: "utf8" });
 
     await new Promise<void>((resolve, reject) => {
       execFile(
@@ -502,5 +514,72 @@ test("analyze.py はテストが存在しない場合に 0 件として集計す
     } else {
       await writeFile(issuePath, originalIssue, { encoding: "utf8" });
     }
+  }
+});
+
+test("analyze.py は失敗後の成功実行で issue_suggestions.md をクリアする", async () => {
+  const { execFile } = (await dynamicImport("node:child_process")) as { execFile: ExecFile };
+  const { readFile, rm, writeFile } = (await dynamicImport("node:fs/promises")) as FsPromisesModule;
+  const { join } = (await dynamicImport("node:path")) as PathModule;
+  const repoRootPath = (process as unknown as { cwd(): string }).cwd();
+  const logPath = join(repoRootPath, "logs", "test.jsonl");
+  const reportPath = join(repoRootPath, "reports", "today.md");
+  const issuePath = join(repoRootPath, "reports", "issue_suggestions.md");
+  const originalLog = await readFile(logPath, { encoding: "utf8" }).catch(() => null);
+  const originalReport = await readFile(reportPath, { encoding: "utf8" }).catch(() => null);
+  const originalIssue = await readFile(issuePath, { encoding: "utf8" }).catch(() => null);
+  const runAnalyze = () =>
+    new Promise<void>((resolve, reject) => {
+      execFile(
+        "python3",
+        ["scripts/analyze.py"],
+        { cwd: repoRootPath, encoding: "utf8" },
+        (error: Error | null, _stdout: string, stderr: string) => {
+          if (error) {
+            const message =
+              stderr.length > 0 ? `analyze.py failed: ${stderr}` : "analyze.py exited with a non-zero status";
+            reject(new Error(message, { cause: error }));
+            return;
+          }
+          resolve();
+        },
+      );
+    });
+  const restore = async (path: string, original: string | null) => {
+    if (original === null) {
+      await rm(path, { force: true });
+      return;
+    }
+    await writeFile(path, original, { encoding: "utf8" });
+  };
+
+  try {
+    await writeFile(logPath, FAILURE_LOG_CONTENT, { encoding: "utf8" });
+    await runAnalyze();
+
+    const issueAfterFailure = await readFile(issuePath, { encoding: "utf8" });
+    assert.ok(issueAfterFailure.includes("sample::failing"), "失敗後は issue_suggestions.md が生成されるはず");
+
+    await writeFile(logPath, SUCCESS_LOG_CONTENT, { encoding: "utf8" });
+    await runAnalyze();
+
+    const issueContent = await readFile(issuePath, { encoding: "utf8" }).catch((error: unknown) => {
+      if (typeof error === "object" && error !== null && "code" in error) {
+        const { code } = error as { code?: unknown };
+        if (code === "ENOENT") {
+          return null;
+        }
+      }
+      throw error;
+    });
+
+    assert.ok(
+      issueContent === null || issueContent.trim().length === 0,
+      "成功時には issue_suggestions.md が削除されるか空になるはず",
+    );
+  } finally {
+    await restore(logPath, originalLog);
+    await restore(reportPath, originalReport);
+    await restore(issuePath, originalIssue);
   }
 });
