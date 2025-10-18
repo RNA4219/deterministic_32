@@ -21,17 +21,97 @@ LOG = pathlib.Path("logs/test.jsonl")
 REPORT = pathlib.Path("reports/today.md")
 ISSUE_OUT = pathlib.Path("reports/issue_suggestions.md")
 
+ALLOWED_EVENT_TYPES = {"test:pass", "test:fail", "test:skip"}
+_NESTED_DATA_KEYS: tuple[str, ...] = ("data", "test")
+
+
+def _extract_numeric_duration(value: object) -> int:
+    if isinstance(value, (int, float)):
+        return int(round(value))
+    return 0
+
+
+def _as_mapping(value: object) -> dict[str, object]:
+    if isinstance(value, dict):
+        return value
+    return {}
+
+
+def _unwrap_payload(payload: dict[str, object]) -> dict[str, object]:
+    current = payload
+    seen: set[int] = set()
+    while True:
+        identifier = id(current)
+        if identifier in seen:
+            return current
+        seen.add(identifier)
+        if any(field in current for field in ("name", "duration_ms", "status", "ok", "details")):
+            return current
+        for key in _NESTED_DATA_KEYS:
+            candidate = current.get(key)
+            if isinstance(candidate, dict):
+                current = candidate
+                break
+        else:
+            return current
+
+
+def _extract_duration(payload: dict[str, object]) -> int:
+    if "duration_ms" in payload:
+        return _extract_numeric_duration(payload.get("duration_ms"))
+    details = payload.get("details")
+    if isinstance(details, dict) and "duration_ms" in details:
+        return _extract_numeric_duration(details.get("duration_ms"))
+    return 0
+
+
+def _load_from_event(obj: dict[str, object]):
+    event_type = obj.get("type")
+    if not isinstance(event_type, str):
+        return None
+    if event_type not in ALLOWED_EVENT_TYPES:
+        return None
+    data = _unwrap_payload(_as_mapping(obj.get("data")))
+    name = data.get("name")
+    if not isinstance(name, str):
+        name = ""
+    duration = _extract_duration(data)
+    is_failure = event_type == "test:fail"
+    return name, duration, is_failure
+
+
+def _load_from_legacy(obj: dict[str, object]):
+    name = obj.get("name")
+    if not isinstance(name, str):
+        name = ""
+    duration = _extract_numeric_duration(obj.get("duration_ms"))
+    status = obj.get("status")
+    is_failure = status == "fail"
+    return name, duration, is_failure
+
+
 def load_results():
     tests, durs, fails = [], [], []
     if not LOG.exists():
         return tests, durs, fails
-    with LOG.open() as f:
+    with LOG.open(encoding="utf-8") as f:
         for line in f:
+            if not line.strip():
+                continue
             obj = json.loads(line)
-            tests.append(obj.get("name"))
-            durs.append(obj.get("duration_ms", 0))
-            if obj.get("status") == "fail":
-                fails.append(obj.get("name"))
+            if not isinstance(obj, dict):
+                continue
+            if "type" in obj:
+                parsed = _load_from_event(obj)
+            else:
+                parsed = _load_from_legacy(obj)
+            if parsed is None:
+                continue
+            name, duration, is_failure = parsed
+            tests.append(name)
+            durs.append(duration)
+            if is_failure:
+                fails.append(name)
     return tests, durs, fails
 
 def main():
