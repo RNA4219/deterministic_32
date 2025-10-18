@@ -398,7 +398,11 @@ const runJsonReporter = async () => {
   delete childEnv.NODE_TEST_CONTEXT;
   const spawnOverride = globalThis.__CAT32_TEST_SPAWN__;
   const spawnFunction = typeof spawnOverride === 'function' ? spawnOverride : spawn;
-  const child = spawnFunction(process.execPath, args, { stdio: 'inherit', env: childEnv });
+  const child = spawnFunction(process.execPath, args, {
+    stdio: 'inherit',
+    env: childEnv,
+    cwd: projectRoot,
+  });
   for (const signal of ['SIGINT', 'SIGTERM', 'SIGQUIT']) {
     process.on(signal, () => {
       if (!child.killed) {

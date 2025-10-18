@@ -330,6 +330,7 @@ test(
     const pathModule = require("node:path") as {
       resolve: (...segments: string[]) => string;
       dirname: (value: string) => string;
+      isAbsolute: (value: string) => boolean;
     };
     const { fileURLToPath } = (await dynamicImport("node:url")) as {
       fileURLToPath: (url: string | URL) => string;
@@ -446,6 +447,21 @@ test(
     assert.equal(destinationArgs[0], expectedDestinationArg);
     const expectedDirectory = pathModule.dirname(expectedDefaultDestination);
     assert.ok(mkdirCalls.includes(expectedDirectory));
+    const targetArgs = args.filter(
+      (value) => typeof value === "string" && !value.startsWith("--") && value !== "--test",
+    );
+    const hasAbsoluteTargets =
+      targetArgs.length > 0 && targetArgs.every((value) => pathModule.isAbsolute(value));
+    const options = invocation.options as { cwd?: unknown };
+    const usesProjectRootCwd =
+      options !== null &&
+      typeof options === "object" &&
+      typeof options.cwd === "string" &&
+      pathModule.resolve(options.cwd) === pathModule.resolve(projectRoot);
+    assert.ok(
+      hasAbsoluteTargets || usesProjectRootCwd,
+      "runner should spawn with absolute targets or project root cwd",
+    );
     assert.deepEqual(exitCodes, [0]);
   },
 );
