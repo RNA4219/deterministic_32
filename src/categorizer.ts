@@ -1,7 +1,7 @@
 import { fnv1a32, toHex32 } from "./hash.js";
 import { stableStringify } from "./serialize.js";
 
-export type NormalizeMode = "none" | "nfc" | "nfkc";
+export type NormalizeMode = "none" | "nfc" | "nfkc" | "nfkd";
 
 export interface CategorizerOptions {
   salt?: string;                 // domain separation
@@ -39,8 +39,8 @@ export class Cat32 {
     this.salt = `${baseSalt}${ns}`;
 
     const normalize = opts.normalize ?? "nfkc";
-    if (normalize !== "none" && normalize !== "nfc" && normalize !== "nfkc") {
-      throw new RangeError("normalize must be one of \"none\", \"nfc\", or \"nfkc\"");
+    if (normalize !== "none" && normalize !== "nfc" && normalize !== "nfkc" && normalize !== "nfkd") {
+      throw new RangeError("normalize must be one of \"none\", \"nfc\", \"nfkc\", or \"nfkd\"");
     }
     this.normalize = normalize;
     this.overrides = new Map();
@@ -95,6 +95,8 @@ export class Cat32 {
         return key.normalize("NFC");
       case "nfkc":
         return key.normalize("NFKC");
+      case "nfkd":
+        return key.normalize("NFKD");
       default:
         return key;
     }

@@ -1342,9 +1342,17 @@ test("normalization NFKC merges fullwidth", () => {
   assert.equal(x.index, y.index);
 });
 
+test("normalization NFKD merges compatibility characters", () => {
+  const c = new Cat32({ normalize: "nfkd" });
+  const x = c.assign("Ａ"); // fullwidth A
+  const y = c.assign("A");
+  assert.equal(x.index, y.index);
+});
+
 test("unsupported normalization option throws", () => {
   assert.throws(
-    () => new Cat32({ normalize: "nfkd" as unknown as import("../src/categorizer.js").NormalizeMode }),
+    () =>
+      new Cat32({ normalize: "unsupported" as unknown as import("../src/categorizer.js").NormalizeMode }),
     (error) => error instanceof RangeError,
   );
 });
@@ -2231,6 +2239,27 @@ test("CLI outputs pretty JSON when --json=pretty is provided", async () => {
 
   const expected = new Cat32().assign("json-pretty");
   assert.equal(stdout, JSON.stringify(expected, null, 2) + "\n");
+});
+
+test("CLI accepts NFKD normalization flag", async () => {
+  const { spawn } = (await dynamicImport("node:child_process")) as { spawn: SpawnFunction };
+  const child = spawn(process.argv[0], [CLI_PATH, "--normalize=nfkd", "Ａ"], {
+    stdio: ["ignore", "pipe", "inherit"],
+  });
+
+  let stdout = "";
+  child.stdout.setEncoding("utf8");
+  child.stdout.on("data", (chunk: string) => {
+    stdout += chunk;
+  });
+
+  const exitCode: number | null = await new Promise((resolve) => {
+    child.on("close", (code: number | null) => resolve(code));
+  });
+  assert.equal(exitCode, 0);
+
+  const expected = new Cat32({ normalize: "nfkd" }).assign("A");
+  assert.equal(stdout, JSON.stringify(expected) + "\n");
 });
 
 test("CLI pretty flag indents JSON output", async () => {
