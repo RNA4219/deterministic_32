@@ -1,7 +1,7 @@
 # API: TypeScript
 
 ```ts
-export type NormalizeMode = "none" | "nfc" | "nfkc";
+export type NormalizeMode = "none" | "nfc" | "nfkc" | "nfkd";
 
 export interface CategorizerOptions {
   salt?: string;
@@ -28,6 +28,8 @@ export class Cat32 {
   labelOf(input: unknown): string;
 }
 ```
+
+`normalize` には Unicode 正規化モードとして `"none" | "nfc" | "nfkc" | "nfkd"` の 4 種類を指定できます（CLI の `--normalize` も同じ値を受け付けます）。
 
 ### 例
 ```ts
