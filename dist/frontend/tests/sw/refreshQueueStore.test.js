@@ -1,7 +1,42 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createRefreshQueueStore } from "../../src/sw/refreshQueueStore.js";
-const createRequest = (input, init) => new Request(input, init);
+const normalizeBody = (body) => {
+    if (typeof body === "string") {
+        return body;
+    }
+    if (body === undefined || body === null) {
+        return "";
+    }
+    return String(body);
+};
+const createFallbackRequest = () => {
+    class MinimalRequest {
+        method;
+        url;
+        #body;
+        #headers;
+        constructor(input, init) {
+            this.url = typeof input === "string" ? input : input.toString();
+            this.method = init?.method ?? "GET";
+            this.#headers = init?.headers;
+            this.#body = normalizeBody(init?.body);
+        }
+        clone() {
+            return new MinimalRequest(this.url, {
+                method: this.method,
+                headers: this.#headers,
+                body: this.#body,
+            });
+        }
+        async text() {
+            return this.#body;
+        }
+    }
+    return MinimalRequest;
+};
+const RequestCtor = typeof Request !== "undefined" ? Request : createFallbackRequest();
+const createRequest = (input, init) => new RequestCtor(input, init);
 test("recordFailure keeps entry with failure metadata", () => {
     const store = createRefreshQueueStore();
     const request = createRequest("https://example.test/api", { method: "POST" });

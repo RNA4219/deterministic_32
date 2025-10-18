@@ -3,8 +3,53 @@ import test from "node:test";
 
 import { createRefreshQueueStore } from "../../src/sw/refreshQueueStore.js";
 
+type RequestConstructor = new (input: string | URL, init?: RequestInit) => Request;
+
+const normalizeBody = (body: unknown): string => {
+  if (typeof body === "string") {
+    return body;
+  }
+  if (body === undefined || body === null) {
+    return "";
+  }
+  return String(body);
+};
+
+const createFallbackRequest = (): RequestConstructor => {
+  class MinimalRequest {
+    readonly method: string;
+    readonly url: string;
+    readonly #body: string;
+    readonly #headers: RequestInit["headers"];
+
+    constructor(input: string | URL, init?: RequestInit) {
+      this.url = typeof input === "string" ? input : input.toString();
+      this.method = init?.method ?? "GET";
+      this.#headers = init?.headers;
+      this.#body = normalizeBody(init?.body);
+    }
+
+    clone(): Request {
+      return new MinimalRequest(this.url, {
+        method: this.method,
+        headers: this.#headers,
+        body: this.#body,
+      }) as unknown as Request;
+    }
+
+    async text(): Promise<string> {
+      return this.#body;
+    }
+  }
+
+  return MinimalRequest as unknown as RequestConstructor;
+};
+
+const RequestCtor: RequestConstructor =
+  typeof Request !== "undefined" ? Request : createFallbackRequest();
+
 const createRequest = (input: string, init?: RequestInit): Request =>
-  new Request(input, init);
+  new RequestCtor(input, init);
 
 test("recordFailure keeps entry with failure metadata", () => {
   const store = createRefreshQueueStore();
