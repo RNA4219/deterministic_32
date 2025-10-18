@@ -28,10 +28,40 @@ def load_results():
     with LOG.open() as f:
         for line in f:
             obj = json.loads(line)
-            tests.append(obj.get("name"))
-            durs.append(obj.get("duration_ms", 0))
-            if obj.get("status") == "fail":
-                fails.append(obj.get("name"))
+            data = obj.get("data")
+            if not isinstance(data, dict):
+                data = {}
+
+            name = obj.get("name")
+            if name is None and data:
+                name = data.get("name")
+            if name is None:
+                name = obj.get("type")
+            tests.append(name)
+
+            duration = obj.get("duration_ms")
+            if duration is None and data:
+                duration = data.get("duration_ms")
+            if duration is None:
+                duration = 0
+            if isinstance(duration, (int, float)):
+                duration_value = int(duration)
+            else:
+                try:
+                    duration_value = int(duration)
+                except (TypeError, ValueError):
+                    duration_value = 0
+            durs.append(duration_value)
+
+            status = obj.get("status")
+            if status is None and data:
+                status = data.get("status")
+            if status is None:
+                type_value = obj.get("type")
+                if isinstance(type_value, str) and type_value.startswith("test:"):
+                    status = type_value.split(":", 1)[1]
+            if status == "fail":
+                fails.append(name)
     return tests, durs, fails
 
 def main():
