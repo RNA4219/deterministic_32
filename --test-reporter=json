@@ -240,17 +240,31 @@ const prepareRunnerOptions = (
   return { passthroughArgs, targets, destinationOverride };
 };
 
-const resolveDestination = (override) => {
-  if (override) {
-    return override;
+const ensureAbsoluteDestination = (candidate) => {
+  if (!candidate) {
+    return path.resolve(projectRoot, DEFAULT_DESTINATION);
   }
 
-  for (const entry of fs.readdirSync('.', { withFileTypes: true })) {
+  if (path.isAbsolute(candidate)) {
+    return candidate;
+  }
+
+  return path.resolve(projectRoot, candidate);
+};
+
+const resolveDestination = (override) => {
+  if (override) {
+    return ensureAbsoluteDestination(override);
+  }
+
+  for (const entry of fs.readdirSync(projectRoot, { withFileTypes: true })) {
     if (!entry.name.startsWith(DESTINATION_PREFIX)) {
       continue;
     }
     let suffix = entry.name.slice(DESTINATION_PREFIX.length);
-    let current = entry.isDirectory() ? entry.name : null;
+    let current = entry.isDirectory()
+      ? path.join(projectRoot, entry.name)
+      : null;
     while (current) {
       const contents = fs.readdirSync(current, { withFileTypes: true });
       const next = contents.find((item) => item.isDirectory());
@@ -260,24 +274,25 @@ const resolveDestination = (override) => {
       suffix = path.join(suffix, next.name);
       current = path.join(current, next.name);
     }
-    return suffix || DEFAULT_DESTINATION;
+    return ensureAbsoluteDestination(suffix || DEFAULT_DESTINATION);
   }
-  return DEFAULT_DESTINATION;
+  return ensureAbsoluteDestination(DEFAULT_DESTINATION);
 };
 
-export { prepareRunnerOptions };
+export { prepareRunnerOptions, resolveDestination };
 
 const runJsonReporter = async () => {
   const { passthroughArgs, targets, destinationOverride } = prepareRunnerOptions();
   const destination = resolveDestination(destinationOverride);
-  const resolvedDestination = path.resolve(destination);
-  fs.mkdirSync(path.dirname(resolvedDestination), { recursive: true });
+  fs.mkdirSync(path.dirname(destination), { recursive: true });
 
-  const reporterSpecifier = pathToFileURL(path.resolve('reporters/json/index.js')).href;
+  const reporterSpecifier = pathToFileURL(
+    path.resolve(projectRoot, 'reporters/json/index.js'),
+  ).href;
   const args = [
     '--test',
     `--test-reporter=${reporterSpecifier}`,
-    `--test-reporter-destination=${resolvedDestination}`,
+    `--test-reporter-destination=${destination}`,
     ...targets,
     ...passthroughArgs
   ];
