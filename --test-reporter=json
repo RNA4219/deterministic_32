@@ -50,40 +50,43 @@ const mapTargetArgument = (
     return target;
   }
 
-  const safeExists = (candidate) =>
-    typeof candidate === 'string' && existsSync(candidate);
+  const absoluteFromCwd = path.isAbsolute(target)
+    ? target
+    : path.resolve(target);
+  const absoluteFromProject = path.isAbsolute(target)
+    ? target
+    : path.resolve(projectRoot, target);
 
-  const resolveAbsoluteCandidate = (candidate) => {
-    if (path.isAbsolute(candidate)) {
-      return path.normalize(candidate);
+  const absolute = (() => {
+    if (path.isAbsolute(target)) {
+      return target;
     }
 
-    const resolvedFromCwd = path.resolve(candidate);
+    const existsFromCwd = existsSync(absoluteFromCwd);
+    const existsFromProject = existsSync(absoluteFromProject);
+    const currentDirectory = process.cwd();
+    const cwdContainsCandidate = absoluteFromCwd.startsWith(`${currentDirectory}${path.sep}`) ||
+      absoluteFromCwd === currentDirectory;
 
-    const relativeFromCwd = path.relative(projectRoot, resolvedFromCwd);
-    const isWithinProjectFromCwd =
-      relativeFromCwd &&
-      relativeFromCwd !== '..' &&
-      !relativeFromCwd.startsWith(`..${path.sep}`);
-    const candidateExtension = path.extname(candidate);
-
-    if (
-      safeExists(resolvedFromCwd) ||
-      (candidateExtension && isWithinProjectFromCwd)
-    ) {
-      return path.normalize(resolvedFromCwd);
+    if (existsFromCwd && !existsFromProject) {
+      return absoluteFromCwd;
     }
 
-    const resolvedFromProject = path.resolve(projectRoot, candidate);
-
-    if (safeExists(resolvedFromProject)) {
-      return path.normalize(resolvedFromProject);
+    if (existsFromProject && !existsFromCwd) {
+      return absoluteFromProject;
     }
 
-    return path.normalize(resolvedFromProject);
-  };
+    if (existsFromCwd && existsFromProject) {
+      return cwdContainsCandidate ? absoluteFromCwd : absoluteFromProject;
+    }
 
-  const absolute = resolveAbsoluteCandidate(target);
+    if (cwdContainsCandidate) {
+      return absoluteFromCwd;
+    }
+
+    return absoluteFromProject;
+  })();
+
   const relativePathFromProject = path.relative(projectRoot, absolute);
   const normalizedRelative = path.normalize(relativePathFromProject);
   const extension = path.extname(normalizedRelative);
@@ -197,20 +200,53 @@ const prepareRunnerOptions = (
       mapDirectoriesToDist: true,
     });
 
+    const toAbsoluteFromProject = (value) => {
+      if (!value) {
+        return null;
+      }
+
+      return path.isAbsolute(value)
+        ? value
+        : path.resolve(projectRoot, value);
+    };
+
+    const toAbsoluteFromCwd = (value) => {
+      if (!value) {
+        return null;
+      }
+
+      return path.isAbsolute(value) ? value : path.resolve(value);
+    };
+
+    const candidatesToCheck = (values) =>
+      values.filter((value) => typeof value === 'string');
+
+    const existsInAnyLocation = (...values) =>
+      candidatesToCheck(values).some((value) => existsSync(value));
+
     if (normalized && normalized !== candidate) {
-      if (candidateExists(normalized) || candidateExists(candidate)) {
+      if (
+        existsInAnyLocation(
+          normalized,
+          toAbsoluteFromProject(normalized),
+          toAbsoluteFromCwd(normalized),
+          candidate,
+          toAbsoluteFromProject(candidate),
+          toAbsoluteFromCwd(candidate),
+        )
+      ) {
         return normalized;
       }
     }
 
-    if (candidateExists(candidate)) {
+    if (
+      existsInAnyLocation(
+        candidate,
+        toAbsoluteFromProject(candidate),
+        toAbsoluteFromCwd(candidate),
+      )
+    ) {
       return candidate;
-    }
-
-    const absoluteCandidate = mapTargetArgument(candidate, { existsSync });
-
-    if (absoluteCandidate && path.isAbsolute(absoluteCandidate)) {
-      return candidateExists(absoluteCandidate) ? absoluteCandidate : null;
     }
 
     return null;

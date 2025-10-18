@@ -605,6 +605,7 @@ test("JSON reporter runner resolves TS targets when invoked from tests directory
   const knownPaths = new Set([
     "categorizer.test.ts",
     pathModuleForCategorizer.resolve("categorizer.test.ts"),
+    pathModuleForCategorizer.resolve("tests/categorizer.test.ts"),
     "dist/tests/categorizer.test.js",
     pathModuleForCategorizer.resolve("dist/tests/categorizer.test.js"),
   ]);
@@ -1023,3 +1024,65 @@ test("prepareRunnerOptions maps directory targets relative to the script", async
     }
   }
 });
+
+test(
+  "prepareRunnerOptions keeps default dist targets when invoked from frontend directory",
+  async () => {
+    const processWithEnv = process as typeof process & {
+      env: Record<string, string | undefined> & {
+        __CAT32_SKIP_JSON_REPORTER_RUN__?: string;
+      };
+    };
+    const previousEnv = processWithEnv.env.__CAT32_SKIP_JSON_REPORTER_RUN__;
+    processWithEnv.env.__CAT32_SKIP_JSON_REPORTER_RUN__ = "1";
+
+    const processWithCwd = process as typeof process & {
+      cwd: () => string;
+      chdir: (directory: string) => void;
+    };
+    const originalCwd = processWithCwd.cwd();
+
+    try {
+      const moduleExports = (await import(
+        `${runnerUrl.href}?frontend-default=${Date.now()}`,
+      )) as { prepareRunnerOptions: PrepareRunnerOptions };
+
+      const { prepareRunnerOptions } = moduleExports;
+      assert.equal(typeof prepareRunnerOptions, "function");
+
+      const { fileURLToPath } = (await dynamicImport("node:url")) as {
+        fileURLToPath: (url: string | URL) => string;
+      };
+      const { resolve } = (await dynamicImport("node:path")) as {
+        resolve: (...segments: string[]) => string;
+      };
+
+      const projectRoot = fileURLToPath(repoRootUrl);
+      const frontendDirectory = fileURLToPath(new URL("./frontend/", repoRootUrl));
+      processWithCwd.chdir(frontendDirectory);
+
+      const knownPaths = new Set([
+        "dist/tests",
+        "dist/frontend/tests",
+        resolve(projectRoot, "dist/tests"),
+        resolve(projectRoot, "dist/frontend/tests"),
+      ]);
+
+      const result = prepareRunnerOptions(["node", "script"], {
+        existsSync: (candidate) =>
+          typeof candidate === "string" &&
+          (knownPaths.has(candidate) || knownPaths.has(resolve(candidate))),
+      });
+
+      assert.deepEqual(result.targets, ["dist/tests", "dist/frontend/tests"]);
+    } finally {
+      processWithCwd.chdir(originalCwd);
+
+      if (previousEnv === undefined) {
+        delete processWithEnv.env.__CAT32_SKIP_JSON_REPORTER_RUN__;
+      } else {
+        processWithEnv.env.__CAT32_SKIP_JSON_REPORTER_RUN__ = previousEnv;
+      }
+    }
+  },
+);
