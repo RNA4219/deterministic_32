@@ -7,7 +7,41 @@ const DESTINATION_PREFIX = '--test-reporter-destination=';
 const DEFAULT_DESTINATION = 'logs/test.jsonl';
 const DEFAULT_TARGETS = ['dist/tests', 'dist/frontend/tests'];
 
-const resolveTargets = () => {
+const mapTargetArgument = (argument) => {
+  if (!argument.endsWith('.ts')) {
+    return argument;
+  }
+
+  const withoutExtension = argument.slice(0, -3);
+  return path.join('dist', `${withoutExtension}.js`);
+};
+
+const parseCliArguments = () => {
+  const passthroughArgs = [];
+  const targetArgs = [];
+
+  for (const argument of process.argv.slice(2)) {
+    if (!argument) {
+      continue;
+    }
+
+    if (argument.startsWith('--')) {
+      passthroughArgs.push(argument);
+      continue;
+    }
+
+    if (fs.existsSync(argument)) {
+      targetArgs.push(mapTargetArgument(argument));
+      continue;
+    }
+
+    passthroughArgs.push(argument);
+  }
+
+  return { passthroughArgs, targetArgs };
+};
+
+const resolveTargets = (explicitTargets) => {
   const targets = [];
   for (const candidate of DEFAULT_TARGETS) {
     if (fs.existsSync(candidate)) {
@@ -15,8 +49,8 @@ const resolveTargets = () => {
     }
   }
 
-  for (const argument of process.argv.slice(2)) {
-    if (!argument || argument.startsWith('--')) {
+  for (const target of explicitTargets) {
+    if (!target) {
       continue;
     }
     let candidate = argument;
@@ -67,18 +101,22 @@ const destination = resolveDestination();
 const resolvedDestination = path.resolve(destination);
 fs.mkdirSync(path.dirname(resolvedDestination), { recursive: true });
 
-const targets = resolveTargets();
+const { passthroughArgs, targetArgs } = parseCliArguments();
+const targets = resolveTargets(targetArgs);
 const reporterSpecifier = pathToFileURL(path.resolve('reporters/json/index.js')).href;
 const args = [
   '--test',
   `--test-reporter=${reporterSpecifier}`,
   `--test-reporter-destination=${resolvedDestination}`,
-  ...targets
+  ...targets,
+  ...passthroughArgs
 ];
 
 const childEnv = { ...process.env };
 delete childEnv.NODE_TEST_CONTEXT;
-const child = spawn(process.execPath, args, { stdio: 'inherit', env: childEnv });
+const spawnOverride = globalThis.__CAT32_TEST_SPAWN__;
+const spawnFunction = typeof spawnOverride === 'function' ? spawnOverride : spawn;
+const child = spawnFunction(process.execPath, args, { stdio: 'inherit', env: childEnv });
 for (const signal of ['SIGINT', 'SIGTERM', 'SIGQUIT']) {
   process.on(signal, () => {
     if (!child.killed) {
