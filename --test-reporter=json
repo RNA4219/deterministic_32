@@ -19,11 +19,28 @@ const normalizeTarget = (target) => {
   return path.join('dist', `${withoutExtension}.js`);
 };
 
-const parseCliArguments = () => {
+const prepareRunnerOptions = (
+  argv = process.argv,
+  {
+    existsSync = fs.existsSync,
+    defaultTargets = DEFAULT_TARGETS,
+  } = {},
+) => {
   const passthroughArgs = [];
-  const targetArgs = [];
+  const explicitTargets = [];
+  const resolvedDefaults = [];
+  const seenTargets = new Set();
 
-  for (const argument of process.argv.slice(2)) {
+  const addTarget = (candidate) => {
+    if (!candidate || seenTargets.has(candidate)) {
+      return;
+    }
+
+    seenTargets.add(candidate);
+    explicitTargets.push(candidate);
+  };
+
+  for (const argument of argv.slice(2)) {
     if (!argument) {
       continue;
     }
@@ -38,38 +55,38 @@ const parseCliArguments = () => {
       continue;
     }
 
+    if (existsSync(argument)) {
+      addTarget(argument);
+      continue;
+    }
+
     passthroughArgs.push(argument);
   }
 
-  return { passthroughArgs, targetArgs };
-};
-
-const resolveTargets = (explicitTargets) => {
-  const targets = [];
-  for (const candidate of DEFAULT_TARGETS) {
-    if (fs.existsSync(candidate)) {
-      targets.push(candidate);
-    }
-  }
-
-  for (const target of explicitTargets) {
-    if (!target) {
+  for (const candidate of defaultTargets) {
+    if (!candidate) {
       continue;
     }
     const candidate = normalizeTarget(target);
     if (!fs.existsSync(candidate)) {
       continue;
     }
-    if (!targets.includes(candidate)) {
-      targets.push(candidate);
+
+    seenTargets.add(candidate);
+    resolvedDefaults.push(candidate);
+  }
+
+  const targets = explicitTargets.length > 0 ? explicitTargets : resolvedDefaults;
+
+  if (targets.length === 0 && defaultTargets.length > 0) {
+    const fallback = defaultTargets[0];
+    if (fallback && !seenTargets.has(fallback)) {
+      targets.push(fallback);
+      seenTargets.add(fallback);
     }
   }
 
-  if (targets.length === 0) {
-    targets.push(DEFAULT_TARGETS[0]);
-  }
-
-  return targets;
+  return { passthroughArgs, targets };
 };
 
 const resolveDestination = () => {
@@ -93,46 +110,53 @@ const resolveDestination = () => {
   return DEFAULT_DESTINATION;
 };
 
-const destination = resolveDestination();
-const resolvedDestination = path.resolve(destination);
-fs.mkdirSync(path.dirname(resolvedDestination), { recursive: true });
+export { prepareRunnerOptions };
 
-const { passthroughArgs, targetArgs } = parseCliArguments();
-const targets = resolveTargets(targetArgs);
-const reporterSpecifier = pathToFileURL(path.resolve('reporters/json/index.js')).href;
-const args = [
-  '--test',
-  `--test-reporter=${reporterSpecifier}`,
-  `--test-reporter-destination=${resolvedDestination}`,
-  ...targets,
-  ...passthroughArgs
-];
+const runJsonReporter = async () => {
+  const destination = resolveDestination();
+  const resolvedDestination = path.resolve(destination);
+  fs.mkdirSync(path.dirname(resolvedDestination), { recursive: true });
 
-const childEnv = { ...process.env };
-delete childEnv.NODE_TEST_CONTEXT;
-const spawnOverride = globalThis.__CAT32_TEST_SPAWN__;
-const spawnFunction = typeof spawnOverride === 'function' ? spawnOverride : spawn;
-const child = spawnFunction(process.execPath, args, { stdio: 'inherit', env: childEnv });
-for (const signal of ['SIGINT', 'SIGTERM', 'SIGQUIT']) {
-  process.on(signal, () => {
-    if (!child.killed) {
-      child.kill(signal);
-    }
+  const { passthroughArgs, targets } = prepareRunnerOptions();
+  const reporterSpecifier = pathToFileURL(path.resolve('reporters/json/index.js')).href;
+  const args = [
+    '--test',
+    `--test-reporter=${reporterSpecifier}`,
+    `--test-reporter-destination=${resolvedDestination}`,
+    ...targets,
+    ...passthroughArgs
+  ];
+
+  const childEnv = { ...process.env };
+  delete childEnv.NODE_TEST_CONTEXT;
+  const spawnOverride = globalThis.__CAT32_TEST_SPAWN__;
+  const spawnFunction = typeof spawnOverride === 'function' ? spawnOverride : spawn;
+  const child = spawnFunction(process.execPath, args, { stdio: 'inherit', env: childEnv });
+  for (const signal of ['SIGINT', 'SIGTERM', 'SIGQUIT']) {
+    process.on(signal, () => {
+      if (!child.killed) {
+        child.kill(signal);
+      }
+    });
+  }
+
+  const exitResult = await new Promise((resolve) => {
+    child.once('error', (error) => {
+      console.error(error);
+      resolve({ code: 1, signal: null });
+    });
+    child.once('exit', (code, signal) => {
+      resolve({ code, signal });
+    });
   });
-}
 
-const exitResult = await new Promise((resolve) => {
-  child.once('error', (error) => {
-    console.error(error);
-    resolve({ code: 1, signal: null });
-  });
-  child.once('exit', (code, signal) => {
-    resolve({ code, signal });
-  });
-});
+  if (exitResult.signal) {
+    process.kill(process.pid, exitResult.signal);
+  } else {
+    process.exit(exitResult.code ?? 1);
+  }
+};
 
-if (exitResult.signal) {
-  process.kill(process.pid, exitResult.signal);
-} else {
-  process.exit(exitResult.code ?? 1);
+if (process.env.__CAT32_SKIP_JSON_REPORTER_RUN__ !== '1') {
+  await runJsonReporter();
 }

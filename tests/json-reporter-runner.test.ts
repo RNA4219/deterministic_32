@@ -113,3 +113,51 @@ test("JSON reporter runner uses dist target when invoked with TS input", async (
   assert.ok(args.includes("dist/tests/example.test.js"));
   assert.deepEqual(exitCodes, [0]);
 });
+
+test("prepareRunnerOptions prefers CLI targets when present", async () => {
+  type PrepareRunnerOptions = (
+    argv: readonly string[],
+    overrides?: {
+      existsSync?: (candidate: string) => boolean;
+      defaultTargets?: readonly string[];
+    },
+  ) => { passthroughArgs: string[]; targets: string[] };
+
+  const processWithEnv = process as typeof process & {
+    env: Record<string, string | undefined> & {
+      __CAT32_SKIP_JSON_REPORTER_RUN__?: string;
+    };
+  };
+  const previous = processWithEnv.env.__CAT32_SKIP_JSON_REPORTER_RUN__;
+  processWithEnv.env.__CAT32_SKIP_JSON_REPORTER_RUN__ = "1";
+
+  try {
+    const moduleExports = (await import(
+      `${runnerUrl.href}?options=${Date.now()}`
+    )) as { prepareRunnerOptions: PrepareRunnerOptions };
+
+    const { prepareRunnerOptions } = moduleExports;
+    assert.equal(typeof prepareRunnerOptions, "function");
+
+    const existingPaths = new Set([
+      "dist/tests",
+      "dist/frontend/tests",
+      "dist/tests/json-reporter.test.js",
+    ]);
+
+    const result = prepareRunnerOptions(
+      ["node", "script", "dist/tests/json-reporter.test.js"],
+      {
+        existsSync: (candidate) => existingPaths.has(candidate),
+      },
+    );
+
+    assert.deepEqual(result.targets, ["dist/tests/json-reporter.test.js"]);
+  } finally {
+    if (previous === undefined) {
+      delete processWithEnv.env.__CAT32_SKIP_JSON_REPORTER_RUN__;
+    } else {
+      processWithEnv.env.__CAT32_SKIP_JSON_REPORTER_RUN__ = previous;
+    }
+  }
+});

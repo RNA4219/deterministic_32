@@ -18,22 +18,72 @@ jobs:
         run: npm run lint
       - name: Build and run tests
         run: |
-          npm run build
+          set -Eeuo pipefail
           mkdir -p logs
+          echo "::group::env"
+          node -v
+          npm -v
+          pwd
+          echo "::endgroup::"
+
+          export NODE_OPTIONS="--enable-source-maps --trace-uncaught --unhandled-rejections=strict --trace-warnings"
+
+          set +e
+          node scripts/build.js 2>&1 | tee logs/build.log
+          build_status=${PIPESTATUS[0]}
+          set -e
+
+          echo "::group::dist tree"
+          (ls -la && echo && (ls -R dist || true)) | tee -a logs/build.log
+          echo "::endgroup::"
+
           set +e
           node --test \
             --test-reporter=json \
             --test-reporter-destination=logs/test.jsonl \
-            dist/tests
-          status=$?
+            dist/tests 2>&1 | tee logs/test.log
+          test_status=${PIPESTATUS[0]}
           set -e
+
           if [ ! -f logs/test.jsonl ]; then
-            touch logs/test.jsonl
+            : > logs/test.jsonl
           fi
-          exit $status
-      - name: Upload logs
+
+          echo "build_status=${build_status} test_status=${test_status}"
+          exit $(( build_status != 0 ? build_status : test_status ))
+      - name: Summarize failing tests
+        if: failure()
+        run: |
+          node -e "
+          const fs=require('fs');
+          const p='logs/test.jsonl';
+          if(!fs.existsSync(p)){ console.log('logs/test.jsonl not found'); process.exit(0); }
+          const lines=fs.readFileSync(p,'utf8').trim().split(/\r?\n/);
+          const fails=[];
+          for(const L of lines){
+            try{
+              const o=JSON.parse(L);
+              if(o.type==='test' && o.data?.details?.error){
+                const e=o.data.details.error;
+                fails.push({
+                  file:o.data.file, name:o.data.name,
+                  message:e.message||String(e),
+                  stack:(e.stack||'').split('\n').slice(0,15).join('\n')
+                });
+              }
+            }catch{}
+          }
+          console.log('\nFailing tests:', fails.length);
+          for(const f of fails){
+            console.log(`\n--- ${f.file} :: ${f.name}\n${f.message}\n${f.stack}`);
+          }"
+      - name: Re-run tests in spec reporter (non-blocking)
+        if: failure()
+        continue-on-error: true
+        run: node --test dist/tests --test-reporter=spec
+      - name: Upload CI logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: test-logs
-          path: logs/test.jsonl
+          name: ci-logs
+          path: logs/*
