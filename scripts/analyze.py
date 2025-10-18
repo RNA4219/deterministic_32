@@ -21,17 +21,64 @@ LOG = pathlib.Path("logs/test.jsonl")
 REPORT = pathlib.Path("reports/today.md")
 ISSUE_OUT = pathlib.Path("reports/issue_suggestions.md")
 
+ALLOWED_EVENT_TYPES = {"test:pass", "test:fail", "test:skip"}
+
+
+def _extract_numeric_duration(value: object) -> int:
+    if isinstance(value, (int, float)):
+        return int(round(value))
+    return 0
+
+
+def _load_from_event(obj: dict[str, object]):
+    event_type = obj.get("type")
+    if not isinstance(event_type, str):
+        return None
+    if event_type not in ALLOWED_EVENT_TYPES:
+        return None
+    data = obj.get("data")
+    if not isinstance(data, dict):
+        data = {}
+    name = data.get("name")
+    if not isinstance(name, str):
+        name = ""
+    duration = _extract_numeric_duration(data.get("duration_ms"))
+    is_failure = event_type == "test:fail"
+    return name, duration, is_failure
+
+
+def _load_from_legacy(obj: dict[str, object]):
+    name = obj.get("name")
+    if not isinstance(name, str):
+        name = ""
+    duration = _extract_numeric_duration(obj.get("duration_ms"))
+    status = obj.get("status")
+    is_failure = status == "fail"
+    return name, duration, is_failure
+
+
 def load_results():
     tests, durs, fails = [], [], []
     if not LOG.exists():
         return tests, durs, fails
-    with LOG.open() as f:
+    with LOG.open(encoding="utf-8") as f:
         for line in f:
+            if not line.strip():
+                continue
             obj = json.loads(line)
-            tests.append(obj.get("name"))
-            durs.append(obj.get("duration_ms", 0))
-            if obj.get("status") == "fail":
-                fails.append(obj.get("name"))
+            if not isinstance(obj, dict):
+                continue
+            if "type" in obj:
+                parsed = _load_from_event(obj)
+            else:
+                parsed = _load_from_legacy(obj)
+            if parsed is None:
+                continue
+            name, duration, is_failure = parsed
+            tests.append(name)
+            durs.append(duration)
+            if is_failure:
+                fails.append(name)
     return tests, durs, fails
 
 def main():
