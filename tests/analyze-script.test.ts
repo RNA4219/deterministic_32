@@ -53,6 +53,16 @@ const LOG_WITH_DIAGNOSTIC_CONTENT =
     data: { message: "informational" },
   })}\n`;
 
+const BASIC_JSONL_CONTENT =
+  `${JSON.stringify({
+    type: "test:pass",
+    data: { name: "ok", duration_ms: 5 },
+  })}\n` +
+  `${JSON.stringify({
+    type: "test:fail",
+    data: { name: "ng", duration_ms: 7 },
+  })}\n`;
+
 const DATA_WRAPPED_LOG_CONTENT =
   [
     {
@@ -146,6 +156,67 @@ test("analyze.py はサンプルが少なくても p95 を計算できる", asyn
       rm(reportPath, { force: true }),
       rm(issuePath, { force: true }),
     ]);
+  }
+});
+
+test("analyze.py は test:pass/test:fail を JSONL から集計する", async () => {
+  const { execFile } = (await dynamicImport("node:child_process")) as { execFile: ExecFile };
+  const { readFile, rm, writeFile } = (await dynamicImport("node:fs/promises")) as FsPromisesModule;
+  const { join } = (await dynamicImport("node:path")) as PathModule;
+
+  const repoRootPath = (process as unknown as { cwd(): string }).cwd();
+  const logPath = join(repoRootPath, "logs", "test.jsonl");
+  const reportPath = join(repoRootPath, "reports", "today.md");
+
+  const originalLog = await readFile(logPath, { encoding: "utf8" }).catch(() => null);
+  const originalReport = await readFile(reportPath, { encoding: "utf8" }).catch(() => null);
+
+  try {
+    await writeFile(logPath, BASIC_JSONL_CONTENT, { encoding: "utf8" });
+
+    await new Promise<void>((resolve, reject) => {
+      execFile(
+        "python3",
+        ["scripts/analyze.py"],
+        { cwd: repoRootPath, encoding: "utf8" },
+        (error: Error | null, _stdout: string, stderr: string) => {
+          if (error) {
+            const message =
+              stderr.length > 0 ? `analyze.py failed: ${stderr}` : "analyze.py exited with a non-zero status";
+            reject(new Error(message, { cause: error }));
+            return;
+          }
+          resolve();
+        },
+      );
+    });
+
+    const report = await readFile(reportPath, { encoding: "utf8" });
+    assert.ok(report.includes("- Total tests: 2"), "test:pass/test:fail だけなら合計は 2 のはず");
+
+    const failuresMatch = report.match(/- Failures: (\d+)/);
+    if (failuresMatch === null) {
+      throw new Error("失敗件数の行が存在するはず");
+    }
+    assert.equal(Number(failuresMatch[1]), 1, "失敗件数は 1 のはず");
+
+    const durationMatch = report.match(/- Duration p95: (\d+) ms/);
+    if (durationMatch === null) {
+      throw new Error("p95 の行が存在するはず");
+    }
+    assert.ok(Number(durationMatch[1]) >= 7, "p95 は 7 以上のはず");
+  } finally {
+    if (originalLog === null) {
+      await rm(logPath, { force: true });
+    } else {
+      await writeFile(logPath, originalLog, { encoding: "utf8" });
+    }
+
+    if (originalReport === null) {
+      await rm(reportPath, { force: true });
+    } else {
+      await writeFile(reportPath, originalReport, { encoding: "utf8" });
+    }
   }
 });
 

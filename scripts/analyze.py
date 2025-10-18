@@ -1,17 +1,15 @@
 import datetime
 import json
+import math
 import os
 import pathlib
 import statistics
 from collections import Counter
-from typing import Optional, Tuple
-
-
 def compute_p95(durations: list[int]) -> int:
     if not durations:
         return 0
     if len(durations) >= 20:
-        return int(statistics.quantiles(durations, n=20)[18])
+        return math.ceil(statistics.quantiles(durations, n=20)[18])
     ordered = sorted(durations)
     if len(ordered) == 1:
         return int(ordered[0])
@@ -20,7 +18,7 @@ def compute_p95(durations: list[int]) -> int:
     upper_index = min(lower_index + 1, len(ordered) - 1)
     fraction = position - lower_index
     interpolated = ordered[lower_index] + (ordered[upper_index] - ordered[lower_index]) * fraction
-    return int(interpolated)
+    return math.ceil(interpolated)
 
 LOG = pathlib.Path(os.environ.get("ANALYZE_LOG_PATH", "logs/test.jsonl"))
 REPORT = pathlib.Path(os.environ.get("ANALYZE_REPORT_PATH", "reports/today.md"))
@@ -44,7 +42,7 @@ def extract_duration(entry: dict[str, object]) -> int:
     return 0
 
 
-ALLOWED_EVENT_TYPES = {"test:pass", "test:fail", "test:skip"}
+TEST_EVENT_TYPES = {"test:pass", "test:fail"}
 _NESTED_DATA_KEYS: tuple[str, ...] = ("data", "test")
 
 
@@ -88,21 +86,6 @@ def _extract_duration(payload: dict[str, object]) -> int:
     return 0
 
 
-def _load_from_event(obj: dict[str, object]):
-    event_type = obj.get("type")
-    if not isinstance(event_type, str):
-        return None
-    if event_type not in ALLOWED_EVENT_TYPES:
-        return None
-    data = _unwrap_payload(_as_mapping(obj.get("data")))
-    name = data.get("name")
-    if not isinstance(name, str):
-        name = ""
-    duration = _extract_duration(data)
-    is_failure = event_type == "test:fail"
-    return name, duration, is_failure
-
-
 def _load_from_legacy(obj: dict[str, object]):
     status = obj.get("status")
     if not isinstance(status, str):
@@ -114,16 +97,6 @@ def _load_from_legacy(obj: dict[str, object]):
     status = obj.get("status")
     is_failure = status == "fail"
     return name, duration, is_failure
-    
-def _load_entry(obj: object) -> Optional[Tuple[str, int, bool]]:
-    if not isinstance(obj, dict):
-        return None
-    event_type = obj.get("type")
-    if isinstance(event_type, str):
-        if event_type not in ALLOWED_EVENT_TYPES:
-            return None
-        return _load_from_event(obj)
-    return _load_from_legacy(obj)
 
 
 def load_results():
@@ -137,10 +110,22 @@ def load_results():
             if not line.strip():
                 continue
             obj = json.loads(line)
-            entry = _load_entry(obj)
-            if entry is None:
+            if not isinstance(obj, dict):
                 continue
-            name, duration, is_failure = entry
+            event_type = obj.get("type")
+            if isinstance(event_type, str):
+                if event_type not in TEST_EVENT_TYPES:
+                    continue
+                data = _unwrap_payload(_as_mapping(obj.get("data")))
+                raw_name = data.get("name")
+                name = raw_name if isinstance(raw_name, str) else ""
+                duration = _extract_duration(data)
+                is_failure = event_type == "test:fail"
+            else:
+                legacy_entry = _load_from_legacy(obj)
+                if legacy_entry is None:
+                    continue
+                name, duration, is_failure = legacy_entry
             tests.append(name)
             durs.append(duration)
             if is_failure:
