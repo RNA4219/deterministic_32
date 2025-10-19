@@ -175,6 +175,38 @@ test(
   },
 );
 
+for (const { extension, distExtension } of [
+  { extension: ".mts", distExtension: ".mjs" },
+  { extension: ".cts", distExtension: ".cjs" },
+]) {
+  test(
+    `prepareRunnerOptions maps ./ prefixed ${extension} target to dist ${distExtension} path`,
+    async () => {
+      const prepareRunnerOptions = await loadPrepareRunnerOptions(
+        `${extension.slice(1)}-prefixed-target`,
+      );
+
+      const result = prepareRunnerOptions(
+        [
+          "node",
+          "script.mjs",
+          `./tests/example.test${extension}`,
+        ],
+        {
+          existsSync: (candidate) =>
+            typeof candidate === "string" &&
+            (candidate.endsWith(`example.test${extension}`) ||
+              candidate.endsWith(`example.test${distExtension}`)),
+        },
+      );
+
+      assert.deepEqual(result.targets, [
+        `dist/tests/example.test${distExtension}`,
+      ]);
+    },
+  );
+}
+
 test("JSON reporter runner uses dist target when invoked with TS input", async () => {
   const { createRequire } = (await dynamicImport("node:module")) as {
     createRequire: (specifier: string | URL) => (id: string) => unknown;
