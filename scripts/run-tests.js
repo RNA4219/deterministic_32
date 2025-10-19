@@ -23,7 +23,10 @@ const mapArgument = (argument) => {
 
   const candidatePaths = path.isAbsolute(argument)
     ? [argument]
-    : [path.resolve(process.cwd(), argument), path.resolve(projectRoot, argument)];
+    : [
+        path.resolve(projectRoot, argument),
+        path.resolve(process.cwd(), argument),
+      ];
 
   let matchedAbsolutePath = null;
   let projectRelativePath = null;
@@ -98,7 +101,25 @@ const flagsWithValues = new Set([
 
 const cliArguments = process.argv.slice(2);
 const filteredCliArguments = cliArguments.filter((argument) => argument !== "--");
-const mappedArguments = filteredCliArguments.map(mapArgument);
+const mappedArguments = [];
+
+for (let index = 0; index < filteredCliArguments.length; index += 1) {
+  const argument = filteredCliArguments[index];
+  if (argument === undefined) {
+    continue;
+  }
+
+  mappedArguments.push(mapArgument(argument));
+
+  if (flagsWithValues.has(argument)) {
+    const valueArgument = filteredCliArguments[index + 1];
+    if (valueArgument !== undefined) {
+      mappedArguments.push({ value: valueArgument, isTarget: false });
+      index += 1;
+    }
+  }
+}
+
 const extraTargets = mappedArguments.map((entry) => entry.value);
 const hasExplicitTargets = mappedArguments.some((entry) => entry.isTarget);
 
