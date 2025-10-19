@@ -124,6 +124,14 @@ const filteredCliArguments = cliArguments.filter((argument) => argument !== "--"
 const mappedArguments = [];
 let pendingValueFlag = null;
 
+const ensurePendingFlagConsumed = (pendingFlag) => {
+  if (pendingFlag === null) {
+    return;
+  }
+
+  throwMissingFlagValueError(pendingFlag);
+};
+
 for (const argument of filteredCliArguments) {
   if (pendingValueFlag !== null) {
     mappedArguments.push({ value: argument, isTarget: false });
@@ -144,14 +152,11 @@ for (const argument of filteredCliArguments) {
     typeof mapped.value === "string" &&
     flagsWithValues.has(mapped.value)
   ) {
-    expectValueForFlag = true;
     pendingValueFlag = mapped.value;
   }
 }
 
-if (pendingValueFlag !== null) {
-  throwMissingFlagValueError(pendingValueFlag);
-}
+ensurePendingFlagConsumed(pendingValueFlag);
 
 const flagArguments = [];
 const targetArguments = [];

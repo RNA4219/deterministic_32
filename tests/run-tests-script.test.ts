@@ -192,6 +192,27 @@ test(
 );
 
 test(
+  "run-tests script reports missing reporter destination before consuming targets",
+  async () => {
+    const env = await loadEnvironment();
+
+    const result = await runScriptWithEnvironment(env, {
+      argv: ["tests", "--test-reporter-destination"],
+    });
+
+    assert.equal(result.spawnCalls.length, 0);
+    assert.equal(result.exitCodes.length, 0);
+    assert.equal(result.exitCode, 2);
+    assert.ok(
+      result.importError instanceof RangeError ||
+        result.exitCodes.includes(2) ||
+        result.exitCode === 2,
+      "expected missing reporter destination to trigger RangeError or exit code 2",
+    );
+  },
+);
+
+test(
   "run-tests script rejects --test-reporter-destination without a value",
   async () => {
     const env = await loadEnvironment();
