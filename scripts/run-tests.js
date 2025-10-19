@@ -101,6 +101,8 @@ const flagsWithValues = new Set([
   "--import",
   "--loader",
   "--experimental-loader",
+  "-r",
+  "-i",
 ]);
 
 const cliArguments = process.argv.slice(2);
@@ -108,12 +110,16 @@ const filteredCliArguments = cliArguments.filter((argument) => argument !== "--"
 const mappedArguments = [];
 let pendingValueFlag = null;
 
-let expectValueForFlag = false;
-
 for (const argument of filteredCliArguments) {
-  if (expectValueForFlag) {
+  if (pendingValueFlag !== null) {
     mappedArguments.push({ value: argument, isTarget: false });
-    expectValueForFlag = false;
+    pendingValueFlag = null;
+    continue;
+  }
+
+  if (flagsWithValues.has(argument)) {
+    mappedArguments.push({ value: argument, isTarget: false });
+    pendingValueFlag = argument;
     continue;
   }
 

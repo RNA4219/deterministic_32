@@ -320,6 +320,44 @@ test(
 );
 
 test(
+  "run-tests script preserves flag values for module registration options",
+  async () => {
+    const env = await loadEnvironment();
+
+    const result = await runScriptWithEnvironment(env, {
+      argv: ["--require", "tests/register.js"],
+    });
+
+    assert.equal(result.importError, undefined);
+    assert.equal(result.spawnCalls.length, 1);
+
+    const invocation = result.spawnCalls[0]!;
+    assert.ok(Array.isArray(invocation.args));
+    const args = invocation.args as string[];
+
+    const flagIndex = args.indexOf("--require");
+    assert.ok(
+      flagIndex !== -1,
+      `expected spawn args to include --require, received: ${args.join(", ")}`,
+    );
+    assert.equal(args[flagIndex + 1], "tests/register.js");
+
+    const defaultTargets = [
+      env.pathModule.join(env.repoRootPath, "dist", "tests"),
+      env.pathModule.join(env.repoRootPath, "dist", "frontend", "tests"),
+    ];
+    for (const defaultTarget of defaultTargets) {
+      assert.ok(
+        args.includes(defaultTarget),
+        `expected spawn args to include ${defaultTarget}, received: ${args.join(", ")}`,
+      );
+    }
+
+    assert.deepEqual(result.exitCodes, [0]);
+  },
+);
+
+test(
   "run-tests script omits default targets when CLI specifies TS target",
   async () => {
     const env = await loadEnvironment();
