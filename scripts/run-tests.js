@@ -3,12 +3,15 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import process from "node:process";
 
-const defaultTargets = ["dist/tests", "dist/frontend/tests"];
-
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = scriptDirectory.endsWith(`${path.sep}dist${path.sep}scripts`)
   ? path.resolve(scriptDirectory, "..", "..")
   : path.resolve(scriptDirectory, "..");
+
+const defaultTargets = [
+  path.join(projectRoot, "dist", "tests"),
+  path.join(projectRoot, "dist", "frontend", "tests"),
+];
 
 const mapArgument = (argument) => {
   if (!argument.endsWith(".ts")) {
@@ -28,7 +31,7 @@ const mapArgument = (argument) => {
   }
 
   const withoutExtension = projectRelativePath.slice(0, -3);
-  const mapped = path.join("dist", `${withoutExtension}.js`);
+  const mapped = path.join(projectRoot, "dist", `${withoutExtension}.js`);
   return mapped;
 };
 
@@ -47,6 +50,7 @@ const child = spawnImplementation(
   process.execPath,
   ["--test", ...defaultTargets, ...extraTargets],
   {
+    cwd: projectRoot,
     stdio: "inherit",
   },
 );
