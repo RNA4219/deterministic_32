@@ -62,10 +62,22 @@ const mapArgument = (argument) => {
     return { value: argument, isTarget: false };
   }
 
-  if (projectRelativePath.endsWith(".ts")) {
-    const withoutExtension = projectRelativePath.slice(0, -3);
-    const mapped = path.join(projectRoot, "dist", `${withoutExtension}.js`);
-    return { value: mapped, isTarget: true };
+  const tsExtensionMappings = [
+    [".cts", ".cjs"],
+    [".mts", ".mjs"],
+    [".ts", ".js"],
+  ];
+
+  for (const [extension, replacement] of tsExtensionMappings) {
+    if (projectRelativePath.endsWith(extension)) {
+      const withoutExtension = projectRelativePath.slice(0, -extension.length);
+      const mapped = path.join(
+        projectRoot,
+        "dist",
+        `${withoutExtension}${replacement}`,
+      );
+      return { value: mapped, isTarget: true };
+    }
   }
 
   if (matchedPathExists) {

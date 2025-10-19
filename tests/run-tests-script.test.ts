@@ -316,6 +316,74 @@ test("run-tests script normalizes absolute TS targets to dist JS paths", async (
 });
 
 test(
+  "run-tests script normalizes absolute MTS targets to dist MJS paths",
+  async () => {
+    const env = await loadEnvironment();
+    const absoluteTarget = env.pathModule.resolve(
+      env.repoRootPath,
+      "tests/example.test.mts",
+    );
+
+    const result = await runScriptWithEnvironment(env, {
+      argv: [absoluteTarget],
+      cwd: env.pathModule.join(env.repoRootPath, "dist"),
+    });
+
+    assert.equal(result.importError, undefined);
+    assert.equal(result.spawnCalls.length, 1);
+
+    const invocation = result.spawnCalls[0]!;
+    assert.ok(Array.isArray(invocation.args));
+    const args = invocation.args as string[];
+    const expectedTarget = env.pathModule.join(
+      env.repoRootPath,
+      "dist",
+      "tests",
+      "example.test.mjs",
+    );
+    assert.ok(
+      args.includes(expectedTarget),
+      `expected spawn args to include ${expectedTarget}, received: ${args.join(", ")}`,
+    );
+    assert.deepEqual(result.exitCodes, [0]);
+  },
+);
+
+test(
+  "run-tests script normalizes absolute CTS targets to dist CJS paths",
+  async () => {
+    const env = await loadEnvironment();
+    const absoluteTarget = env.pathModule.resolve(
+      env.repoRootPath,
+      "tests/example.test.cts",
+    );
+
+    const result = await runScriptWithEnvironment(env, {
+      argv: [absoluteTarget],
+      cwd: env.pathModule.join(env.repoRootPath, "dist"),
+    });
+
+    assert.equal(result.importError, undefined);
+    assert.equal(result.spawnCalls.length, 1);
+
+    const invocation = result.spawnCalls[0]!;
+    assert.ok(Array.isArray(invocation.args));
+    const args = invocation.args as string[];
+    const expectedTarget = env.pathModule.join(
+      env.repoRootPath,
+      "dist",
+      "tests",
+      "example.test.cjs",
+    );
+    assert.ok(
+      args.includes(expectedTarget),
+      `expected spawn args to include ${expectedTarget}, received: ${args.join(", ")}`,
+    );
+    assert.deepEqual(result.exitCodes, [0]);
+  },
+);
+
+test(
   "run-tests script preserves flag values for known option arguments",
   async () => {
     const env = await loadEnvironment();
