@@ -1,10 +1,14 @@
 import { spawn } from "node:child_process";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import process from "node:process";
 
 const defaultTargets = ["dist/tests", "dist/frontend/tests"];
 
-const projectRoot = process.cwd();
+const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
+const projectRoot = scriptDirectory.endsWith(`${path.sep}dist${path.sep}scripts`)
+  ? path.resolve(scriptDirectory, "..", "..")
+  : path.resolve(scriptDirectory, "..");
 
 const mapArgument = (argument) => {
   if (!argument.endsWith(".ts")) {
@@ -14,8 +18,16 @@ const mapArgument = (argument) => {
   const absolutePath = path.isAbsolute(argument)
     ? argument
     : path.resolve(projectRoot, argument);
-  const relativePath = path.relative(projectRoot, absolutePath);
-  const withoutExtension = relativePath.slice(0, -3);
+  const projectRelativePath = path.relative(projectRoot, absolutePath);
+  if (
+    projectRelativePath === "" ||
+    projectRelativePath.startsWith("..") ||
+    path.isAbsolute(projectRelativePath)
+  ) {
+    return argument;
+  }
+
+  const withoutExtension = projectRelativePath.slice(0, -3);
   const mapped = path.join("dist", `${withoutExtension}.js`);
   return mapped;
 };
