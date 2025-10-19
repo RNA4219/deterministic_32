@@ -192,97 +192,43 @@ test("run-tests script normalizes absolute TS targets to dist JS paths", async (
 });
 
 test(
-  "run-tests script normalizes directory arguments to dist targets",
+  "run-tests script omits default targets when CLI specifies TS target",
   async () => {
     const env = await loadEnvironment();
-    const fsModule = (await dynamicImport("node:fs")) as {
-      existsSync: (path: string) => boolean;
-      renameSync: (from: string, to: string) => void;
-    };
 
-    const backupSuffix = `.backup-${Date.now()}`;
-    const backupRecords: Array<{ original: string; backup: string }> = [];
-    const scheduleRename = (original: string) => {
-      if (!fsModule.existsSync(original)) {
-        return;
-      }
-      const backup = `${original}${backupSuffix}-${backupRecords.length}`;
-      fsModule.renameSync(original, backup);
-      backupRecords.push({ original, backup });
-    };
+    const result = await runScriptWithEnvironment(env, {
+      argv: ["tests/example.test.ts"],
+    });
 
-    const distTestsPath = env.pathModule.join(env.repoRootPath, "dist", "tests");
-    const distFrontendTestsPath = env.pathModule.join(
+    assert.equal(result.importError, undefined);
+    assert.equal(result.spawnCalls.length, 1);
+
+    const invocation = result.spawnCalls[0]!;
+    assert.ok(Array.isArray(invocation.args));
+    const args = invocation.args as string[];
+    const expectedTarget = env.pathModule.join(
       env.repoRootPath,
       "dist",
-      "frontend",
       "tests",
+      "example.test.js",
+    );
+    assert.ok(
+      args.includes(expectedTarget),
+      `expected spawn args to include ${expectedTarget}, received: ${args.join(", ")}`,
     );
 
-    scheduleRename(distTestsPath);
-    scheduleRename(distFrontendTestsPath);
-
-    try {
-      const result = await runScriptWithEnvironment(env, {
-        argv: ["tests", "frontend/tests"],
-        cwd: env.repoRootPath,
-      });
-
-      assert.equal(result.importError, undefined);
-      assert.equal(result.spawnCalls.length, 1);
-
-      const invocation = result.spawnCalls[0]!;
-      assert.ok(Array.isArray(invocation.args));
-      const args = invocation.args as string[];
-
-      assert.ok(!args.includes("tests"), `expected spawn args to omit tests`);
+    const defaultTargets = [
+      env.pathModule.join(env.repoRootPath, "dist", "tests"),
+      env.pathModule.join(env.repoRootPath, "dist", "frontend", "tests"),
+    ];
+    for (const defaultTarget of defaultTargets) {
       assert.ok(
-        !args.includes("frontend/tests"),
-        `expected spawn args to omit frontend/tests`,
+        !args.includes(defaultTarget),
+        `expected spawn args to omit ${defaultTarget}, received: ${args.join(", ")}`,
       );
-
-      const repoTests = env.pathModule.join(env.repoRootPath, "tests");
-      const repoFrontendTests = env.pathModule.join(
-        env.repoRootPath,
-        "frontend",
-        "tests",
-      );
-
-      assert.ok(
-        !args.includes(repoTests),
-        `expected spawn args to omit ${repoTests}, received: ${args.join(", ")}`,
-      );
-      assert.ok(
-        !args.includes(repoFrontendTests),
-        `expected spawn args to omit ${repoFrontendTests}, received: ${args.join(", ")}`,
-      );
-
-      const distTestsOccurrences = args.filter(
-        (arg) => arg === distTestsPath,
-      ).length;
-      const distFrontendTestsOccurrences = args.filter(
-        (arg) => arg === distFrontendTestsPath,
-      ).length;
-
-      assert.equal(
-        distTestsOccurrences,
-        2,
-        `expected spawn args to include ${distTestsPath} twice, received: ${args.join(", ")}`,
-      );
-      assert.equal(
-        distFrontendTestsOccurrences,
-        2,
-        `expected spawn args to include ${distFrontendTestsPath} twice, received: ${args.join(", ")}`,
-      );
-
-      assert.deepEqual(result.exitCodes, [0]);
-    } finally {
-      for (const { original, backup } of backupRecords.reverse()) {
-        if (fsModule.existsSync(backup)) {
-          fsModule.renameSync(backup, original);
-        }
-      }
     }
+
+    assert.deepEqual(result.exitCodes, [0]);
   },
 );
 
