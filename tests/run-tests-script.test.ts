@@ -14,6 +14,27 @@ type SpawnInvocation = {
   readonly child: FakeChildProcess;
 };
 
+type PathModule = {
+  join: (...segments: string[]) => string;
+  resolve: (...segments: string[]) => string;
+};
+
+type RunScriptEnvironment = {
+  readonly pathModule: PathModule;
+  readonly repoRootPath: string;
+};
+
+type RunScriptOptions = {
+  readonly argv: string[];
+  readonly cwd?: string;
+};
+
+type RunScriptResult = {
+  readonly spawnCalls: SpawnInvocation[];
+  readonly exitCodes: number[];
+  readonly importError: unknown;
+};
+
 const repoRootUrl = import.meta.url.includes("/dist/tests/")
   ? new URL("../..", import.meta.url)
   : new URL("..", import.meta.url);
@@ -25,15 +46,19 @@ const dynamicImport = new Function(
   "return import(specifier);",
 ) as (specifier: string) => Promise<unknown>;
 
-test("run-tests script normalizes absolute TS targets to dist JS paths", async () => {
+const loadEnvironment = async (): Promise<RunScriptEnvironment> => {
   const { fileURLToPath } = (await dynamicImport("node:url")) as {
     fileURLToPath: (specifier: string | URL) => string;
   };
-  const pathModule = (await dynamicImport("node:path")) as {
-    join: (...segments: string[]) => string;
-    resolve: (...segments: string[]) => string;
-  };
+  const pathModule = (await dynamicImport("node:path")) as PathModule;
+  const repoRootPath = pathModule.resolve(fileURLToPath(repoRootUrl));
+  return { pathModule, repoRootPath };
+};
 
+const runScriptWithEnvironment = async (
+  env: RunScriptEnvironment,
+  options: RunScriptOptions,
+): Promise<RunScriptResult> => {
   const spawnCalls: SpawnInvocation[] = [];
   const exitCodes: number[] = [];
   const cleanups: Array<() => void> = [];
@@ -92,24 +117,21 @@ test("run-tests script normalizes absolute TS targets to dist JS paths", async (
     }
   });
 
-  const repoRootPath = pathModule.resolve(fileURLToPath(repoRootUrl));
   const processModule = process as NodeJS.Process & {
     cwd: () => string;
     chdir: (directory: string) => void;
   };
   const originalCwd = processModule.cwd();
-  processModule.chdir(pathModule.join(repoRootPath, "dist"));
+  const targetCwd = options.cwd ?? env.repoRootPath;
+  if (targetCwd !== originalCwd) {
+    processModule.chdir(targetCwd);
+  }
   cleanups.push(() => {
     processModule.chdir(originalCwd);
   });
 
-  const absoluteTarget = pathModule.resolve(
-    repoRootPath,
-    "tests/example.test.ts",
-  );
-
   const originalArgv = process.argv;
-  process.argv = [process.argv[0]!, scriptUrl.pathname, absoluteTarget];
+  process.argv = [process.argv[0]!, scriptUrl.pathname, ...options.argv];
   cleanups.push(() => {
     process.argv = originalArgv;
   });
@@ -135,14 +157,29 @@ test("run-tests script normalizes absolute TS targets to dist JS paths", async (
     }
   }
 
-  assert.equal(importError, undefined);
-  assert.equal(spawnCalls.length, 1);
+  return { spawnCalls, exitCodes, importError };
+};
 
-  const invocation = spawnCalls[0]!;
+test("run-tests script normalizes absolute TS targets to dist JS paths", async () => {
+  const env = await loadEnvironment();
+  const absoluteTarget = env.pathModule.resolve(
+    env.repoRootPath,
+    "tests/example.test.ts",
+  );
+
+  const result = await runScriptWithEnvironment(env, {
+    argv: [absoluteTarget],
+    cwd: env.pathModule.join(env.repoRootPath, "dist"),
+  });
+
+  assert.equal(result.importError, undefined);
+  assert.equal(result.spawnCalls.length, 1);
+
+  const invocation = result.spawnCalls[0]!;
   assert.ok(Array.isArray(invocation.args));
   const args = invocation.args as string[];
-  const expectedTarget = pathModule.join(
-    repoRootPath,
+  const expectedTarget = env.pathModule.join(
+    env.repoRootPath,
     "dist",
     "tests",
     "example.test.js",
@@ -151,7 +188,7 @@ test("run-tests script normalizes absolute TS targets to dist JS paths", async (
     args.includes(expectedTarget),
     `expected spawn args to include ${expectedTarget}, received: ${args.join(", ")}`,
   );
-  assert.deepEqual(exitCodes, [0]);
+  assert.deepEqual(result.exitCodes, [0]);
 });
 
 for (const directoryName of ["frontend", "dist"]) {
