@@ -439,22 +439,50 @@ test(
 );
 
 test(
-  "run-tests script rejects reporter destination without value",
+  "run-tests script preserves flag values for Node preload options",
   async () => {
     const env = await loadEnvironment();
+    const cases = [
+      { flag: "--require", value: "tests/register.js" },
+      { flag: "--import", value: "file:///tests/bootstrap.mjs" },
+      { flag: "--loader", value: "ts-node/esm" },
+    ];
 
-    const result = await runScriptWithEnvironment(env, {
-      argv: ["--test-reporter-destination"],
-    });
+    for (const { flag, value } of cases) {
+      const result = await runScriptWithEnvironment(env, {
+        argv: [flag, value],
+      });
 
-    const hasRangeError = result.importError instanceof RangeError;
-    const hasExitCodeTwo = result.exitCodes.includes(2);
+      assert.equal(result.importError, undefined);
+      assert.equal(result.spawnCalls.length, 1);
 
-    assert.ok(
-      hasRangeError || hasExitCodeTwo,
-      "expected RangeError import or exit code 2 when reporter destination value is missing",
-    );
-    assert.equal(result.spawnCalls.length, 0);
+      const invocation = result.spawnCalls[0]!;
+      assert.ok(Array.isArray(invocation.args));
+      const args = invocation.args as string[];
+
+      const flagIndex = args.indexOf(flag);
+      assert.ok(
+        flagIndex !== -1,
+        `expected spawn args to include ${flag}, received: ${args.join(", ")}`,
+      );
+      assert.equal(args[flagIndex + 1], value);
+
+      const defaultTargets = [
+        env.pathModule.join(env.repoRootPath, "dist", "tests"),
+        env.pathModule.join(env.repoRootPath, "dist", "frontend", "tests"),
+      ];
+      const firstTargetIndex = args.indexOf(defaultTargets[0]);
+      assert.ok(
+        firstTargetIndex !== -1,
+        `expected spawn args to include ${defaultTargets[0]}, received: ${args.join(", ")}`,
+      );
+      assert.ok(
+        args.slice(firstTargetIndex).every((entry) => entry !== value),
+        `expected ${value} to remain a flag value, received: ${args.join(", ")}`,
+      );
+
+      assert.deepEqual(result.exitCodes, [0]);
+    }
   },
 );
 
