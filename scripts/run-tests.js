@@ -23,7 +23,10 @@ const mapArgument = (argument) => {
 
   const candidatePaths = path.isAbsolute(argument)
     ? [argument]
-    : [path.resolve(process.cwd(), argument), path.resolve(projectRoot, argument)];
+    : [
+        path.resolve(projectRoot, argument),
+        path.resolve(process.cwd(), argument),
+      ];
 
   let matchedAbsolutePath = null;
   let projectRelativePath = null;
