@@ -42,6 +42,12 @@ const projectRoot = (() => {
   }
 })();
 
+const EXTENSION_MAPPING = new Map([
+  [".ts", ".js"],
+  [".mts", ".mjs"],
+  [".cts", ".cjs"],
+]);
+
 const mapTargetArgument = (
   target,
   { existsSync = fs.existsSync, mapDirectoriesToDist = false } = {},
@@ -109,7 +115,9 @@ const mapTargetArgument = (
     return target;
   }
 
-  if (extension === '.ts') {
+  const mappedExtension = EXTENSION_MAPPING.get(extension);
+
+  if (mappedExtension) {
     const withoutExtension = extension.length > 0
       ? normalizedRelative.slice(0, -extension.length)
       : normalizedRelative;
@@ -119,7 +127,7 @@ const mapTargetArgument = (
       .filter((segment) => segment && segment !== '.' && segment !== '..');
     const distPath = path.join('dist', ...normalizedSegments);
 
-    return `${distPath}.js`;
+    return `${distPath}${mappedExtension}`;
   }
 
   const inDistAlready =
