@@ -15,16 +15,32 @@ const defaultTargets = [
 ];
 
 const mapArgument = (argument) => {
-  const absolutePath = path.isAbsolute(argument)
-    ? argument
-    : path.resolve(projectRoot, argument);
-  const projectRelativePath = path.relative(projectRoot, absolutePath);
+  const candidatePaths = path.isAbsolute(argument)
+    ? [argument]
+    : [path.resolve(process.cwd(), argument), path.resolve(projectRoot, argument)];
 
-  if (
-    projectRelativePath === "" ||
-    projectRelativePath.startsWith("..") ||
-    path.isAbsolute(projectRelativePath)
-  ) {
+  let matchedAbsolutePath = null;
+  let projectRelativePath = null;
+
+  for (const candidate of candidatePaths) {
+    const relative = path.relative(projectRoot, candidate);
+    if (relative === "" || relative.startsWith("..") || path.isAbsolute(relative)) {
+      continue;
+    }
+
+    if (fs.existsSync(candidate)) {
+      matchedAbsolutePath = candidate;
+      projectRelativePath = relative;
+      break;
+    }
+
+    if (matchedAbsolutePath === null) {
+      matchedAbsolutePath = candidate;
+      projectRelativePath = relative;
+    }
+  }
+
+  if (matchedAbsolutePath === null || projectRelativePath === null) {
     return argument;
   }
 
@@ -34,13 +50,22 @@ const mapArgument = (argument) => {
     return mapped;
   }
 
-  if (fs.existsSync(absolutePath)) {
+  if (fs.existsSync(matchedAbsolutePath)) {
     try {
       if (fs.statSync(absolutePath).isDirectory()) {
-        const mappedDirectory = path.join(projectRoot, "dist", projectRelativePath);
-        if (fs.existsSync(mappedDirectory)) {
-          return mappedDirectory;
+        if (
+          projectRelativePath === "dist" ||
+          projectRelativePath.startsWith(`dist${path.sep}`)
+        ) {
+          return argument;
         }
+
+        const mappedDirectory = path.join(
+          projectRoot,
+          "dist",
+          projectRelativePath,
+        );
+        return mappedDirectory;
       }
     } catch {
       // ignore errors and fall through to original argument
