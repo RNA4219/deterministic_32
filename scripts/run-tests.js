@@ -46,13 +46,15 @@ const spawnOverride =
 
 const spawnImplementation = spawnOverride ?? spawn;
 
+const spawnOptions = {
+  cwd: projectRoot,
+  stdio: "inherit",
+};
+
 const child = spawnImplementation(
   process.execPath,
   ["--test", ...defaultTargets, ...extraTargets],
-  {
-    cwd: projectRoot,
-    stdio: "inherit",
-  },
+  spawnOptions,
 );
 
 child.on("exit", (code, signal) => {

@@ -154,138 +154,143 @@ test("run-tests script normalizes absolute TS targets to dist JS paths", async (
   assert.deepEqual(exitCodes, [0]);
 });
 
-test("run-tests script resolves cwd and default targets from repo root", async () => {
-  const { fileURLToPath } = (await dynamicImport("node:url")) as {
-    fileURLToPath: (specifier: string | URL) => string;
-  };
-  const pathModule = (await dynamicImport("node:path")) as {
-    join: (...segments: string[]) => string;
-    resolve: (...segments: string[]) => string;
-  };
+for (const directoryName of ["frontend", "dist"]) {
+  test(
+    `run-tests script resolves cwd and default targets from repo root when started from ${directoryName}/`,
+    async () => {
+      const { fileURLToPath } = (await dynamicImport("node:url")) as {
+        fileURLToPath: (specifier: string | URL) => string;
+      };
+      const pathModule = (await dynamicImport("node:path")) as {
+        join: (...segments: string[]) => string;
+        resolve: (...segments: string[]) => string;
+      };
 
-  const spawnCalls: SpawnInvocation[] = [];
-  const exitCodes: number[] = [];
-  const cleanups: Array<() => void> = [];
-  let importError: unknown;
+      const spawnCalls: SpawnInvocation[] = [];
+      const exitCodes: number[] = [];
+      const cleanups: Array<() => void> = [];
+      let importError: unknown;
 
-  const globalOverride = globalThis as {
-    __CAT32_TEST_SPAWN__?: (
-      command: unknown,
-      args: unknown,
-      options: unknown,
-    ) => FakeChildProcess;
-  };
+      const globalOverride = globalThis as {
+        __CAT32_TEST_SPAWN__?: (
+          command: unknown,
+          args: unknown,
+          options: unknown,
+        ) => FakeChildProcess;
+      };
 
-  const spawnOverride = (
-    command: unknown,
-    args: unknown,
-    options: unknown,
-  ): FakeChildProcess => {
-    const listeners = new Map<string, Array<(...listenerArgs: unknown[]) => void>>();
-    const child: FakeChildProcess = {
-      on: (event, listener) => {
-        const current = listeners.get(event) ?? [];
-        current.push(listener);
-        listeners.set(event, current);
+      const spawnOverride = (
+        command: unknown,
+        args: unknown,
+        options: unknown,
+      ): FakeChildProcess => {
+        const listeners = new Map<string, Array<(...listenerArgs: unknown[]) => void>>();
+        const child: FakeChildProcess = {
+          on: (event, listener) => {
+            const current = listeners.get(event) ?? [];
+            current.push(listener);
+            listeners.set(event, current);
+            return child;
+          },
+          emit: (event, ...listenerArgs) => {
+            const registered = listeners.get(event);
+            if (registered) {
+              for (const listener of registered) {
+                listener(...listenerArgs);
+              }
+            }
+            return child;
+          },
+          kill: () => true,
+        };
+
+        spawnCalls.push({
+          command,
+          args: Array.isArray(args) ? [...args] : [],
+          options,
+          child,
+        });
+
         return child;
-      },
-      emit: (event, ...listenerArgs) => {
-        const registered = listeners.get(event);
-        if (registered) {
-          for (const listener of registered) {
-            listener(...listenerArgs);
-          }
+      };
+
+      const previousSpawnOverride = globalOverride.__CAT32_TEST_SPAWN__;
+      globalOverride.__CAT32_TEST_SPAWN__ = spawnOverride;
+      cleanups.push(() => {
+        if (previousSpawnOverride === undefined) {
+          delete globalOverride.__CAT32_TEST_SPAWN__;
+        } else {
+          globalOverride.__CAT32_TEST_SPAWN__ = previousSpawnOverride;
         }
-        return child;
-      },
-      kill: () => true,
-    };
+      });
 
-    spawnCalls.push({
-      command,
-      args: Array.isArray(args) ? [...args] : [],
-      options,
-      child,
-    });
+      const repoRootPath = pathModule.resolve(fileURLToPath(repoRootUrl));
+      const processModule = process as NodeJS.Process & {
+        cwd: () => string;
+        chdir: (directory: string) => void;
+      };
+      const originalCwd = processModule.cwd();
+      processModule.chdir(pathModule.join(repoRootPath, directoryName));
+      cleanups.push(() => {
+        processModule.chdir(originalCwd);
+      });
 
-    return child;
-  };
+      const originalArgv = process.argv;
+      process.argv = [process.argv[0]!, scriptUrl.pathname];
+      cleanups.push(() => {
+        process.argv = originalArgv;
+      });
 
-  const previousSpawnOverride = globalOverride.__CAT32_TEST_SPAWN__;
-  globalOverride.__CAT32_TEST_SPAWN__ = spawnOverride;
-  cleanups.push(() => {
-    if (previousSpawnOverride === undefined) {
-      delete globalOverride.__CAT32_TEST_SPAWN__;
-    } else {
-      globalOverride.__CAT32_TEST_SPAWN__ = previousSpawnOverride;
-    }
-  });
+      const originalExit = process.exit;
+      (process as { exit: (code?: number) => never }).exit = ((code?: number) => {
+        exitCodes.push(code ?? 0);
+        return undefined as never;
+      }) as typeof originalExit;
+      cleanups.push(() => {
+        (process as { exit: typeof originalExit }).exit = originalExit;
+      });
 
-  const repoRootPath = pathModule.resolve(fileURLToPath(repoRootUrl));
-  const processModule = process as NodeJS.Process & {
-    cwd: () => string;
-    chdir: (directory: string) => void;
-  };
-  const originalCwd = processModule.cwd();
-  processModule.chdir(pathModule.join(repoRootPath, "frontend"));
-  cleanups.push(() => {
-    processModule.chdir(originalCwd);
-  });
+      try {
+        await import(`${scriptUrl.href}?t=${Date.now()}`);
+        const invocation = spawnCalls[0];
+        invocation?.child.emit("exit", 0, null);
+      } catch (error) {
+        importError = error;
+      } finally {
+        while (cleanups.length > 0) {
+          cleanups.pop()?.();
+        }
+      }
 
-  const originalArgv = process.argv;
-  process.argv = [process.argv[0]!, scriptUrl.pathname];
-  cleanups.push(() => {
-    process.argv = originalArgv;
-  });
+      assert.equal(importError, undefined);
+      assert.equal(spawnCalls.length, 1);
 
-  const originalExit = process.exit;
-  (process as { exit: (code?: number) => never }).exit = ((code?: number) => {
-    exitCodes.push(code ?? 0);
-    return undefined as never;
-  }) as typeof originalExit;
-  cleanups.push(() => {
-    (process as { exit: typeof originalExit }).exit = originalExit;
-  });
+      const invocation = spawnCalls[0]!;
+      assert.equal(
+        (invocation.options as { cwd?: unknown } | undefined)?.cwd,
+        repoRootPath,
+      );
 
-  try {
-    await import(`${scriptUrl.href}?t=${Date.now()}`);
-    const invocation = spawnCalls[0];
-    invocation?.child.emit("exit", 0, null);
-  } catch (error) {
-    importError = error;
-  } finally {
-    while (cleanups.length > 0) {
-      cleanups.pop()?.();
-    }
-  }
+      assert.ok(Array.isArray(invocation.args));
+      const args = invocation.args as string[];
+      const defaultTarget = pathModule.join(repoRootPath, "dist", "tests");
+      const frontendTarget = pathModule.join(
+        repoRootPath,
+        "dist",
+        "frontend",
+        "tests",
+      );
 
-  assert.equal(importError, undefined);
-  assert.equal(spawnCalls.length, 1);
+      assert.ok(
+        args.includes(defaultTarget),
+        `expected spawn args to include ${defaultTarget}, received: ${args.join(", ")}`,
+      );
+      assert.ok(
+        args.includes(frontendTarget),
+        `expected spawn args to include ${frontendTarget}, received: ${args.join(", ")}`,
+      );
 
-  const invocation = spawnCalls[0]!;
-  assert.equal(
-    (invocation.options as { cwd?: unknown } | undefined)?.cwd,
-    repoRootPath,
+      assert.deepEqual(exitCodes, [0]);
+    },
   );
-
-  assert.ok(Array.isArray(invocation.args));
-  const args = invocation.args as string[];
-  const defaultTarget = pathModule.join(repoRootPath, "dist", "tests");
-  const frontendTarget = pathModule.join(
-    repoRootPath,
-    "dist",
-    "frontend",
-    "tests",
-  );
-
-  assert.ok(
-    args.includes(defaultTarget),
-    `expected spawn args to include ${defaultTarget}, received: ${args.join(", ")}`,
-  );
-  assert.ok(
-    args.includes(frontendTarget),
-    `expected spawn args to include ${frontendTarget}, received: ${args.join(", ")}`,
-  );
-
-  assert.deepEqual(exitCodes, [0]);
-});
+}
