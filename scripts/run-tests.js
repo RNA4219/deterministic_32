@@ -127,6 +127,7 @@ const flagsWithValues = new Set([
   "--test-name-pattern",
   "--test-reporter",
   "--test-reporter-destination",
+  "--test-skip-pattern",
   "--test-timeout",
   "--watch-path",
   "-i",

@@ -232,6 +232,41 @@ test(
   },
 );
 
+test(
+  "run-tests script preserves default targets when --test-skip-pattern is provided",
+  async () => {
+    const env = await loadEnvironment();
+
+    const result = await runScriptWithEnvironment(env, {
+      argv: ["--test-skip-pattern", "tests/example.test.js"],
+    });
+
+    assert.equal(result.importError, undefined);
+    assert.equal(result.spawnCalls.length, 1);
+
+    const invocation = result.spawnCalls[0]!;
+    assert.ok(Array.isArray(invocation.args));
+    const args = invocation.args as string[];
+
+    const expectedTargets = [
+      env.pathModule.join(env.repoRootPath, "dist", "tests"),
+      env.pathModule.join(env.repoRootPath, "dist", "frontend", "tests"),
+    ];
+
+    for (const expectedTarget of expectedTargets) {
+      assert.ok(
+        args.includes(expectedTarget),
+        `expected spawn args to include ${expectedTarget}, received: ${args.join(", ")}`,
+      );
+    }
+
+    assert.ok(args.includes("--test-skip-pattern"));
+    assert.ok(args.includes("tests/example.test.js"));
+
+    assert.deepEqual(result.exitCodes, [0]);
+  },
+);
+
 test("run-tests script maps CLI directory arguments to dist targets", async () => {
   const env = await loadEnvironment();
 
