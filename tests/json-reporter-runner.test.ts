@@ -57,6 +57,51 @@ const loadResolveDestination = async (
   }
 };
 
+test(
+  "prepareRunnerOptions throws when destination option is missing value",
+  async () => {
+    const processWithEnv = process as typeof process & {
+      env: Record<string, string | undefined> & {
+        __CAT32_SKIP_JSON_REPORTER_RUN__?: string;
+      };
+    };
+    const previousSkip = processWithEnv.env.__CAT32_SKIP_JSON_REPORTER_RUN__;
+    processWithEnv.env.__CAT32_SKIP_JSON_REPORTER_RUN__ = "1";
+
+    try {
+      const moduleExports = (await import(
+        `${runnerUrl.href}?missing-destination=${Date.now()}`,
+      )) as { prepareRunnerOptions?: PrepareRunnerOptions };
+
+      assert.equal(
+        typeof moduleExports.prepareRunnerOptions,
+        "function",
+        "prepareRunnerOptions not loaded",
+      );
+
+      let thrown: unknown;
+
+      try {
+        moduleExports.prepareRunnerOptions!([
+          "node",
+          "script.mjs",
+          "--test-reporter-destination",
+        ]);
+      } catch (error) {
+        thrown = error;
+      }
+
+      assert.ok(thrown instanceof RangeError, "missing destination should throw");
+    } finally {
+      if (previousSkip === undefined) {
+        delete processWithEnv.env.__CAT32_SKIP_JSON_REPORTER_RUN__;
+      } else {
+        processWithEnv.env.__CAT32_SKIP_JSON_REPORTER_RUN__ = previousSkip;
+      }
+    }
+  },
+);
+
 test("JSON reporter runner uses dist target when invoked with TS input", async () => {
   const { createRequire } = (await dynamicImport("node:module")) as {
     createRequire: (specifier: string | URL) => (id: string) => unknown;
