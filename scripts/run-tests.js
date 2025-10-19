@@ -90,6 +90,12 @@ const mapArgument = (argument) => {
   return { value: argument, isTarget: true };
 };
 
+const flagsWithValues = new Set([
+  "--test-name-pattern",
+  "--test-reporter",
+  "--test-reporter-destination",
+]);
+
 const cliArguments = process.argv.slice(2);
 const filteredCliArguments = cliArguments.filter((argument) => argument !== "--");
 const mappedArguments = filteredCliArguments.map(mapArgument);
