@@ -51,9 +51,11 @@ const mapArgument = (argument) => {
 };
 
 const cliArguments = process.argv.slice(2);
-const extraTargets = cliArguments
-  .filter((argument) => argument !== "--")
-  .map(mapArgument);
+const filteredCliArguments = cliArguments.filter((argument) => argument !== "--");
+const extraTargets = filteredCliArguments.map(mapArgument);
+const hasCliTargets = filteredCliArguments.some(
+  (argument) => !argument.startsWith("--"),
+);
 
 const spawnOverride =
   typeof globalThis === "object" &&
@@ -69,11 +71,11 @@ const spawnOptions = {
   stdio: "inherit",
 };
 
-const child = spawnImplementation(
-  process.execPath,
-  ["--test", ...defaultTargets, ...extraTargets],
-  spawnOptions,
-);
+const nodeTestArgs = hasCliTargets
+  ? ["--test", ...extraTargets]
+  : ["--test", ...defaultTargets, ...extraTargets];
+
+const child = spawnImplementation(process.execPath, nodeTestArgs, spawnOptions);
 
 child.on("exit", (code, signal) => {
   if (signal) {

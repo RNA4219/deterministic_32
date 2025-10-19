@@ -191,6 +191,47 @@ test("run-tests script normalizes absolute TS targets to dist JS paths", async (
   assert.deepEqual(result.exitCodes, [0]);
 });
 
+test(
+  "run-tests script omits default targets when CLI specifies TS target",
+  async () => {
+    const env = await loadEnvironment();
+
+    const result = await runScriptWithEnvironment(env, {
+      argv: ["tests/example.test.ts"],
+    });
+
+    assert.equal(result.importError, undefined);
+    assert.equal(result.spawnCalls.length, 1);
+
+    const invocation = result.spawnCalls[0]!;
+    assert.ok(Array.isArray(invocation.args));
+    const args = invocation.args as string[];
+    const expectedTarget = env.pathModule.join(
+      env.repoRootPath,
+      "dist",
+      "tests",
+      "example.test.js",
+    );
+    assert.ok(
+      args.includes(expectedTarget),
+      `expected spawn args to include ${expectedTarget}, received: ${args.join(", ")}`,
+    );
+
+    const defaultTargets = [
+      env.pathModule.join(env.repoRootPath, "dist", "tests"),
+      env.pathModule.join(env.repoRootPath, "dist", "frontend", "tests"),
+    ];
+    for (const defaultTarget of defaultTargets) {
+      assert.ok(
+        !args.includes(defaultTarget),
+        `expected spawn args to omit ${defaultTarget}, received: ${args.join(", ")}`,
+      );
+    }
+
+    assert.deepEqual(result.exitCodes, [0]);
+  },
+);
+
 for (const directoryName of ["frontend", "dist"]) {
   test(
     `run-tests script resolves cwd and default targets from repo root when started from ${directoryName}/`,
