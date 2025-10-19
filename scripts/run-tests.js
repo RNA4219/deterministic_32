@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import { spawn } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -14,14 +15,11 @@ const defaultTargets = [
 ];
 
 const mapArgument = (argument) => {
-  if (!argument.endsWith(".ts")) {
-    return argument;
-  }
-
   const absolutePath = path.isAbsolute(argument)
     ? argument
     : path.resolve(projectRoot, argument);
   const projectRelativePath = path.relative(projectRoot, absolutePath);
+
   if (
     projectRelativePath === "" ||
     projectRelativePath.startsWith("..") ||
@@ -30,12 +28,32 @@ const mapArgument = (argument) => {
     return argument;
   }
 
-  const withoutExtension = projectRelativePath.slice(0, -3);
-  const mapped = path.join(projectRoot, "dist", `${withoutExtension}.js`);
-  return mapped;
+  if (projectRelativePath.endsWith(".ts")) {
+    const withoutExtension = projectRelativePath.slice(0, -3);
+    const mapped = path.join(projectRoot, "dist", `${withoutExtension}.js`);
+    return mapped;
+  }
+
+  if (fs.existsSync(absolutePath)) {
+    try {
+      if (fs.statSync(absolutePath).isDirectory()) {
+        const mappedDirectory = path.join(projectRoot, "dist", projectRelativePath);
+        if (fs.existsSync(mappedDirectory)) {
+          return mappedDirectory;
+        }
+      }
+    } catch {
+      // ignore errors and fall through to original argument
+    }
+  }
+
+  return argument;
 };
 
-const extraTargets = process.argv.slice(2).map(mapArgument);
+const cliArguments = process.argv.slice(2);
+const extraTargets = cliArguments
+  .filter((argument) => argument !== "--")
+  .map(mapArgument);
 
 const spawnOverride =
   typeof globalThis === "object" &&
