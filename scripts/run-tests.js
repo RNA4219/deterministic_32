@@ -113,6 +113,11 @@ const flagsWithValues = new Set([
   "--test-timeout",
 ]);
 
+const throwMissingFlagValueError = (flag) => {
+  process.exitCode = 2;
+  throw new RangeError(`Missing value for ${flag}`);
+};
+
 const cliArguments = process.argv.slice(2);
 const filteredCliArguments = cliArguments.filter((argument) => argument !== "--");
 const mappedArguments = [];
@@ -144,8 +149,7 @@ for (const argument of filteredCliArguments) {
 }
 
 if (pendingValueFlag !== null) {
-  process.exitCode = 2;
-  throw new RangeError(`Missing value for ${pendingValueFlag}`);
+  throwMissingFlagValueError(pendingValueFlag);
 }
 
 const flagArguments = [];

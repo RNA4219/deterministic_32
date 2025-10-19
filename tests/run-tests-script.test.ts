@@ -32,6 +32,7 @@ type RunScriptOptions = {
 type RunScriptResult = {
   readonly spawnCalls: SpawnInvocation[];
   readonly exitCodes: number[];
+  readonly exitCode?: number;
   readonly importError: unknown;
 };
 
@@ -63,6 +64,7 @@ const runScriptWithEnvironment = async (
   const exitCodes: number[] = [];
   const cleanups: Array<() => void> = [];
   let importError: unknown;
+  let recordedExitCode: number | undefined;
 
   const globalOverride = globalThis as {
     __CAT32_TEST_SPAWN__?: (
@@ -159,13 +161,35 @@ const runScriptWithEnvironment = async (
   } catch (error) {
     importError = error;
   } finally {
+    recordedExitCode = processWithExitCode.exitCode;
     while (cleanups.length > 0) {
       cleanups.pop()?.();
     }
   }
 
-  return { spawnCalls, exitCodes, importError };
+  return { spawnCalls, exitCodes, exitCode: recordedExitCode, importError };
 };
+
+test(
+  "run-tests script sets exit code 2 when reporter destination value is missing",
+  async () => {
+    const env = await loadEnvironment();
+
+    const result = await runScriptWithEnvironment(env, {
+      argv: ["--test-reporter-destination"],
+    });
+
+    assert.equal(result.spawnCalls.length, 0);
+    assert.equal(result.exitCodes.length, 0);
+    assert.equal(result.exitCode, 2);
+    assert.ok(
+      result.importError instanceof RangeError ||
+        result.exitCodes.includes(2) ||
+        result.exitCode === 2,
+      "expected missing reporter destination to trigger RangeError or exit code 2",
+    );
+  },
+);
 
 test(
   "run-tests script rejects --test-reporter-destination without a value",
