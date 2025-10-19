@@ -94,13 +94,14 @@ const mapArgument = (argument) => {
 };
 
 const flagsWithValues = new Set([
-  "--test-name-pattern",
-  "--test-reporter",
-  "--test-reporter-destination",
-  "--require",
+  "--env-file",
   "--import",
   "--loader",
   "--experimental-loader",
+  "--require",
+  "--test-name-pattern",
+  "--test-reporter",
+  "--test-reporter-destination",
   "-r",
   "-i",
 ]);
