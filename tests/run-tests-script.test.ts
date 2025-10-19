@@ -319,13 +319,20 @@ test(
   },
 );
 
-test(
-  "run-tests script preserves flag values for module registration options",
-  async () => {
+const moduleRegistrationFlagCases: ReadonlyArray<{
+  readonly flag: string;
+  readonly description: string;
+}> = [
+  { flag: "--require", description: "module registration flag --require" },
+  { flag: "--import", description: "module registration flag --import" },
+];
+
+for (const { flag, description } of moduleRegistrationFlagCases) {
+  test(`run-tests script preserves ${description}`, async () => {
     const env = await loadEnvironment();
 
     const result = await runScriptWithEnvironment(env, {
-      argv: ["--require", "tests/register.js"],
+      argv: [flag, "tests/register.js"],
     });
 
     assert.equal(result.importError, undefined);
@@ -335,10 +342,10 @@ test(
     assert.ok(Array.isArray(invocation.args));
     const args = invocation.args as string[];
 
-    const flagIndex = args.indexOf("--require");
+    const flagIndex = args.indexOf(flag);
     assert.ok(
       flagIndex !== -1,
-      `expected spawn args to include --require, received: ${args.join(", ")}`,
+      `expected spawn args to include ${flag}, received: ${args.join(", ")}`,
     );
     assert.equal(args[flagIndex + 1], "tests/register.js");
 
@@ -354,8 +361,8 @@ test(
     }
 
     assert.deepEqual(result.exitCodes, [0]);
-  },
-);
+  });
+}
 
 test(
   "run-tests script omits default targets when CLI specifies TS target",
