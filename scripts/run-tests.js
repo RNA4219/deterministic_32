@@ -62,22 +62,29 @@ const mapArgument = (argument) => {
     return { value: argument, isTarget: false };
   }
 
-  const tsExtensionMappings = [
-    [".cts", ".cjs"],
-    [".mts", ".mjs"],
-    [".ts", ".js"],
-  ];
+  const mapTsTarget = (extension, replacement) => {
+    const withoutExtension = projectRelativePath.slice(
+      0,
+      -extension.length,
+    );
+    const mapped = path.join(
+      projectRoot,
+      "dist",
+      `${withoutExtension}${replacement}`,
+    );
+    return { value: mapped, isTarget: true };
+  };
 
-  for (const [extension, replacement] of tsExtensionMappings) {
-    if (projectRelativePath.endsWith(extension)) {
-      const withoutExtension = projectRelativePath.slice(0, -extension.length);
-      const mapped = path.join(
-        projectRoot,
-        "dist",
-        `${withoutExtension}${replacement}`,
-      );
-      return { value: mapped, isTarget: true };
-    }
+  if (projectRelativePath.endsWith(".cts")) {
+    return mapTsTarget(".cts", ".cjs");
+  }
+
+  if (projectRelativePath.endsWith(".mts")) {
+    return mapTsTarget(".mts", ".mjs");
+  }
+
+  if (projectRelativePath.endsWith(".ts")) {
+    return mapTsTarget(".ts", ".js");
   }
 
   if (matchedPathExists) {
