@@ -125,6 +125,14 @@ for (const argument of filteredCliArguments) {
 
   const mapped = mapArgument(argument);
   mappedArguments.push(mapped);
+
+  if (
+    typeof mapped.value === "string" &&
+    flagsWithValues.has(mapped.value)
+  ) {
+    expectValueForFlag = true;
+    pendingValueFlag = mapped.value;
+  }
 }
 
 if (pendingValueFlag !== null) {
