@@ -14,6 +14,13 @@ const expectedLintGlobs = [
   "\"frontend/tests/**/*.ts\"",
 ];
 
+const requiredLintGlobs = [
+  "src/**/*.ts",
+  "tests/**/*.ts",
+  "frontend/src/**/*.ts",
+  "frontend/tests/**/*.ts",
+];
+
 test("package.json exposes a TypeScript dev dependency", async () => {
   const { readFile } = (await dynamicImport("node:fs/promises")) as {
     readFile: (path: string | URL, options: "utf8") => Promise<string>;
