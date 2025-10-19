@@ -11,6 +11,8 @@ $ npx deterministic-32 <key?> [--salt=... --namespace=... --normalize=nfkc|nfkd|
   ```
   - `--json` を付けない場合も、`--json` / `--json=compact` を指定した場合も compact JSON（1 行 1 JSON、末尾改行あり）の NDJSON を維持する。
   - `--json=pretty` / `--pretty` / `--json --pretty` はインデント 2 の複数行 JSON を返し、各レコードが複数行になるため NDJSON ではない。
+  - 整形モードでは 1 レコードが複数行の JSON になり、NDJSON ではない。
+  - NDJSON (1 行 1 JSON オブジェクト) になるのは compact/既定モードのみ。
 - `--normalize` には Unicode 正規化モードとして `nfkc`（既定）、`nfkd`、`nfc`、`none` の 4 種類を指定できる。
 - 終了コード:
 - `0` … 成功
