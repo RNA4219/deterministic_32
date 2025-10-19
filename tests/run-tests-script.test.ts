@@ -439,6 +439,26 @@ test(
 );
 
 test(
+  "run-tests script rejects reporter destination without value",
+  async () => {
+    const env = await loadEnvironment();
+
+    const result = await runScriptWithEnvironment(env, {
+      argv: ["--test-reporter-destination"],
+    });
+
+    const hasRangeError = result.importError instanceof RangeError;
+    const hasExitCodeTwo = result.exitCodes.includes(2);
+
+    assert.ok(
+      hasRangeError || hasExitCodeTwo,
+      "expected RangeError import or exit code 2 when reporter destination value is missing",
+    );
+    assert.equal(result.spawnCalls.length, 0);
+  },
+);
+
+test(
   "run-tests script positions value-less flags before default targets",
   async () => {
     const env = await loadEnvironment();
