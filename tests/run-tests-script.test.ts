@@ -93,7 +93,20 @@ test("run-tests script normalizes absolute TS targets to dist JS paths", async (
   });
 
   const repoRootPath = pathModule.resolve(fileURLToPath(repoRootUrl));
-  const absoluteTarget = pathModule.resolve(repoRootPath, "tests/example.test.ts");
+  const processModule = process as NodeJS.Process & {
+    cwd: () => string;
+    chdir: (directory: string) => void;
+  };
+  const originalCwd = processModule.cwd();
+  processModule.chdir(pathModule.join(repoRootPath, "dist"));
+  cleanups.push(() => {
+    processModule.chdir(originalCwd);
+  });
+
+  const absoluteTarget = pathModule.resolve(
+    repoRootPath,
+    "tests/example.test.ts",
+  );
 
   const originalArgv = process.argv;
   process.argv = [process.argv[0]!, scriptUrl.pathname, absoluteTarget];
