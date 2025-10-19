@@ -104,6 +104,13 @@ const flagsWithValues = new Set([
   "--test-reporter-destination",
   "-r",
   "-i",
+  "--conditions",
+  "--eval",
+  "--experimental-specifier-resolution",
+  "--input-type",
+  "--print",
+  "--test-concurrency",
+  "--test-timeout",
 ]);
 
 const cliArguments = process.argv.slice(2);
