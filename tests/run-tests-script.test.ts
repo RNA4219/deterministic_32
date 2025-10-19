@@ -332,6 +332,46 @@ test(
   },
 );
 
+test(
+  "run-tests script positions value-less flags before default targets",
+  async () => {
+    const env = await loadEnvironment();
+
+    const result = await runScriptWithEnvironment(env, {
+      argv: ["--", "--watch"],
+    });
+
+    assert.equal(result.importError, undefined);
+    assert.equal(result.spawnCalls.length, 1);
+
+    const invocation = result.spawnCalls[0]!;
+    assert.ok(Array.isArray(invocation.args));
+    const args = invocation.args as string[];
+
+    const defaultTargets = [
+      env.pathModule.join(env.repoRootPath, "dist", "tests"),
+      env.pathModule.join(env.repoRootPath, "dist", "frontend", "tests"),
+    ];
+
+    const watchIndex = args.indexOf("--watch");
+    assert.equal(
+      watchIndex,
+      1,
+      `expected --watch to appear immediately after --test, received: ${args.join(", ")}`,
+    );
+
+    for (const defaultTarget of defaultTargets) {
+      const defaultIndex = args.indexOf(defaultTarget);
+      assert.ok(
+        defaultIndex > watchIndex,
+        `expected ${defaultTarget} to appear after --watch, received: ${args.join(", ")}`,
+      );
+    }
+
+    assert.deepEqual(result.exitCodes, [0]);
+  },
+);
+
 for (const directoryName of ["frontend", "dist"]) {
   test(
     `run-tests script resolves cwd and default targets from repo root when started from ${directoryName}/`,
