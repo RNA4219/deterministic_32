@@ -401,6 +401,44 @@ test(
 );
 
 test(
+  "run-tests script retains default targets when CLI provides reporter destination",
+  async () => {
+    const env = await loadEnvironment();
+
+    const result = await runScriptWithEnvironment(env, {
+      argv: ["--test-reporter-destination", "tests/output.jsonl"],
+    });
+
+    assert.equal(result.importError, undefined);
+    assert.equal(result.spawnCalls.length, 1);
+
+    const invocation = result.spawnCalls[0]!;
+    assert.ok(Array.isArray(invocation.args));
+    const args = invocation.args as string[];
+
+    const defaultTargets = [
+      env.pathModule.join(env.repoRootPath, "dist", "tests"),
+      env.pathModule.join(env.repoRootPath, "dist", "frontend", "tests"),
+    ];
+    for (const defaultTarget of defaultTargets) {
+      assert.ok(
+        args.includes(defaultTarget),
+        `expected spawn args to include ${defaultTarget}, received: ${args.join(", ")}`,
+      );
+    }
+
+    const reporterDestinationIndex = args.indexOf("--test-reporter-destination");
+    assert.ok(
+      reporterDestinationIndex !== -1,
+      `expected spawn args to include --test-reporter-destination, received: ${args.join(", ")}`,
+    );
+    assert.equal(args[reporterDestinationIndex + 1], "tests/output.jsonl");
+
+    assert.deepEqual(result.exitCodes, [0]);
+  },
+);
+
+test(
   "run-tests script positions value-less flags before default targets",
   async () => {
     const env = await loadEnvironment();

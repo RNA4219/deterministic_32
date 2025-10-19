@@ -102,12 +102,19 @@ const flagsWithValues = new Set([
 const cliArguments = process.argv.slice(2);
 const filteredCliArguments = cliArguments.filter((argument) => argument !== "--");
 const mappedArguments = [];
-let expectValueForFlag = false;
 
-for (const argument of filteredCliArguments) {
-  if (expectValueForFlag) {
+for (let index = 0; index < filteredCliArguments.length; index += 1) {
+  const argument = filteredCliArguments[index];
+
+  if (flagsWithValues.has(argument)) {
     mappedArguments.push({ value: argument, isTarget: false });
-    expectValueForFlag = false;
+
+    const valueArgument = filteredCliArguments[index + 1];
+    if (valueArgument !== undefined) {
+      mappedArguments.push({ value: valueArgument, isTarget: false });
+      index += 1;
+    }
+
     continue;
   }
 
