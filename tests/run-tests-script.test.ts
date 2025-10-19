@@ -14,6 +14,12 @@ type SpawnInvocation = {
   readonly child: FakeChildProcess;
 };
 
+type PathModule = {
+  join: (...segments: string[]) => string;
+  resolve: (...segments: string[]) => string;
+  sep: string;
+};
+
 const repoRootUrl = import.meta.url.includes("/dist/tests/")
   ? new URL("../..", import.meta.url)
   : new URL("..", import.meta.url);
@@ -25,14 +31,28 @@ const dynamicImport = new Function(
   "return import(specifier);",
 ) as (specifier: string) => Promise<unknown>;
 
-test("run-tests script normalizes absolute TS targets to dist JS paths", async () => {
+type ExecutionResult = {
+  readonly pathModule: PathModule;
+  readonly spawnArgs: string[];
+  readonly exitCodes: number[];
+  readonly importError: unknown;
+};
+
+type ExecutionOptions = {
+  readonly buildArgument: (context: {
+    readonly pathModule: PathModule;
+    readonly repoRootPath: string;
+  }) => string;
+  readonly chdirToDist?: boolean;
+};
+
+const runScriptWithArgument = async (
+  options: ExecutionOptions,
+): Promise<ExecutionResult> => {
   const { fileURLToPath } = (await dynamicImport("node:url")) as {
     fileURLToPath: (specifier: string | URL) => string;
   };
-  const pathModule = (await dynamicImport("node:path")) as {
-    join: (...segments: string[]) => string;
-    resolve: (...segments: string[]) => string;
-  };
+  const pathModule = (await dynamicImport("node:path")) as PathModule;
 
   const spawnCalls: SpawnInvocation[] = [];
   const exitCodes: number[] = [];
@@ -98,35 +118,34 @@ test("run-tests script normalizes absolute TS targets to dist JS paths", async (
     chdir: (directory: string) => void;
   };
   const originalCwd = processModule.cwd();
-  processModule.chdir(pathModule.join(repoRootPath, "dist"));
-  cleanups.push(() => {
-    processModule.chdir(originalCwd);
-  });
+  cleanups.push(() => { processModule.chdir(originalCwd); });
+  if (options.chdirToDist ?? true) {
+    processModule.chdir(pathModule.join(repoRootPath, "dist"));
+  }
 
-  const absoluteTarget = pathModule.resolve(
-    repoRootPath,
-    "tests/example.test.ts",
-  );
+  const cliArgument = options.buildArgument({ pathModule, repoRootPath });
 
   const originalArgv = process.argv;
-  process.argv = [process.argv[0]!, scriptUrl.pathname, absoluteTarget];
-  cleanups.push(() => {
-    process.argv = originalArgv;
-  });
+  process.argv = [process.argv[0]!, scriptUrl.pathname, cliArgument];
+  cleanups.push(() => { process.argv = originalArgv; });
 
   const originalExit = process.exit;
   (process as { exit: (code?: number) => never }).exit = ((code?: number) => {
     exitCodes.push(code ?? 0);
     return undefined as never;
   }) as typeof originalExit;
-  cleanups.push(() => {
-    (process as { exit: typeof originalExit }).exit = originalExit;
-  });
+  cleanups.push(() => { (process as { exit: typeof originalExit }).exit = originalExit; });
 
+  let spawnArgs: string[] = [];
   try {
     await import(`${scriptUrl.href}?t=${Date.now()}`);
     const invocation = spawnCalls[0];
-    invocation?.child.emit("exit", 0, null);
+    if (invocation) {
+      spawnArgs = Array.isArray(invocation.args)
+        ? [...(invocation.args as string[])]
+        : [];
+      invocation.child.emit("exit", 0, null);
+    }
   } catch (error) {
     importError = error;
   } finally {
@@ -135,16 +154,51 @@ test("run-tests script normalizes absolute TS targets to dist JS paths", async (
     }
   }
 
-  assert.equal(importError, undefined);
-  assert.equal(spawnCalls.length, 1);
+  return {
+    pathModule,
+    spawnArgs,
+    exitCodes,
+    importError,
+  };
+};
 
-  const invocation = spawnCalls[0]!;
-  assert.ok(Array.isArray(invocation.args));
-  const args = invocation.args as string[];
-  const expectedTarget = pathModule.join("dist", "tests", "example.test.js");
+const runAndAssert = async (
+  options: ExecutionOptions,
+  expectedSegments: string[],
+) => {
+  const result = await runScriptWithArgument(options);
+  assert.equal(result.importError, undefined);
+  assert.ok(result.spawnArgs.length > 0);
+  const expectedTarget = result.pathModule.join(...expectedSegments);
   assert.ok(
-    args.includes(expectedTarget),
-    `expected spawn args to include ${expectedTarget}, received: ${args.join(", ")}`,
+    result.spawnArgs.includes(expectedTarget),
+    `expected spawn args to include ${expectedTarget}, received: ${result.spawnArgs.join(", ")}`,
   );
-  assert.deepEqual(exitCodes, [0]);
+  assert.deepEqual(result.exitCodes, [0]);
+};
+
+test("run-tests script normalizes absolute TS targets to dist JS paths", async () => {
+  await runAndAssert(
+    {
+      buildArgument: ({ pathModule, repoRootPath }) =>
+        pathModule.resolve(repoRootPath, "tests/example.test.ts"),
+    },
+    ["dist", "tests", "example.test.js"],
+  );
+});
+
+test("run-tests script normalizes nested TS targets with parent segments", async () => {
+  await runAndAssert(
+    {
+      buildArgument: ({ pathModule }) =>
+        [
+          "..",
+          "frontend",
+          "tests",
+          "integration",
+          "sample.test.ts",
+        ].join(pathModule.sep),
+    },
+    ["dist", "frontend", "tests", "integration", "sample.test.js"],
+  );
 });

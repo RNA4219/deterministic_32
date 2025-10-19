@@ -17,7 +17,7 @@ const mapArgument = (argument) => {
 
   const absolutePath = path.isAbsolute(argument)
     ? argument
-    : path.resolve(projectRoot, argument);
+    : path.resolve(process.cwd(), argument);
   const projectRelativePath = path.relative(projectRoot, absolutePath);
   if (
     projectRelativePath === "" ||
@@ -27,7 +27,8 @@ const mapArgument = (argument) => {
     return argument;
   }
 
-  const withoutExtension = projectRelativePath.slice(0, -3);
+  const normalizedRelativePath = path.normalize(projectRelativePath);
+  const withoutExtension = normalizedRelativePath.slice(0, -3);
   const mapped = path.join("dist", `${withoutExtension}.js`);
   return mapped;
 };
