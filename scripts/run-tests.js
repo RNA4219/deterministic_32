@@ -52,7 +52,7 @@ const mapArgument = (argument) => {
 
   if (fs.existsSync(matchedAbsolutePath)) {
     try {
-      if (fs.statSync(absolutePath).isDirectory()) {
+      if (fs.statSync(matchedAbsolutePath).isDirectory()) {
         if (
           projectRelativePath === "dist" ||
           projectRelativePath.startsWith(`dist${path.sep}`)

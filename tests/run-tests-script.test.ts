@@ -160,6 +160,28 @@ const runScriptWithEnvironment = async (
   return { spawnCalls, exitCodes, importError };
 };
 
+test("run-tests script maps CLI directory arguments to dist targets", async () => {
+  const env = await loadEnvironment();
+
+  const result = await runScriptWithEnvironment(env, {
+    argv: ["tests"],
+  });
+
+  assert.equal(result.importError, undefined);
+  assert.equal(result.spawnCalls.length, 1);
+
+  const invocation = result.spawnCalls[0]!;
+  assert.ok(Array.isArray(invocation.args));
+  const args = invocation.args as string[];
+  const expectedTarget = env.pathModule.join(env.repoRootPath, "dist", "tests");
+  assert.ok(
+    args.includes(expectedTarget),
+    `expected spawn args to include ${expectedTarget}, received: ${args.join(", ")}`,
+  );
+
+  assert.deepEqual(result.exitCodes, [0]);
+});
+
 test("run-tests script normalizes absolute TS targets to dist JS paths", async () => {
   const env = await loadEnvironment();
   const absoluteTarget = env.pathModule.resolve(
