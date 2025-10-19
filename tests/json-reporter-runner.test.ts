@@ -207,6 +207,31 @@ for (const { extension, distExtension } of [
   );
 }
 
+test(
+  "prepareRunnerOptions forwards skip pattern arguments as passthrough",
+  async () => {
+    const prepareRunnerOptions = await loadPrepareRunnerOptions(
+      "skip-pattern-passthrough",
+    );
+
+    const result = prepareRunnerOptions(
+      [
+        "node",
+        "script.mjs",
+        "--test-skip-pattern",
+        "tests/example.test.js",
+      ],
+      { defaultTargets: [] },
+    );
+
+    assert.deepEqual(result.targets, []);
+    assert.deepEqual(result.passthroughArgs, [
+      "--test-skip-pattern",
+      "tests/example.test.js",
+    ]);
+  },
+);
+
 test("JSON reporter runner uses dist target when invoked with TS input", async () => {
   const { createRequire } = (await dynamicImport("node:module")) as {
     createRequire: (specifier: string | URL) => (id: string) => unknown;
