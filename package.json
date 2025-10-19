@@ -26,7 +26,7 @@
     "bench": "npm run build && node dist/scripts/bench.js",
     "test": "npm run build && node scripts/run-tests.js",
     "prepare": "npm run build",
-    "lint": "eslint \"src/**/*.ts\" \"tests/**/*.ts\"",
+    "lint": "eslint \"src/**/*.ts\" \"tests/**/*.ts\" \"frontend/src/**/*.ts\" \"frontend/tests/**/*.ts\"",
     "lint:fix": "npm run lint -- --fix"
   },
   "engines": {
