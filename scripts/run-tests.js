@@ -94,23 +94,24 @@ const mapArgument = (argument) => {
 };
 
 const flagsWithValues = new Set([
+  "--conditions",
   "--env-file",
-  "--import",
-  "--loader",
+  "--eval",
   "--experimental-loader",
+  "--experimental-specifier-resolution",
+  "--import",
+  "--input-type",
+  "--loader",
+  "--print",
   "--require",
+  "--test-concurrency",
   "--test-name-pattern",
   "--test-reporter",
   "--test-reporter-destination",
-  "-r",
-  "-i",
-  "--conditions",
-  "--eval",
-  "--experimental-specifier-resolution",
-  "--input-type",
-  "--print",
-  "--test-concurrency",
   "--test-timeout",
+  "--watch-path",
+  "-i",
+  "-r",
 ]);
 
 const throwMissingFlagValueError = (flag) => {
