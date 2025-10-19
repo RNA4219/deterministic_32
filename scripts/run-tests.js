@@ -111,12 +111,14 @@ for (const argument of filteredCliArguments) {
     continue;
   }
 
+  if (flagsWithValues.has(argument)) {
+    mappedArguments.push({ value: argument, isTarget: false });
+    expectValueForFlag = true;
+    continue;
+  }
+
   const mapped = mapArgument(argument);
   mappedArguments.push(mapped);
-
-  if (!mapped.isTarget && flagsWithValues.has(argument)) {
-    expectValueForFlag = true;
-  }
 }
 
 const flagArguments = [];
