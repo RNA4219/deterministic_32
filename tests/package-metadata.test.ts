@@ -11,6 +11,7 @@ const expectedBenchScript = "npm run build && node dist/scripts/bench.js";
 const requiredLintGlobs = [
   "src/**/*.ts",
   "tests/**/*.ts",
+  "frontend/**/*.ts",
   "frontend/src/**/*.ts",
   "frontend/tests/**/*.ts",
 ];
