@@ -42,6 +42,49 @@ const repoRootUrl = import.meta.url.includes("/dist/tests/")
   ? new URL("../..", import.meta.url)
   : new URL("..", import.meta.url);
 
+type PrepareRunnerOptions = (
+  argv: readonly string[],
+  overrides?: {
+    existsSync?: (candidate: string) => boolean;
+    defaultTargets?: readonly string[];
+  },
+) => {
+  passthroughArgs: string[];
+  targets: string[];
+  destinationOverride: string | null;
+};
+
+const loadPrepareRunnerOptions = async (
+  token: string,
+): Promise<PrepareRunnerOptions> => {
+  const runnerUrl = new URL("./--test-reporter=json", repoRootUrl);
+  const processWithEnv = process as typeof process & {
+    env: Record<string, string | undefined> & {
+      __CAT32_SKIP_JSON_REPORTER_RUN__?: string;
+    };
+  };
+  const previousSkip = processWithEnv.env.__CAT32_SKIP_JSON_REPORTER_RUN__;
+  processWithEnv.env.__CAT32_SKIP_JSON_REPORTER_RUN__ = "1";
+
+  try {
+    const moduleExports = (await import(
+      `${runnerUrl.href}?prepare-runner=${Date.now()}-${token}`,
+    )) as { prepareRunnerOptions?: PrepareRunnerOptions };
+
+    if (typeof moduleExports.prepareRunnerOptions !== "function") {
+      throw new Error("prepareRunnerOptions not loaded");
+    }
+
+    return moduleExports.prepareRunnerOptions;
+  } finally {
+    if (previousSkip === undefined) {
+      delete processWithEnv.env.__CAT32_SKIP_JSON_REPORTER_RUN__;
+    } else {
+      processWithEnv.env.__CAT32_SKIP_JSON_REPORTER_RUN__ = previousSkip;
+    }
+  }
+};
+
 test("JSON reporter runner forwards CLI flags to spawned process", async () => {
   const spawnCalls: Array<{
     command: string;
@@ -413,3 +456,35 @@ test("JSON reporter runner does not treat skip pattern values as targets", async
     -1,
   );
 });
+
+test(
+  "prepareRunnerOptions keeps default targets when --test-match uses separate value argument",
+  async () => {
+    const prepareRunnerOptions = await loadPrepareRunnerOptions("test-match");
+
+    const result = prepareRunnerOptions(
+      ["node", "script", "--test-match", "**/*.test.js"],
+      {
+        existsSync: (candidate) => {
+          if (typeof candidate !== "string") {
+            return false;
+          }
+
+          return candidate.endsWith("dist/tests") ||
+            candidate.endsWith("dist/frontend/tests");
+        },
+        defaultTargets: ["dist/tests", "dist/frontend/tests"],
+      },
+    );
+
+    assert.deepEqual(result.passthroughArgs, [
+      "--test-match",
+      "**/*.test.js",
+    ]);
+    assert.deepEqual(result.targets, [
+      "dist/tests",
+      "dist/frontend/tests",
+    ]);
+    assert.equal(result.destinationOverride, null);
+  },
+);
