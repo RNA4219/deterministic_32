@@ -759,6 +759,45 @@ test(
 );
 
 test(
+  "run-tests script retains default targets when CLI provides skip pattern",
+  async () => {
+    const env = await loadEnvironment();
+
+    const result = await runScriptWithEnvironment(env, {
+      argv: ["--test-skip-pattern", "tests/example.test.js"],
+    });
+
+    assert.equal(result.importError, undefined);
+    assert.equal(result.spawnCalls.length, 1);
+
+    const invocation = result.spawnCalls[0]!;
+    assert.ok(Array.isArray(invocation.args));
+    const args = invocation.args as string[];
+
+    const defaultTargets = [
+      env.pathModule.join(env.repoRootPath, "dist", "tests"),
+      env.pathModule.join(env.repoRootPath, "dist", "frontend", "tests"),
+    ];
+
+    for (const defaultTarget of defaultTargets) {
+      assert.ok(
+        args.includes(defaultTarget),
+        `expected spawn args to include ${defaultTarget}, received: ${args.join(", ")}`,
+      );
+    }
+
+    const skipPatternIndex = args.indexOf("--test-skip-pattern");
+    assert.ok(
+      skipPatternIndex !== -1,
+      `expected spawn args to include --test-skip-pattern, received: ${args.join(", ")}`,
+    );
+    assert.equal(args[skipPatternIndex + 1], "tests/example.test.js");
+
+    assert.deepEqual(result.exitCodes, [0]);
+  },
+);
+
+test(
   "run-tests script rejects reporter destination flag without value",
   async () => {
     const env = await loadEnvironment();
