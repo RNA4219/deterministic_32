@@ -75,12 +75,42 @@ const mapArgument = (argument) => {
   return argument;
 };
 
+const flagsWithValues = new Set([
+  "--test-name-pattern",
+  "--test-reporter",
+  "--test-reporter-destination",
+]);
+
 const cliArguments = process.argv.slice(2);
-const filteredCliArguments = cliArguments.filter((argument) => argument !== "--");
-const extraTargets = filteredCliArguments.map(mapArgument);
-const hasCliTargets = filteredCliArguments.some(
-  (argument) => !argument.startsWith("--"),
-);
+const optionArguments = [];
+const targetArguments = [];
+let expectingValueForFlag = false;
+
+for (const argument of cliArguments) {
+  if (argument === "--") {
+    continue;
+  }
+
+  if (expectingValueForFlag) {
+    optionArguments.push(argument);
+    expectingValueForFlag = false;
+    continue;
+  }
+
+  if (argument.startsWith("--")) {
+    const [flagName, inlineValue] = argument.split("=", 2);
+    optionArguments.push(argument);
+    if (flagsWithValues.has(flagName) && inlineValue === undefined) {
+      expectingValueForFlag = true;
+    }
+    continue;
+  }
+
+  const mappedArgument = mapArgument(argument);
+  targetArguments.push(mappedArgument);
+}
+
+const hasCliTargets = targetArguments.length > 0;
 
 const spawnOverride =
   typeof globalThis === "object" &&
@@ -97,8 +127,8 @@ const spawnOptions = {
 };
 
 const nodeTestArgs = hasCliTargets
-  ? ["--test", ...extraTargets]
-  : ["--test", ...defaultTargets, ...extraTargets];
+  ? ["--test", ...optionArguments, ...targetArguments]
+  : ["--test", ...optionArguments, ...defaultTargets];
 
 const child = spawnImplementation(process.execPath, nodeTestArgs, spawnOptions);
 
