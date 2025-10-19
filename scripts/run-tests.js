@@ -52,11 +52,20 @@ const mapArgument = (argument) => {
 
   if (fs.existsSync(matchedAbsolutePath)) {
     try {
-      if (fs.statSync(matchedAbsolutePath).isDirectory()) {
-        const mappedDirectory = path.join(projectRoot, "dist", projectRelativePath);
-        if (fs.existsSync(mappedDirectory)) {
-          return mappedDirectory;
+      if (fs.statSync(absolutePath).isDirectory()) {
+        if (
+          projectRelativePath === "dist" ||
+          projectRelativePath.startsWith(`dist${path.sep}`)
+        ) {
+          return argument;
         }
+
+        const mappedDirectory = path.join(
+          projectRoot,
+          "dist",
+          projectRelativePath,
+        );
+        return mappedDirectory;
       }
     } catch {
       // ignore errors and fall through to original argument
