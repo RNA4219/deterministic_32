@@ -283,20 +283,19 @@ test(
     assert.ok(Array.isArray(invocation.args));
     const args = invocation.args as string[];
 
-    const expectedTargets = [
+    const expectedArgs = [
+      "--test",
+      "--test-skip-pattern",
+      "tests/example.test.js",
       env.pathModule.join(env.repoRootPath, "dist", "tests"),
       env.pathModule.join(env.repoRootPath, "dist", "frontend", "tests"),
     ];
 
-    for (const expectedTarget of expectedTargets) {
-      assert.ok(
-        args.includes(expectedTarget),
-        `expected spawn args to include ${expectedTarget}, received: ${args.join(", ")}`,
-      );
-    }
-
-    assert.ok(args.includes("--test-skip-pattern"));
-    assert.ok(args.includes("tests/example.test.js"));
+    assert.deepEqual(
+      args,
+      expectedArgs,
+      `expected spawn args to equal ${expectedArgs.join(", ")}, received: ${args.join(", ")}`,
+    );
 
     assert.deepEqual(result.exitCodes, [0]);
   },

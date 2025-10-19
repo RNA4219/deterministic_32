@@ -16,6 +16,8 @@ const defaultTargets = [
 
 const testSegmentPattern = /^(?:tests|__tests__)$|(?:\.spec(?:\.[^.]+)?$)|(?:\.test(?:\.[^.]+)?$)/u;
 
+const testSkipPatternFlag = "--test-skip-pattern";
+
 const mapArgument = (argument) => {
   if (argument.startsWith("--")) {
     return { value: argument, isTarget: false };
@@ -125,11 +127,9 @@ const flagsWithValues = new Set([
   "--require",
   "--test-concurrency",
   "--test-name-pattern",
-  "--test-ignore",
-  "--test-skip-pattern",
   "--test-reporter",
   "--test-reporter-destination",
-  "--test-skip-pattern",
+  testSkipPatternFlag,
   "--test-timeout",
   "--watch-path",
   "-i",
