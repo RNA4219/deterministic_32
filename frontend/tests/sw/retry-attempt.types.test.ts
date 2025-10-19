@@ -15,4 +15,6 @@ const assertRetryQueueEntryResult = async (store: RefreshQueueStore) => {
   return { promiseResult, syncResult };
 };
 
+void acceptsPromiseReturningValue;
+void acceptsSynchronousValue;
 void assertRetryQueueEntryResult;
