@@ -439,6 +439,26 @@ test(
 );
 
 test(
+  "run-tests script rejects reporter destination flag without value",
+  async () => {
+    const env = await loadEnvironment();
+
+    const result = await runScriptWithEnvironment(env, {
+      argv: ["--test-reporter-destination"],
+    });
+
+    assert.equal(result.spawnCalls.length, 0);
+    assert.deepEqual(result.exitCodes, []);
+
+    assert.ok(result.importError instanceof RangeError);
+    assert.equal(
+      (result.importError as RangeError).message,
+      "Missing value for --test-reporter-destination",
+    );
+  },
+);
+
+test(
   "run-tests script preserves flag values for Node preload options",
   async () => {
     const env = await loadEnvironment();
