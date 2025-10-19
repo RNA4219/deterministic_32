@@ -136,6 +136,7 @@ for (const argument of filteredCliArguments) {
 }
 
 if (pendingValueFlag !== null) {
+  process.exitCode = 2;
   throw new RangeError(`Missing value for ${pendingValueFlag}`);
 }
 

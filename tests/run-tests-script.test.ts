@@ -137,12 +137,19 @@ const runScriptWithEnvironment = async (
   });
 
   const originalExit = process.exit;
+  const processWithExitCode = process as NodeJS.Process & { exitCode?: number };
+  const originalExitCode = processWithExitCode.exitCode;
   (process as { exit: (code?: number) => never }).exit = ((code?: number) => {
     exitCodes.push(code ?? 0);
     return undefined as never;
   }) as typeof originalExit;
   cleanups.push(() => {
     (process as { exit: typeof originalExit }).exit = originalExit;
+    if (originalExitCode === undefined) {
+      processWithExitCode.exitCode = undefined;
+    } else {
+      processWithExitCode.exitCode = originalExitCode;
+    }
   });
 
   try {
@@ -159,6 +166,26 @@ const runScriptWithEnvironment = async (
 
   return { spawnCalls, exitCodes, importError };
 };
+
+test(
+  "run-tests script rejects --test-reporter-destination without a value",
+  async () => {
+    const env = await loadEnvironment();
+
+    const result = await runScriptWithEnvironment(env, {
+      argv: ["--test-reporter-destination"],
+    });
+
+    assert.equal(result.spawnCalls.length, 0);
+    assert.equal(result.exitCodes.length, 0);
+    assert.ok(result.importError instanceof RangeError);
+    const message = String((result.importError as RangeError).message);
+    assert.ok(
+      /Missing value for --test-reporter-destination/u.test(message),
+      `expected RangeError message to mention missing destination value, received: ${message}`,
+    );
+  },
+);
 
 test("run-tests script maps CLI directory arguments to dist targets", async () => {
   const env = await loadEnvironment();
