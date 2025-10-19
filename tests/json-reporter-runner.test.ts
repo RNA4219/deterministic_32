@@ -57,48 +57,75 @@ const loadResolveDestination = async (
   }
 };
 
+const loadPrepareRunnerOptions = async (
+  token: string,
+): Promise<PrepareRunnerOptions> => {
+  const processWithEnv = process as typeof process & {
+    env: Record<string, string | undefined> & {
+      __CAT32_SKIP_JSON_REPORTER_RUN__?: string;
+    };
+  };
+  const previousSkip = processWithEnv.env.__CAT32_SKIP_JSON_REPORTER_RUN__;
+  processWithEnv.env.__CAT32_SKIP_JSON_REPORTER_RUN__ = "1";
+
+  try {
+    const moduleExports = (await import(
+      `${runnerUrl.href}?prepare-runner=${Date.now()}-${token}`,
+    )) as { prepareRunnerOptions?: PrepareRunnerOptions };
+
+    if (typeof moduleExports.prepareRunnerOptions !== "function") {
+      throw new Error("prepareRunnerOptions not loaded");
+    }
+
+    return moduleExports.prepareRunnerOptions;
+  } finally {
+    if (previousSkip === undefined) {
+      delete processWithEnv.env.__CAT32_SKIP_JSON_REPORTER_RUN__;
+    } else {
+      processWithEnv.env.__CAT32_SKIP_JSON_REPORTER_RUN__ = previousSkip;
+    }
+  }
+};
+
 test(
   "prepareRunnerOptions throws when destination option is missing value",
   async () => {
-    const processWithEnv = process as typeof process & {
-      env: Record<string, string | undefined> & {
-        __CAT32_SKIP_JSON_REPORTER_RUN__?: string;
-      };
-    };
-    const previousSkip = processWithEnv.env.__CAT32_SKIP_JSON_REPORTER_RUN__;
-    processWithEnv.env.__CAT32_SKIP_JSON_REPORTER_RUN__ = "1";
+    const prepareRunnerOptions = await loadPrepareRunnerOptions("missing");
+
+    let thrown: unknown;
 
     try {
-      const moduleExports = (await import(
-        `${runnerUrl.href}?missing-destination=${Date.now()}`,
-      )) as { prepareRunnerOptions?: PrepareRunnerOptions };
-
-      assert.equal(
-        typeof moduleExports.prepareRunnerOptions,
-        "function",
-        "prepareRunnerOptions not loaded",
-      );
-
-      let thrown: unknown;
-
-      try {
-        moduleExports.prepareRunnerOptions!([
-          "node",
-          "script.mjs",
-          "--test-reporter-destination",
-        ]);
-      } catch (error) {
-        thrown = error;
-      }
-
-      assert.ok(thrown instanceof RangeError, "missing destination should throw");
-    } finally {
-      if (previousSkip === undefined) {
-        delete processWithEnv.env.__CAT32_SKIP_JSON_REPORTER_RUN__;
-      } else {
-        processWithEnv.env.__CAT32_SKIP_JSON_REPORTER_RUN__ = previousSkip;
-      }
+      prepareRunnerOptions([
+        "node",
+        "script.mjs",
+        "--test-reporter-destination",
+      ]);
+    } catch (error) {
+      thrown = error;
     }
+
+    assert.ok(thrown instanceof RangeError, "missing destination should throw");
+  },
+);
+
+test(
+  "prepareRunnerOptions throws when destination option ends argv without value",
+  async () => {
+    const prepareRunnerOptions = await loadPrepareRunnerOptions("pending");
+
+    let thrown: unknown;
+
+    try {
+      prepareRunnerOptions([
+        "node",
+        "script",
+        "--test-reporter-destination",
+      ]);
+    } catch (error) {
+      thrown = error;
+    }
+
+    assert.ok(thrown instanceof RangeError, "pending destination option should throw");
   },
 );
 

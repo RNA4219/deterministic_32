@@ -332,8 +332,10 @@ const prepareRunnerOptions = (
     addResolvedTarget(resolvedTarget, resolvedDefaults);
   }
 
-  if (pendingOption === '--test-reporter-destination') {
-    throw new RangeError('Missing value for --test-reporter-destination');
+  if (pendingOption) {
+    if (pendingOption === '--test-reporter-destination') {
+      throw new RangeError(`Missing value for ${pendingOption}`);
+    }
   }
 
   const targets = explicitTargets.length > 0 ? explicitTargets : resolvedDefaults;
