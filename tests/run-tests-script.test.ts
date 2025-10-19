@@ -49,7 +49,7 @@ runTest(
     const spawnImplementation: SpawnImplementation = (
       command,
       args,
-      options,
+      _options,
     ) => {
       spawnCalls.push({ command, args: [...args] });
       return {
