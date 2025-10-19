@@ -102,6 +102,7 @@ const flagsWithValues = new Set([
 const cliArguments = process.argv.slice(2);
 const filteredCliArguments = cliArguments.filter((argument) => argument !== "--");
 const mappedArguments = [];
+let pendingValueFlag = null;
 
 for (let index = 0; index < filteredCliArguments.length; index += 1) {
   const argument = filteredCliArguments[index];
@@ -113,19 +114,19 @@ for (let index = 0; index < filteredCliArguments.length; index += 1) {
     if (valueArgument !== undefined) {
       mappedArguments.push({ value: valueArgument, isTarget: false });
       index += 1;
+    } else {
+      pendingValueFlag = argument;
     }
 
     continue;
   }
 
-  if (flagsWithValues.has(argument)) {
-    mappedArguments.push({ value: argument, isTarget: false });
-    expectValueForFlag = true;
-    continue;
-  }
-
   const mapped = mapArgument(argument);
   mappedArguments.push(mapped);
+}
+
+if (pendingValueFlag !== null) {
+  throw new RangeError(`Missing value for ${pendingValueFlag}`);
 }
 
 const flagArguments = [];
