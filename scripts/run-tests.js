@@ -97,24 +97,22 @@ const flagsWithValues = new Set([
   "--test-name-pattern",
   "--test-reporter",
   "--test-reporter-destination",
+  "--require",
+  "--import",
+  "--loader",
+  "--experimental-loader",
 ]);
 
 const cliArguments = process.argv.slice(2);
 const filteredCliArguments = cliArguments.filter((argument) => argument !== "--");
 const mappedArguments = [];
 
-for (let index = 0; index < filteredCliArguments.length; index += 1) {
-  const argument = filteredCliArguments[index];
+let expectValueForFlag = false;
 
-  if (flagsWithValues.has(argument)) {
+for (const argument of filteredCliArguments) {
+  if (expectValueForFlag) {
     mappedArguments.push({ value: argument, isTarget: false });
-
-    const valueArgument = filteredCliArguments[index + 1];
-    if (valueArgument !== undefined) {
-      mappedArguments.push({ value: valueArgument, isTarget: false });
-      index += 1;
-    }
-
+    expectValueForFlag = false;
     continue;
   }
 
