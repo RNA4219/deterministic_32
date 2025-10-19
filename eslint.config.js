@@ -9,7 +9,12 @@ export default [
     ignores: ["dist/**"],
   },
   {
-    files: ["src/**/*.ts", "tests/**/*.ts"],
+    files: [
+      "src/**/*.ts",
+      "tests/**/*.ts",
+      "frontend/src/**/*.ts",
+      "frontend/tests/**/*.ts",
+    ],
     languageOptions: {
       parser: tsParser,
       parserOptions: {
