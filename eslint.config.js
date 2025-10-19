@@ -12,6 +12,7 @@ export default [
     files: [
       "src/**/*.ts",
       "tests/**/*.ts",
+      "frontend/**/*.ts",
       "frontend/src/**/*.ts",
       "frontend/tests/**/*.ts",
     ],
