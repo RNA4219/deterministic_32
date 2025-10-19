@@ -14,13 +14,20 @@ const defaultTargets = [
   path.join(projectRoot, "dist", "frontend", "tests"),
 ];
 
+const testSegmentPattern = /^(?:tests|__tests__)$|(?:\.spec(?:\.[^.]+)?$)|(?:\.test(?:\.[^.]+)?$)/u;
+
 const mapArgument = (argument) => {
+  if (argument.startsWith("--")) {
+    return { value: argument, isTarget: false };
+  }
+
   const candidatePaths = path.isAbsolute(argument)
     ? [argument]
     : [path.resolve(process.cwd(), argument), path.resolve(projectRoot, argument)];
 
   let matchedAbsolutePath = null;
   let projectRelativePath = null;
+  let matchedPathExists = false;
 
   for (const candidate of candidatePaths) {
     const relative = path.relative(projectRoot, candidate);
@@ -31,6 +38,7 @@ const mapArgument = (argument) => {
     if (fs.existsSync(candidate)) {
       matchedAbsolutePath = candidate;
       projectRelativePath = relative;
+      matchedPathExists = true;
       break;
     }
 
@@ -41,23 +49,30 @@ const mapArgument = (argument) => {
   }
 
   if (matchedAbsolutePath === null || projectRelativePath === null) {
-    return argument;
+    return { value: argument, isTarget: false };
+  }
+
+  const pathSegments = projectRelativePath.split(path.sep);
+  const hasTestSegment = pathSegments.some((segment) => testSegmentPattern.test(segment));
+
+  if (!hasTestSegment) {
+    return { value: argument, isTarget: false };
   }
 
   if (projectRelativePath.endsWith(".ts")) {
     const withoutExtension = projectRelativePath.slice(0, -3);
     const mapped = path.join(projectRoot, "dist", `${withoutExtension}.js`);
-    return mapped;
+    return { value: mapped, isTarget: true };
   }
 
-  if (fs.existsSync(matchedAbsolutePath)) {
+  if (matchedPathExists) {
     try {
       if (fs.statSync(matchedAbsolutePath).isDirectory()) {
         if (
           projectRelativePath === "dist" ||
           projectRelativePath.startsWith(`dist${path.sep}`)
         ) {
-          return argument;
+          return { value: argument, isTarget: true };
         }
 
         const mappedDirectory = path.join(
@@ -65,14 +80,14 @@ const mapArgument = (argument) => {
           "dist",
           projectRelativePath,
         );
-        return mappedDirectory;
+        return { value: mappedDirectory, isTarget: true };
       }
     } catch {
       // ignore errors and fall through to original argument
     }
   }
 
-  return argument;
+  return { value: argument, isTarget: true };
 };
 
 const flagsWithValues = new Set([
@@ -82,35 +97,10 @@ const flagsWithValues = new Set([
 ]);
 
 const cliArguments = process.argv.slice(2);
-const optionArguments = [];
-const targetArguments = [];
-let expectingValueForFlag = false;
-
-for (const argument of cliArguments) {
-  if (argument === "--") {
-    continue;
-  }
-
-  if (expectingValueForFlag) {
-    optionArguments.push(argument);
-    expectingValueForFlag = false;
-    continue;
-  }
-
-  if (argument.startsWith("--")) {
-    const [flagName, inlineValue] = argument.split("=", 2);
-    optionArguments.push(argument);
-    if (flagsWithValues.has(flagName) && inlineValue === undefined) {
-      expectingValueForFlag = true;
-    }
-    continue;
-  }
-
-  const mappedArgument = mapArgument(argument);
-  targetArguments.push(mappedArgument);
-}
-
-const hasCliTargets = targetArguments.length > 0;
+const filteredCliArguments = cliArguments.filter((argument) => argument !== "--");
+const mappedArguments = filteredCliArguments.map(mapArgument);
+const extraTargets = mappedArguments.map((entry) => entry.value);
+const hasExplicitTargets = mappedArguments.some((entry) => entry.isTarget);
 
 const spawnOverride =
   typeof globalThis === "object" &&
@@ -126,9 +116,9 @@ const spawnOptions = {
   stdio: "inherit",
 };
 
-const nodeTestArgs = hasCliTargets
-  ? ["--test", ...optionArguments, ...targetArguments]
-  : ["--test", ...optionArguments, ...defaultTargets];
+const nodeTestArgs = hasExplicitTargets
+  ? ["--test", ...extraTargets]
+  : ["--test", ...defaultTargets, ...extraTargets];
 
 const child = spawnImplementation(process.execPath, nodeTestArgs, spawnOptions);
 

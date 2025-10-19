@@ -292,6 +292,46 @@ test(
   },
 );
 
+test(
+  "run-tests script falls back to default targets when CLI only provides reporter options",
+  async () => {
+    const env = await loadEnvironment();
+
+    const result = await runScriptWithEnvironment(env, {
+      argv: ["--test-reporter", "spec"],
+    });
+
+    assert.equal(result.importError, undefined);
+    assert.equal(result.spawnCalls.length, 1);
+
+    const invocation = result.spawnCalls[0]!;
+    assert.ok(Array.isArray(invocation.args));
+    const args = invocation.args as string[];
+
+    const defaultTargets = [
+      env.pathModule.join(env.repoRootPath, "dist", "tests"),
+      env.pathModule.join(env.repoRootPath, "dist", "frontend", "tests"),
+    ];
+    for (const defaultTarget of defaultTargets) {
+      assert.ok(
+        args.includes(defaultTarget),
+        `expected spawn args to include ${defaultTarget}, received: ${args.join(", ")}`,
+      );
+    }
+
+    assert.ok(
+      args.includes("--test-reporter"),
+      `expected spawn args to include --test-reporter, received: ${args.join(", ")}`,
+    );
+    assert.ok(
+      args.includes("spec"),
+      `expected spawn args to include reporter value spec, received: ${args.join(", ")}`,
+    );
+
+    assert.deepEqual(result.exitCodes, [0]);
+  },
+);
+
 for (const directoryName of ["frontend", "dist"]) {
   test(
     `run-tests script resolves cwd and default targets from repo root when started from ${directoryName}/`,
