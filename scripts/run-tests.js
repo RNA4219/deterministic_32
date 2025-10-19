@@ -102,26 +102,36 @@ const flagsWithValues = new Set([
 const cliArguments = process.argv.slice(2);
 const filteredCliArguments = cliArguments.filter((argument) => argument !== "--");
 const mappedArguments = [];
+let expectValueForFlag = false;
 
-for (let index = 0; index < filteredCliArguments.length; index += 1) {
-  const argument = filteredCliArguments[index];
-  if (argument === undefined) {
+for (const argument of filteredCliArguments) {
+  if (expectValueForFlag) {
+    mappedArguments.push({ value: argument, isTarget: false });
+    expectValueForFlag = false;
     continue;
   }
 
-  mappedArguments.push(mapArgument(argument));
+  const mapped = mapArgument(argument);
+  mappedArguments.push(mapped);
 
-  if (flagsWithValues.has(argument)) {
-    const valueArgument = filteredCliArguments[index + 1];
-    if (valueArgument !== undefined) {
-      mappedArguments.push({ value: valueArgument, isTarget: false });
-      index += 1;
-    }
+  if (!mapped.isTarget && flagsWithValues.has(argument)) {
+    expectValueForFlag = true;
   }
 }
 
-const extraTargets = mappedArguments.map((entry) => entry.value);
-const hasExplicitTargets = mappedArguments.some((entry) => entry.isTarget);
+const flagArguments = [];
+const targetArguments = [];
+
+for (const entry of mappedArguments) {
+  if (entry.isTarget) {
+    targetArguments.push(entry.value);
+  } else {
+    flagArguments.push(entry.value);
+  }
+}
+
+const effectiveTargets =
+  targetArguments.length > 0 ? targetArguments : [...defaultTargets];
 
 const spawnOverride =
   typeof globalThis === "object" &&
@@ -137,9 +147,11 @@ const spawnOptions = {
   stdio: "inherit",
 };
 
-const nodeTestArgs = hasExplicitTargets
-  ? ["--test", ...extraTargets]
-  : ["--test", ...defaultTargets, ...extraTargets];
+const nodeTestArgs = [
+  "--test",
+  ...flagArguments,
+  ...effectiveTargets,
+];
 
 const child = spawnImplementation(process.execPath, nodeTestArgs, spawnOptions);
 
