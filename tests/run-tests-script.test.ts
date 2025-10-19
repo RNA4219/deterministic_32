@@ -621,6 +621,40 @@ test(
 );
 
 test(
+  "run-tests script preserves default targets when --test-match is provided",
+  async () => {
+    const env = await loadEnvironment();
+
+    const result = await runScriptWithEnvironment(env, {
+      argv: ["--test-match", "**/*.test.js"],
+    });
+
+    assert.equal(result.importError, undefined);
+    assert.equal(result.spawnCalls.length, 1);
+
+    const invocation = result.spawnCalls[0]!;
+    assert.ok(Array.isArray(invocation.args));
+    const args = invocation.args as string[];
+
+    const expectedArgs = [
+      "--test",
+      "--test-match",
+      "**/*.test.js",
+      env.pathModule.join(env.repoRootPath, "dist", "tests"),
+      env.pathModule.join(env.repoRootPath, "dist", "frontend", "tests"),
+    ];
+
+    assert.deepEqual(
+      args,
+      expectedArgs,
+      `expected spawn args to equal ${expectedArgs.join(", ")}, received: ${args.join(", ")}`,
+    );
+
+    assert.deepEqual(result.exitCodes, [0]);
+  },
+);
+
+test(
   "run-tests script keeps module registration flag values separate from default targets",
   async () => {
     const env = await loadEnvironment();

@@ -127,6 +127,7 @@ const flagsWithValues = new Set([
   "--require",
   "--test-concurrency",
   "--test-name-pattern",
+  "--test-match",
   "--test-reporter",
   "--test-reporter-destination",
   testSkipPatternFlag,
