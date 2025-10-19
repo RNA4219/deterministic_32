@@ -129,6 +129,52 @@ test(
   },
 );
 
+test(
+  "prepareRunnerOptions maps .mts target to dist .mjs path",
+  async () => {
+    const prepareRunnerOptions = await loadPrepareRunnerOptions("mts-target");
+
+    const result = prepareRunnerOptions(
+      [
+        "node",
+        "script.mjs",
+        "tests/example.test.mts",
+      ],
+      {
+        existsSync: (candidate) =>
+          typeof candidate === "string" &&
+          (candidate.endsWith("tests/example.test.mts") ||
+            candidate.endsWith("dist/tests/example.test.mjs")),
+      },
+    );
+
+    assert.deepEqual(result.targets, ["dist/tests/example.test.mjs"]);
+  },
+);
+
+test(
+  "prepareRunnerOptions maps .cts target to dist .cjs path",
+  async () => {
+    const prepareRunnerOptions = await loadPrepareRunnerOptions("cts-target");
+
+    const result = prepareRunnerOptions(
+      [
+        "node",
+        "script.mjs",
+        "tests/example.test.cts",
+      ],
+      {
+        existsSync: (candidate) =>
+          typeof candidate === "string" &&
+          (candidate.endsWith("tests/example.test.cts") ||
+            candidate.endsWith("dist/tests/example.test.cjs")),
+      },
+    );
+
+    assert.deepEqual(result.targets, ["dist/tests/example.test.cjs"]);
+  },
+);
+
 test("JSON reporter runner uses dist target when invoked with TS input", async () => {
   const { createRequire } = (await dynamicImport("node:module")) as {
     createRequire: (specifier: string | URL) => (id: string) => unknown;
