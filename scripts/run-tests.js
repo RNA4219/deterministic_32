@@ -182,6 +182,7 @@ const flagsWithValues = new Set([
   "--test-name-pattern",
   "--test-ignore",
   "--test-match",
+  "--test-runner",
   "--test-reporter",
   "--test-reporter-destination",
   testSkipPatternFlag,
@@ -200,6 +201,7 @@ const cliArguments = process.argv.slice(2);
 const mappedArguments = [];
 let pendingValueFlag = null;
 let forceTargetMode = false;
+let cliSentinelProvided = false;
 
 const ensurePendingFlagConsumed = (pendingFlag) => {
   if (pendingFlag === null) {
@@ -214,7 +216,7 @@ for (const argument of cliArguments) {
     ensurePendingFlagConsumed(pendingValueFlag);
     pendingValueFlag = null;
     forceTargetMode = true;
-    mappedArguments.push({ value: argument, isTarget: false });
+    cliSentinelProvided = true;
     continue;
   }
 
@@ -224,7 +226,7 @@ for (const argument of cliArguments) {
     continue;
   }
 
-  if (!forceTargetMode && flagsWithValues.has(argument)) {
+  if (flagsWithValues.has(argument)) {
     mappedArguments.push({ value: argument, isTarget: false });
     pendingValueFlag = argument;
     continue;
@@ -246,10 +248,12 @@ ensurePendingFlagConsumed(pendingValueFlag);
 
 const flagArguments = [];
 const targetArguments = [];
+let cliSentinelTargetEncountered = false;
 
 for (const entry of mappedArguments) {
   if (entry.isTarget) {
     targetArguments.push(entry.value);
+    cliSentinelTargetEncountered = true;
   } else {
     flagArguments.push(entry.value);
   }
@@ -257,6 +261,8 @@ for (const entry of mappedArguments) {
 
 const effectiveTargets =
   targetArguments.length > 0 ? targetArguments : [...defaultTargets];
+
+const includeCliSentinel = cliSentinelProvided && cliSentinelTargetEncountered;
 
 const spawnOverride =
   typeof globalThis === "object" &&
@@ -275,6 +281,7 @@ const spawnOptions = {
 const nodeTestArgs = [
   "--test",
   ...flagArguments,
+  ...(includeCliSentinel ? ["--"] : []),
   ...effectiveTargets,
 ];
 
