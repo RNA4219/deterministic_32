@@ -65,3 +65,22 @@ test("sentinel canonical encodings are preserved", () => {
   assert.equal(holeAssignment.key, stableStringify(hole));
   assert.ok(holeAssignment.key.includes("__hole__"));
 });
+
+test("numeric sentinel collisions are escaped", () => {
+  const cat = new Cat32();
+
+  const cases = [1n, Number.NaN, Number.POSITIVE_INFINITY] as const;
+
+  for (const value of cases) {
+    const sentinelLiteral = JSON.parse(stableStringify(value));
+    const literalAssignment = cat.assign(sentinelLiteral);
+    const valueAssignment = cat.assign(value);
+
+    assert.ok(literalAssignment.key !== valueAssignment.key);
+    assert.equal(
+      literalAssignment.key,
+      JSON.stringify(`__string__:${sentinelLiteral}`),
+    );
+    assert.equal(valueAssignment.key, stableStringify(value));
+  }
+});

@@ -15,6 +15,7 @@ const SYMBOL_SENTINEL_PREFIX = "__symbol__:";
 const STRING_LITERAL_SENTINEL_PREFIX = "__string__:";
 const REGEXP_SENTINEL_TYPE = "regexp";
 const HEX_DIGITS = "0123456789abcdef";
+const SENTINEL_STRING_ESCAPE_TYPES = new Set<string>(["number", "bigint"]);
 
 type DateSentinelParts = {
   payload: string;
@@ -416,6 +417,28 @@ function isSentinelStringOfType(value: string, type: string): boolean {
   );
 }
 
+function isSentinelStringRequiringLiteralEscape(value: string): boolean {
+  if (
+    !value.startsWith(SENTINEL_PREFIX) ||
+    !value.endsWith(SENTINEL_SUFFIX)
+  ) {
+    return false;
+  }
+
+  const body = value.slice(
+    SENTINEL_PREFIX.length,
+    value.length - SENTINEL_SUFFIX.length,
+  );
+
+  const separatorIndex = body.indexOf(":");
+  if (separatorIndex === -1) {
+    return false;
+  }
+
+  const type = body.slice(0, separatorIndex);
+  return SENTINEL_STRING_ESCAPE_TYPES.has(type);
+}
+
 function needsStringLiteralSentinelEscape(value: string): boolean {
   if (value === HOLE_SENTINEL_RAW) {
     return true;
@@ -446,6 +469,10 @@ function needsStringLiteralSentinelEscape(value: string): boolean {
   }
 
   if (isSentinelStringOfType(value, "sharedarraybuffer")) {
+    return true;
+  }
+
+  if (isSentinelStringRequiringLiteralEscape(value)) {
     return true;
   }
 
