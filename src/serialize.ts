@@ -106,6 +106,10 @@ function _stringify(v: unknown, stack: Set<unknown>): string {
     return String(v);
   }
 
+  if (v instanceof Number || v instanceof Boolean || v instanceof BigInt) {
+    return _stringify(v.valueOf(), stack);
+  }
+
   if (Array.isArray(v)) {
     if (stack.has(v)) throw new TypeError("Cyclic object");
     stack.add(v);
@@ -264,6 +268,9 @@ function compareSerializedEntry(
 }
 
 function mapBucketTypeTag(rawKey: unknown): string {
+  if (rawKey instanceof Number || rawKey instanceof Boolean || rawKey instanceof BigInt) {
+    return mapBucketTypeTag(rawKey.valueOf());
+  }
   if (typeof rawKey === "symbol") return "symbol";
   if (rawKey === null) return "null";
   if (rawKey instanceof Date) return "date";
@@ -371,6 +378,9 @@ function toPropertyKeyString(
   revivedKey: unknown,
   serializedKey: string,
 ): string {
+  if (rawKey instanceof Number || rawKey instanceof Boolean || rawKey instanceof BigInt) {
+    return toPropertyKeyString(rawKey.valueOf(), revivedKey, serializedKey);
+  }
   if (typeof rawKey === "symbol") {
     return (rawKey as symbol).toString();
   }
