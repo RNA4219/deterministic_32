@@ -336,7 +336,10 @@ function toMapPropertyKey(
     const { key } = getDateSentinelParts(rawKey);
     const normalizedDateKey =
       revivedString.startsWith(DATE_SENTINEL_PREFIX) ? revivedString : key;
-    const escapedDateKey = escapeSentinelString(normalizedDateKey);
+    const escapedDateKey =
+      normalizedDateKey === key
+        ? key
+        : escapeSentinelString(normalizedDateKey);
     return {
       bucketKey: `${bucketTag}|${escapedDateKey}`,
       propertyKey: escapedDateKey,
@@ -364,11 +367,27 @@ function normalizeStringLiteral(value: string): string {
     return value;
   }
 
-  if (value === HOLE_SENTINEL_RAW) {
+  if (needsStringLiteralSentinelEscape(value)) {
     return `${STRING_LITERAL_SENTINEL_PREFIX}${value}`;
   }
 
   return value;
+}
+
+function needsStringLiteralSentinelEscape(value: string): boolean {
+  if (value === HOLE_SENTINEL_RAW) {
+    return true;
+  }
+
+  if (value === UNDEFINED_SENTINEL) {
+    return true;
+  }
+
+  if (value.startsWith(DATE_SENTINEL_PREFIX)) {
+    return true;
+  }
+
+  return false;
 }
 
 function stringifySentinelLiteral(value: string): string {
@@ -479,7 +498,7 @@ function toPropertyKeyString(
       return escapeSentinelString(revivedKey);
     }
     const { key } = getDateSentinelParts(rawKey);
-    return escapeSentinelString(key);
+    return key;
   }
 
   if (rawKey instanceof RegExp) {

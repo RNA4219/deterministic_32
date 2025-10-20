@@ -1,0 +1,67 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+
+import { Cat32, stableStringify } from "../src/index.js";
+
+test("string literals matching sentinel encodings are escaped", () => {
+  const cat = new Cat32();
+
+  const undefinedLiteral = "__undefined__";
+  const literalAssignment = cat.assign(undefinedLiteral);
+  const undefinedAssignment = cat.assign(undefined);
+
+  assert.ok(literalAssignment.key !== undefinedAssignment.key);
+  assert.equal(
+    literalAssignment.key,
+    JSON.stringify(`__string__:${undefinedLiteral}`),
+  );
+  assert.equal(
+    undefinedAssignment.key,
+    JSON.stringify("__undefined__"),
+  );
+
+  const canonicalDate = new Date("2024-02-03T04:05:06.789Z");
+  const dateLiteral = `__date__:${canonicalDate.toISOString()}`;
+  const dateLiteralAssignment = cat.assign(dateLiteral);
+  const dateAssignment = cat.assign(canonicalDate);
+
+  assert.ok(dateLiteralAssignment.key !== dateAssignment.key);
+  assert.equal(
+    dateLiteralAssignment.key,
+    JSON.stringify(`__string__:${dateLiteral}`),
+  );
+  assert.equal(
+    dateAssignment.key,
+    JSON.stringify(`__date__:${canonicalDate.toISOString()}`),
+  );
+});
+
+test("sentinel canonical encodings are preserved", () => {
+  const cat = new Cat32();
+
+  assert.equal(
+    stableStringify(undefined),
+    JSON.stringify("__undefined__"),
+  );
+  assert.equal(
+    cat.assign(undefined).key,
+    JSON.stringify("__undefined__"),
+  );
+
+  const date = new Date("2020-01-01T00:00:00.000Z");
+  assert.equal(
+    stableStringify(date),
+    JSON.stringify(`__date__:${date.toISOString()}`),
+  );
+  assert.equal(
+    cat.assign(date).key,
+    JSON.stringify(`__date__:${date.toISOString()}`),
+  );
+
+  const hole: unknown[] = [];
+  hole.length = 2;
+  hole[1] = 1;
+  const holeAssignment = cat.assign(hole);
+  assert.equal(holeAssignment.key, stableStringify(hole));
+  assert.ok(holeAssignment.key.includes("__hole__"));
+});
