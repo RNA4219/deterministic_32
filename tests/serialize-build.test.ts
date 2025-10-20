@@ -11,24 +11,38 @@ async function loadStableStringify() {
   return module.stableStringify;
 }
 
-test("stableStringify matches JSON stringified String(value) for TypedArray", async () => {
+test("stableStringify encodes typed array metadata and bytes", async () => {
   const stableStringify = await loadStableStringify();
   const value = new Uint8Array(typedArray);
-  assert.equal(stableStringify(value), JSON.stringify(String(value)));
+  const serialized = JSON.parse(stableStringify(value));
+
+  assert.ok(serialized.startsWith("\u0000cat32:typedarray:"));
+  assert.ok(serialized.includes("kind=Uint8Array"));
+  assert.ok(serialized.includes("byteLength=3"));
+  assert.ok(serialized.includes("length=3"));
+  assert.ok(serialized.endsWith("hex=010203\u0000"));
 });
 
-test("stableStringify matches JSON stringified String(value) for ArrayBuffer", async () => {
+test("stableStringify encodes ArrayBuffer bytes", async () => {
   const stableStringify = await loadStableStringify();
   const value = typedArray.buffer.slice(0);
-  assert.equal(stableStringify(value), JSON.stringify(String(value)));
+  const serialized = JSON.parse(stableStringify(value));
+
+  assert.ok(serialized.startsWith("\u0000cat32:arraybuffer:"));
+  assert.ok(serialized.includes("byteLength=3"));
+  assert.ok(serialized.endsWith("hex=010203\u0000"));
 });
 
 if (hasSharedArrayBuffer) {
-  test("stableStringify matches JSON stringified String(value) for SharedArrayBuffer views", async () => {
+  test("stableStringify encodes SharedArrayBuffer bytes", async () => {
     const stableStringify = await loadStableStringify();
     const shared = new SharedArrayBuffer(typedArray.byteLength);
     const view = new Uint8Array(shared);
     view.set(typedArray);
-    assert.equal(stableStringify(view), JSON.stringify(String(view)));
+    const serialized = JSON.parse(stableStringify(shared));
+
+    assert.ok(serialized.startsWith("\u0000cat32:sharedarraybuffer:"));
+    assert.ok(serialized.includes("byteLength=3"));
+    assert.ok(serialized.endsWith("hex=010203\u0000"));
   });
 }
