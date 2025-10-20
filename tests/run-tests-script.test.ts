@@ -511,12 +511,12 @@ test(
 );
 
 test(
-  "run-tests script preserves flag values for known option arguments",
+  "run-tests script retains CLI sentinel and maps hyphen-prefixed TS targets",
   async () => {
     const env = await loadEnvironment();
 
     const result = await runScriptWithEnvironment(env, {
-      argv: ["--", "--test-name-pattern", "frontend/tests"],
+      argv: ["--", "--edge-case.test.ts"],
     });
 
     assert.equal(result.importError, undefined);
@@ -526,23 +526,26 @@ test(
     assert.ok(Array.isArray(invocation.args));
     const args = invocation.args as string[];
 
-    const flagIndex = args.indexOf("--test-name-pattern");
+    const sentinelIndex = args.indexOf("--");
     assert.ok(
-      flagIndex !== -1,
-      `expected spawn args to include --test-name-pattern, received: ${args.join(", ")}`,
+      sentinelIndex !== -1,
+      `expected spawn args to include -- sentinel, received: ${args.join(", ")}`,
     );
-    assert.equal(args[flagIndex + 1], "frontend/tests");
 
-    const defaultTargets = [
-      env.pathModule.join(env.repoRootPath, "dist", "tests"),
-      env.pathModule.join(env.repoRootPath, "dist", "frontend", "tests"),
-    ];
-    for (const defaultTarget of defaultTargets) {
-      assert.ok(
-        args.includes(defaultTarget),
-        `expected spawn args to include ${defaultTarget}, received: ${args.join(", ")}`,
-      );
-    }
+    const expectedTarget = env.pathModule.join(
+      env.repoRootPath,
+      "dist",
+      "--edge-case.test.js",
+    );
+    const targetIndex = args.indexOf(expectedTarget);
+    assert.ok(
+      targetIndex !== -1,
+      `expected spawn args to include ${expectedTarget}, received: ${args.join(", ")}`,
+    );
+    assert.ok(
+      sentinelIndex < targetIndex,
+      `expected -- sentinel to appear before ${expectedTarget}, received: ${args.join(", ")}`,
+    );
 
     assert.deepEqual(result.exitCodes, [0]);
   },
@@ -974,7 +977,7 @@ test(
     const env = await loadEnvironment();
 
     const result = await runScriptWithEnvironment(env, {
-      argv: ["--", "--watch"],
+      argv: ["--watch"],
     });
 
     assert.equal(result.importError, undefined);
