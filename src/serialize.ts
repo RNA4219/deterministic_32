@@ -414,13 +414,6 @@ function normalizeStringLiteral(value: string): string {
   return value;
 }
 
-function isSentinelStringOfType(value: string, type: string): boolean {
-  return (
-    value.startsWith(`${SENTINEL_PREFIX}${type}:`) &&
-    value.endsWith(SENTINEL_SUFFIX)
-  );
-}
-
 function hasArrayBufferLikeSentinelPrefix(value: string): boolean {
   for (const prefix of ARRAY_BUFFER_LIKE_SENTINEL_PREFIXES) {
     if (value.startsWith(prefix)) {
