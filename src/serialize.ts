@@ -14,6 +14,14 @@ const DATE_SENTINEL_PREFIX = "__date__:";
 const STRING_LITERAL_SENTINEL_PREFIX = "__string__:";
 const HEX_DIGITS = "0123456789abcdef";
 
+function getDateSentinelPayload(date: Date): string {
+  const time = date.getTime();
+  if (!Number.isFinite(time)) {
+    return "invalid";
+  }
+  return date.toISOString();
+}
+
 function serializeArrayBufferLikeSentinel(
   type: string,
   buffer: ArrayBufferLike,
@@ -129,7 +137,9 @@ function _stringify(v: unknown, stack: Set<unknown>): string {
 
   // Date
   if (v instanceof Date) {
-    return stringifySentinelLiteral(`${DATE_SENTINEL_PREFIX}${v.toISOString()}`);
+    return stringifySentinelLiteral(
+      `${DATE_SENTINEL_PREFIX}${getDateSentinelPayload(v)}`,
+    );
   }
 
   if (ArrayBuffer.isView(v)) {
@@ -290,11 +300,11 @@ function toMapPropertyKey(
   const revivedKey = reviveFromSerialized(serializedKey);
   if (rawKey instanceof Date) {
     const revivedString = typeof revivedKey === "string" ? revivedKey : "";
-    const isoValue = rawKey.toISOString();
+    const payload = getDateSentinelPayload(rawKey);
     const normalizedDateKey =
       revivedString && revivedString.startsWith(DATE_SENTINEL_PREFIX)
         ? revivedString
-        : `${DATE_SENTINEL_PREFIX}${revivedString || isoValue}`;
+        : `${DATE_SENTINEL_PREFIX}${revivedString || payload}`;
     const escapedDateKey = escapeSentinelString(normalizedDateKey);
     return {
       bucketKey: `${bucketTag}|${escapedDateKey}`,
@@ -400,7 +410,7 @@ function toPropertyKeyString(
     if (typeof revivedKey === "string") {
       return escapeSentinelString(revivedKey);
     }
-    return `${DATE_SENTINEL_PREFIX}${rawKey.toISOString()}`;
+    return `${DATE_SENTINEL_PREFIX}${getDateSentinelPayload(rawKey)}`;
   }
 
   const rawType = typeof rawKey;
