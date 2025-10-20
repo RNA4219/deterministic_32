@@ -433,26 +433,20 @@ function needsStringLiteralSentinelEscape(value: string): boolean {
     return true;
   }
 
-  if (
-    value.startsWith(SENTINEL_PREFIX) &&
-    value.endsWith(SENTINEL_SUFFIX)
-  ) {
-    const inner = value.slice(
-      SENTINEL_PREFIX.length,
-      -SENTINEL_SUFFIX.length,
-    );
-    const separatorIndex = inner.indexOf(":");
-    if (separatorIndex !== -1) {
-      const type = inner.slice(0, separatorIndex);
-      if (
-        type === REGEXP_SENTINEL_TYPE ||
-        type === "typedarray" ||
-        type === "arraybuffer" ||
-        type === "sharedarraybuffer"
-      ) {
-        return true;
-      }
-    }
+  if (isSentinelStringOfType(value, REGEXP_SENTINEL_TYPE)) {
+    return true;
+  }
+
+  if (isSentinelStringOfType(value, "typedarray")) {
+    return true;
+  }
+
+  if (isSentinelStringOfType(value, "arraybuffer")) {
+    return true;
+  }
+
+  if (isSentinelStringOfType(value, "sharedarraybuffer")) {
+    return true;
   }
 
   return false;
