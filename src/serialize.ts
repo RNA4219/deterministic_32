@@ -399,7 +399,36 @@ function needsStringLiteralSentinelEscape(value: string): boolean {
     return true;
   }
 
+  if (
+    value.startsWith(SENTINEL_PREFIX) &&
+    value.endsWith(SENTINEL_SUFFIX)
+  ) {
+    const inner = value.slice(
+      SENTINEL_PREFIX.length,
+      -SENTINEL_SUFFIX.length,
+    );
+    const separatorIndex = inner.indexOf(":");
+    if (separatorIndex !== -1) {
+      const type = inner.slice(0, separatorIndex);
+      if (
+        type === REGEXP_SENTINEL_TYPE ||
+        type === "typedarray" ||
+        type === "arraybuffer" ||
+        type === "sharedarraybuffer"
+      ) {
+        return true;
+      }
+    }
+  }
+
   return false;
+}
+
+function stripStringLiteralSentinelPrefix(value: string): string {
+  if (value.startsWith(STRING_LITERAL_SENTINEL_PREFIX)) {
+    return value.slice(STRING_LITERAL_SENTINEL_PREFIX.length);
+  }
+  return value;
 }
 
 function stringifySentinelLiteral(value: string): string {
@@ -523,12 +552,16 @@ function toPropertyKeyString(
   }
 
   if (rawKey instanceof RegExp) {
-    const normalizedFromRaw = normalizePlainObjectKey(
-      escapeSentinelString(buildRegExpSentinel(rawKey)),
+    const normalizedFromRaw = stripStringLiteralSentinelPrefix(
+      normalizePlainObjectKey(
+        escapeSentinelString(buildRegExpSentinel(rawKey)),
+      ),
     );
     if (revivedKey instanceof RegExp) {
-      return normalizePlainObjectKey(
-        escapeSentinelString(buildRegExpSentinel(revivedKey)),
+      return stripStringLiteralSentinelPrefix(
+        normalizePlainObjectKey(
+          escapeSentinelString(buildRegExpSentinel(revivedKey)),
+        ),
       );
     }
     if (typeof revivedKey === "string") {

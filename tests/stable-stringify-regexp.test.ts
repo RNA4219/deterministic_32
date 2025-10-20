@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { Cat32, stableStringify } from "../src/index.js";
+import { typeSentinel } from "../src/serialize.js";
 
 test("stableStringify distinguishes RegExp variants", () => {
   const foo = stableStringify(/foo/);
@@ -37,6 +38,17 @@ test("Cat32.assign produces distinct keys and hashes for RegExp variants", () =>
   assert.ok(fooIgnoreCase.hash !== emptyObject.hash);
 });
 
+test("Cat32.assign distinguishes RegExp from RegExp sentinel string literals", () => {
+  const cat = new Cat32();
+
+  const regexAssignment = cat.assign(/foo/);
+  const sentinelLiteral = typeSentinel("regexp", JSON.stringify(["foo", ""]));
+  const stringAssignment = cat.assign(sentinelLiteral);
+
+  assert.ok(regexAssignment.key !== stringAssignment.key);
+  assert.ok(regexAssignment.hash !== stringAssignment.hash);
+});
+
 test("stableStringify Map buckets RegExp keys without collisions", () => {
   const map = new Map<unknown, string>([
     [/foo/, "a"],
@@ -54,4 +66,21 @@ test("stableStringify Map buckets RegExp keys without collisions", () => {
   assert.equal(regexKeys.length, 2);
   assert.equal(new Set(regexKeys).size, 2);
   assert.deepStrictEqual(regexKeys.map((key) => parsed[key]).sort(), ["a", "b"]);
+});
+
+test("stableStringify Map separates RegExp keys from sentinel string literals", () => {
+  const sentinelLiteral = typeSentinel("regexp", JSON.stringify(["foo", ""]));
+  const map = new Map<unknown, string>([
+    [/foo/, "regex"],
+    [sentinelLiteral, "literal"],
+  ]);
+
+  const serialized = stableStringify(map);
+  const parsed = JSON.parse(serialized) as Record<string, string>;
+  const entries = Object.entries(parsed);
+
+  assert.equal(entries.length, 2);
+  const values = new Set(entries.map(([, value]) => value));
+  assert.ok(values.has("regex"));
+  assert.ok(values.has("literal"));
 });
