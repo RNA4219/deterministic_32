@@ -287,12 +287,6 @@ function toMapPropertyKey(
   serializedKey: string,
 ): { bucketKey: string; propertyKey: string } {
   const bucketTag = mapBucketTypeTag(rawKey);
-  if (rawKey instanceof Date) {
-    return {
-      bucketKey: `${bucketTag}|${serializedKey}`,
-      propertyKey: normalizePlainObjectKey(String(rawKey)),
-    };
-  }
   const revivedKey = reviveFromSerialized(serializedKey);
   return {
     bucketKey: `${bucketTag}|${serializedKey}`,
