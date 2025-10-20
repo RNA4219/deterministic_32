@@ -14,11 +14,20 @@ const DATE_SENTINEL_PREFIX = "__date__:";
 const STRING_LITERAL_SENTINEL_PREFIX = "__string__:";
 const HEX_DIGITS = "0123456789abcdef";
 
-function isBoxedPrimitive(value: unknown): value is Number | Boolean | BigInt {
+type NumberObject = InstanceType<typeof Number>;
+type BooleanObject = InstanceType<typeof Boolean>;
+type BigIntObject = { valueOf(): bigint };
+type BoxedPrimitive = NumberObject | BooleanObject | BigIntObject;
+
+function isBoxedPrimitive(value: unknown): value is BoxedPrimitive {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  const tag = Object.prototype.toString.call(value);
   return (
-    value instanceof Number ||
-    value instanceof Boolean ||
-    value instanceof BigInt
+    tag === "[object Number]" ||
+    tag === "[object Boolean]" ||
+    tag === "[object BigInt]"
   );
 }
 
