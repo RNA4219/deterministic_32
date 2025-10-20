@@ -44,6 +44,8 @@ const projectRoot = (() => {
   }
 })();
 
+const distRoot = path.resolve(projectRoot, 'dist');
+
 const EXTENSION_MAPPING = new Map([
   [".ts", ".js"],
   [".mts", ".mjs"],
@@ -167,6 +169,35 @@ const prepareRunnerOptions = (
   const seenTargets = new Set();
   let destinationOverride = null;
   let pendingOption = null;
+  let forceTargetArguments = false;
+
+  const defaultSourcePrefixes = Array.from(
+    new Set(
+      defaultTargets
+        .map((candidate) => {
+          if (!candidate || typeof candidate !== 'string') {
+            return null;
+          }
+
+          const resolvedCandidate = path.isAbsolute(candidate)
+            ? path.normalize(candidate)
+            : path.normalize(path.resolve(projectRoot, candidate));
+          const relativeFromDist = path.relative(distRoot, resolvedCandidate);
+
+          if (
+            !relativeFromDist ||
+            relativeFromDist === '.' ||
+            relativeFromDist.startsWith('..') ||
+            path.isAbsolute(relativeFromDist)
+          ) {
+            return null;
+          }
+
+          return relativeFromDist;
+        })
+        .filter((value) => typeof value === 'string' && value.length > 0),
+    ),
+  );
 
   const addResolvedTarget = (candidate, bucket) => {
     if (!candidate) {
@@ -274,6 +305,28 @@ const prepareRunnerOptions = (
     return null;
   };
 
+  const resolveCandidateWithFallbacks = (
+    candidate,
+    { useDefaultPrefixes = false } = {},
+  ) => {
+    const direct = resolveTargetCandidate(candidate);
+
+    if (direct || !useDefaultPrefixes) {
+      return direct;
+    }
+
+    for (const prefix of defaultSourcePrefixes) {
+      const prefixedCandidate = path.join(prefix, candidate);
+      const resolved = resolveTargetCandidate(prefixedCandidate);
+
+      if (resolved) {
+        return resolved;
+      }
+    }
+
+    return null;
+  };
+
   for (const argument of argv.slice(2)) {
     if (!argument) {
       continue;
@@ -289,13 +342,19 @@ const prepareRunnerOptions = (
       continue;
     }
 
-    if (argument.startsWith(DESTINATION_PREFIX)) {
+    if (!forceTargetArguments && argument.startsWith(DESTINATION_PREFIX)) {
       const candidateDestination = argument.slice(DESTINATION_PREFIX.length);
       destinationOverride = candidateDestination || null;
       continue;
     }
 
-    if (argument.startsWith('--')) {
+    if (argument === '--') {
+      passthroughArgs.push(argument);
+      forceTargetArguments = true;
+      continue;
+    }
+
+    if (!forceTargetArguments && argument.startsWith('--')) {
       const assignmentIndex = argument.indexOf('=');
       const optionName = assignmentIndex === -1
         ? argument
@@ -318,10 +377,17 @@ const prepareRunnerOptions = (
       continue;
     }
 
-    const resolvedTarget = resolveTargetCandidate(argument);
+    const resolvedTarget = resolveCandidateWithFallbacks(argument, {
+      useDefaultPrefixes: forceTargetArguments,
+    });
 
     if (resolvedTarget) {
       addResolvedTarget(resolvedTarget, explicitTargets);
+      continue;
+    }
+
+    if (forceTargetArguments) {
+      addResolvedTarget(argument, explicitTargets);
       continue;
     }
 
