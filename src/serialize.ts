@@ -288,6 +288,19 @@ function toMapPropertyKey(
 ): { bucketKey: string; propertyKey: string } {
   const bucketTag = mapBucketTypeTag(rawKey);
   const revivedKey = reviveFromSerialized(serializedKey);
+  if (rawKey instanceof Date) {
+    const revivedString = typeof revivedKey === "string" ? revivedKey : "";
+    const isoValue = rawKey.toISOString();
+    const normalizedDateKey =
+      revivedString && revivedString.startsWith(DATE_SENTINEL_PREFIX)
+        ? revivedString
+        : `${DATE_SENTINEL_PREFIX}${revivedString || isoValue}`;
+    const escapedDateKey = escapeSentinelString(normalizedDateKey);
+    return {
+      bucketKey: `${bucketTag}|${escapedDateKey}`,
+      propertyKey: escapedDateKey,
+    };
+  }
   return {
     bucketKey: `${bucketTag}|${serializedKey}`,
     propertyKey: toPropertyKeyString(rawKey, revivedKey, serializedKey),
