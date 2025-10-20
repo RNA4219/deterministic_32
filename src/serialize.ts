@@ -74,6 +74,10 @@ function buildArrayBufferPayload(length: number, bytes: Uint8Array): string {
   return `byteLength=${length};hex=${toHex(bytes)}`;
 }
 
+function buildRegExpPayload(value: RegExp): string {
+  return JSON.stringify([value.source, value.flags]);
+}
+
 function getArrayBufferViewTag(view: ArrayBufferView): string {
   const raw = Object.prototype.toString.call(view);
   return raw.slice(8, -1);
@@ -161,7 +165,9 @@ function _stringify(v: unknown, stack: Set<unknown>): string {
 
   // Date
   if (v instanceof Date) {
-    return stringifySentinelLiteral(`${DATE_SENTINEL_PREFIX}${v.toISOString()}`);
+    return stringifySentinelLiteral(
+      `${DATE_SENTINEL_PREFIX}${getDateSentinelPayload(v)}`,
+    );
   }
 
   if (ArrayBuffer.isView(v)) {
@@ -243,6 +249,12 @@ function _stringify(v: unknown, stack: Set<unknown>): string {
     return out;
   }
 
+  if (v instanceof RegExp) {
+    return stringifySentinelLiteral(
+      typeSentinel("regexp", buildRegExpPayload(v)),
+    );
+  }
+
   // Plain object
   const o = v as Record<string, unknown>;
   if (stack.has(o)) throw new TypeError("Cyclic object");
@@ -309,6 +321,7 @@ function mapBucketTypeTag(rawKey: unknown): string {
   if (rawKey instanceof Date) return "date";
   if (rawKey instanceof Map) return "map";
   if (rawKey instanceof Set) return "set";
+  if (rawKey instanceof RegExp) return "regexp";
   if (Array.isArray(rawKey)) return "array";
   if (sharedArrayBufferCtor && rawKey instanceof sharedArrayBufferCtor) return "sharedarraybuffer";
   if (rawKey instanceof ArrayBuffer || ArrayBuffer.isView(rawKey)) return "arraybuffer";
@@ -321,6 +334,19 @@ function toMapPropertyKey(
 ): { bucketKey: string; propertyKey: string } {
   const bucketTag = mapBucketTypeTag(rawKey);
   const revivedKey = reviveFromSerialized(serializedKey);
+  if (rawKey instanceof Date) {
+    const revivedString = typeof revivedKey === "string" ? revivedKey : "";
+    const payload = getDateSentinelPayload(rawKey);
+    const normalizedDateKey =
+      revivedString && revivedString.startsWith(DATE_SENTINEL_PREFIX)
+        ? revivedString
+        : `${DATE_SENTINEL_PREFIX}${revivedString || payload}`;
+    const escapedDateKey = escapeSentinelString(normalizedDateKey);
+    return {
+      bucketKey: `${bucketTag}|${escapedDateKey}`,
+      propertyKey: escapedDateKey,
+    };
+  }
   return {
     bucketKey: `${bucketTag}|${serializedKey}`,
     propertyKey: toPropertyKeyString(rawKey, revivedKey, serializedKey),
@@ -395,6 +421,18 @@ function reviveSentinelValue(value: unknown): unknown {
           return value;
         }
       }
+      if (type === "regexp") {
+        try {
+          const parsed = JSON.parse(payload) as unknown;
+          if (Array.isArray(parsed) && typeof parsed[0] === "string") {
+            const flags = typeof parsed[1] === "string" ? parsed[1] : "";
+            return new RegExp(parsed[0], flags);
+          }
+        } catch {
+          return value;
+        }
+        return value;
+      }
     }
   }
   return value;
@@ -421,7 +459,27 @@ function toPropertyKeyString(
     if (typeof revivedKey === "string") {
       return escapeSentinelString(revivedKey);
     }
-    return `${DATE_SENTINEL_PREFIX}${rawKey.toISOString()}`;
+    return `${DATE_SENTINEL_PREFIX}${getDateSentinelPayload(rawKey)}`;
+  }
+
+  if (rawKey instanceof RegExp) {
+    const normalizedFromRaw = normalizePlainObjectKey(
+      escapeSentinelString(typeSentinel("regexp", buildRegExpPayload(rawKey))),
+    );
+    if (revivedKey instanceof RegExp) {
+      return normalizePlainObjectKey(
+        escapeSentinelString(typeSentinel("regexp", buildRegExpPayload(revivedKey))),
+      );
+    }
+    if (typeof revivedKey === "string") {
+      const normalizedRevived = normalizePlainObjectKey(
+        escapeSentinelString(revivedKey),
+      );
+      if (normalizedRevived !== normalizedFromRaw) {
+        return normalizedRevived;
+      }
+    }
+    return normalizedFromRaw;
   }
 
   const rawType = typeof rawKey;
