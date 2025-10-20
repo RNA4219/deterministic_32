@@ -12,6 +12,50 @@ const HOLE_SENTINEL = JSON.stringify(HOLE_SENTINEL_RAW);
 const UNDEFINED_SENTINEL = "__undefined__";
 const DATE_SENTINEL_PREFIX = "__date__:";
 const STRING_LITERAL_SENTINEL_PREFIX = "__string__:";
+const HEX_DIGITS = "0123456789abcdef";
+
+function serializeArrayBufferLikeSentinel(
+  type: string,
+  buffer: ArrayBufferLike,
+): string {
+  const bytes = new Uint8Array(buffer);
+  const payload = buildArrayBufferPayload(bytes.length, bytes);
+  return stringifySentinelLiteral(typeSentinel(type, payload));
+}
+
+function buildTypedArrayPayload(view: ArrayBufferView): string {
+  const bytes = new Uint8Array(view.buffer, view.byteOffset, view.byteLength);
+  const parts = [
+    `kind=${getArrayBufferViewTag(view)}`,
+    `byteOffset=${view.byteOffset}`,
+    `byteLength=${view.byteLength}`,
+  ];
+  const elementLength = (view as { length?: number }).length;
+  if (typeof elementLength === "number") {
+    parts.push(`length=${elementLength}`);
+  }
+  parts.push(`hex=${toHex(bytes)}`);
+  return parts.join(";");
+}
+
+function buildArrayBufferPayload(length: number, bytes: Uint8Array): string {
+  return `byteLength=${length};hex=${toHex(bytes)}`;
+}
+
+function getArrayBufferViewTag(view: ArrayBufferView): string {
+  const raw = Object.prototype.toString.call(view);
+  return raw.slice(8, -1);
+}
+
+function toHex(bytes: Uint8Array): string {
+  let out = "";
+  for (let i = 0; i < bytes.length; i += 1) {
+    const byte = bytes[i];
+    out += HEX_DIGITS[(byte >> 4) & 0xf];
+    out += HEX_DIGITS[byte & 0xf];
+  }
+  return out;
+}
 
 type ArrayBufferLikeConstructor = {
   new (...args: unknown[]): ArrayBufferLike;
@@ -85,15 +129,18 @@ function _stringify(v: unknown, stack: Set<unknown>): string {
   }
 
   if (ArrayBuffer.isView(v)) {
-    return stringifyStringLiteral(String(v));
+    const view = v as ArrayBufferView;
+    return stringifySentinelLiteral(
+      typeSentinel("typedarray", buildTypedArrayPayload(view)),
+    );
   }
 
   if (sharedArrayBufferCtor && v instanceof sharedArrayBufferCtor) {
-    return stringifyStringLiteral(String(v));
+    return serializeArrayBufferLikeSentinel("sharedarraybuffer", v);
   }
 
   if (v instanceof ArrayBuffer) {
-    return stringifyStringLiteral(String(v));
+    return serializeArrayBufferLikeSentinel("arraybuffer", v);
   }
 
   // Map
