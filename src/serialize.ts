@@ -148,41 +148,46 @@ function _stringify(v: unknown, stack: Set<unknown>): string {
     if (stack.has(v)) throw new TypeError("Cyclic object");
     stack.add(v);
     type SerializedEntry = { serializedKey: string; serializedValue: string };
-    const normalizedEntries: Record<string, SerializedEntry[]> = Object.create(null);
-    const dedupeByKey: Record<string, boolean> = Object.create(null);
+    const normalizedEntries: Record<
+      string,
+      { propertyKey: string; entries: SerializedEntry[]; shouldDedupe: boolean }
+    > = Object.create(null);
     for (const [rawKey, rawValue] of v.entries()) {
       const serializedKey = _stringify(rawKey, stack);
-      const propertyKey = toMapPropertyKey(rawKey, serializedKey);
-      const serializedValue = _stringify(rawValue, stack);
-      const candidate: SerializedEntry = { serializedKey, serializedValue };
+      const { bucketKey, propertyKey } = toMapPropertyKey(rawKey, serializedKey);
       const shouldDedupe = typeof rawKey !== "symbol";
-      const bucket = normalizedEntries[propertyKey];
+      const bucket = normalizedEntries[bucketKey];
       if (bucket) {
-        bucket.push(candidate);
-        dedupeByKey[propertyKey] = (dedupeByKey[propertyKey] ?? true) && shouldDedupe;
+        bucket.entries.push({ serializedKey, serializedValue: _stringify(rawValue, stack) });
+        bucket.shouldDedupe &&= shouldDedupe;
       } else {
-        normalizedEntries[propertyKey] = [candidate];
-        dedupeByKey[propertyKey] = shouldDedupe;
+        normalizedEntries[bucketKey] = {
+          propertyKey,
+          entries: [{ serializedKey, serializedValue: _stringify(rawValue, stack) }],
+          shouldDedupe,
+        };
       }
     }
-    const sortedKeys = Object.keys(normalizedEntries).sort();
     const bodyParts: string[] = [];
-    for (let i = 0; i < sortedKeys.length; i += 1) {
-      const key = sortedKeys[i];
-      const bucket = normalizedEntries[key];
-      if (!bucket || bucket.length === 0) {
-        continue;
+    const sortedKeys = Object.keys(normalizedEntries).sort((leftKey, rightKey) => {
+      const left = normalizedEntries[leftKey]!;
+      const right = normalizedEntries[rightKey]!;
+      if (left.propertyKey === right.propertyKey) {
+        if (leftKey < rightKey) return -1;
+        if (leftKey > rightKey) return 1;
+        return 0;
       }
-      bucket.sort(compareSerializedEntry);
-      const entriesToEmit = dedupeByKey[key] ? [bucket[0]] : bucket;
-      for (let j = 0; j < entriesToEmit.length; j += 1) {
-        const entry = entriesToEmit[j];
-        if (bodyParts.length > 0) {
-          bodyParts.push(",");
-        }
-        bodyParts.push(JSON.stringify(key));
-        bodyParts.push(":");
-        bodyParts.push(entry.serializedValue);
+      return left.propertyKey < right.propertyKey ? -1 : 1;
+    });
+    for (const key of sortedKeys) {
+      const bucket = normalizedEntries[key];
+      if (!bucket?.entries.length) continue;
+      const entries = bucket.entries;
+      entries.sort(compareSerializedEntry);
+      const entriesToEmit = bucket.shouldDedupe ? [entries[0]] : entries;
+      for (const entry of entriesToEmit) {
+        if (bodyParts.length) bodyParts.push(",");
+        bodyParts.push(JSON.stringify(bucket.propertyKey), ":", entry.serializedValue);
       }
     }
     stack.delete(v);
@@ -258,12 +263,34 @@ function compareSerializedEntry(
   return 0;
 }
 
-function toMapPropertyKey(rawKey: unknown, serializedKey: string): string {
+function mapBucketTypeTag(rawKey: unknown): string {
+  if (typeof rawKey === "symbol") return "symbol";
+  if (rawKey === null) return "null";
+  if (rawKey instanceof Date) return "date";
+  if (rawKey instanceof Map) return "map";
+  if (rawKey instanceof Set) return "set";
+  if (Array.isArray(rawKey)) return "array";
+  if (sharedArrayBufferCtor && rawKey instanceof sharedArrayBufferCtor) return "sharedarraybuffer";
+  if (rawKey instanceof ArrayBuffer || ArrayBuffer.isView(rawKey)) return "arraybuffer";
+  return typeof rawKey;
+}
+
+function toMapPropertyKey(
+  rawKey: unknown,
+  serializedKey: string,
+): { bucketKey: string; propertyKey: string } {
+  const bucketTag = mapBucketTypeTag(rawKey);
   if (rawKey instanceof Date) {
-    return normalizePlainObjectKey(String(rawKey));
+    return {
+      bucketKey: `${bucketTag}|${serializedKey}`,
+      propertyKey: normalizePlainObjectKey(String(rawKey)),
+    };
   }
   const revivedKey = reviveFromSerialized(serializedKey);
-  return toPropertyKeyString(rawKey, revivedKey, serializedKey);
+  return {
+    bucketKey: `${bucketTag}|${serializedKey}`,
+    propertyKey: toPropertyKeyString(rawKey, revivedKey, serializedKey),
+  };
 }
 
 function stringifyStringLiteral(value: string): string {

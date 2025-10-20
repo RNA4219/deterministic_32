@@ -383,7 +383,7 @@ test(
   },
 );
 
-test("dist Cat32 assign normalizes Map keys by string representation", async () => {
+test("dist Cat32 assign distinguishes Map keys when String(key) collides", async () => {
   const sourceImportMetaUrl = import.meta.url.includes("/dist/tests/")
     ? new URL("../../tests/categorizer.test.ts", import.meta.url)
     : import.meta.url;
@@ -408,8 +408,8 @@ test("dist Cat32 assign normalizes Map keys by string representation", async () 
     new Map<unknown, unknown>([[String(obj), "string"]]),
   );
 
-  assert.equal(mixedAssignment.hash, stringOnlyAssignment.hash);
-  assert.equal(mixedAssignment.key, stringOnlyAssignment.key);
+  assert.ok(mixedAssignment.hash !== stringOnlyAssignment.hash);
+  assert.ok(mixedAssignment.key !== stringOnlyAssignment.key);
 });
 
 test("stableStringify maps simple entries without throwing", () => {
@@ -427,7 +427,7 @@ test("Cat32 assign handles Map input deterministically", () => {
   assert.equal(assignment.key, "{\"k\":1}");
 });
 
-test("Cat32 assign normalizes Map keys by string representation", () => {
+test("Cat32 assign distinguishes Map keys when String(key) collides", () => {
   const obj = { foo: 1 };
   const instance = new Cat32();
 
@@ -441,11 +441,11 @@ test("Cat32 assign normalizes Map keys by string representation", () => {
     new Map<unknown, unknown>([[String(obj), "string"]]),
   );
 
-  assert.equal(mixedAssignment.hash, stringOnlyAssignment.hash);
-  assert.equal(mixedAssignment.key, stringOnlyAssignment.key);
+  assert.ok(mixedAssignment.hash !== stringOnlyAssignment.hash);
+  assert.ok(mixedAssignment.key !== stringOnlyAssignment.key);
 });
 
-test("stableStringify aligns Map object keys with object literals", () => {
+test("stableStringify retains compatibility for single Map object keys", () => {
   const obj = { foo: 1 };
 
   const mapKey = stableStringify(new Map([[obj, "value"]]));
@@ -459,6 +459,38 @@ test("stableStringify aligns Map object keys with object literals", () => {
 
   assert.equal(mapAssignment.key, objectAssignment.key);
   assert.equal(mapAssignment.hash, objectAssignment.hash);
+});
+
+test("Map serialization preserves entries when String(key) collisions occur", () => {
+  const keyA = { id: 1 };
+  const keyB = { id: 2 };
+  const scenarios = [
+    {
+      map: new Map<unknown, unknown>([
+        [1, "number"],
+        ["1", "string"],
+      ]),
+      comparator: new Map<unknown, unknown>([["1", "string"]]),
+    },
+    {
+      map: new Map<unknown, unknown>([
+        [keyA, "a"],
+        [keyB, "b"],
+      ]),
+      comparator: new Map<unknown, unknown>([[keyA, "a"]]),
+    },
+  ];
+
+  for (const { map, comparator } of scenarios) {
+    const serialized = stableStringify(map);
+    const baseline = stableStringify(comparator);
+    assert.ok(serialized !== baseline);
+
+    const cat = new Cat32();
+    const mapAssignment = cat.assign(map);
+    const baselineAssignment = cat.assign(comparator);
+    assert.ok(mapAssignment.key !== baselineAssignment.key);
+  }
 });
 
 test("tsc succeeds without duplicate identifier errors", async () => {
@@ -1477,7 +1509,7 @@ test("date sentinel string matches Date instance in arrays", () => {
   assert.equal(sentinelAssignment.hash, literalAssignment.hash);
 });
 
-test("Map keys match plain object representation regardless of entry order", () => {
+test("Map keys align with plain object representation when property keys are unique", () => {
   const c = new Cat32();
   const map = new Map<string, number>([
     ["10", 10],
@@ -1511,8 +1543,8 @@ test("Map keys match plain object representation regardless of entry order", () 
   );
   const duplicateKeyObjectAssignment = c.assign({ 0: "same" });
 
-  assert.equal(duplicateKeyMapAssignment.key, duplicateKeyObjectAssignment.key);
-  assert.equal(duplicateKeyMapAssignment.hash, duplicateKeyObjectAssignment.hash);
+  assert.ok(duplicateKeyMapAssignment.key !== duplicateKeyObjectAssignment.key);
+  assert.ok(duplicateKeyMapAssignment.hash !== duplicateKeyObjectAssignment.hash);
 });
 
 test("Map Date key matches plain object string key", () => {
@@ -1526,7 +1558,7 @@ test("Map Date key matches plain object string key", () => {
   assert.equal(mapAssignment.hash, objectAssignment.hash);
 });
 
-test("Map duplicate property keys deterministically pick a single representative", () => {
+test("Map duplicate property keys retain distinct entries per key type", () => {
   const c = new Cat32();
 
   const mapAssignment = c.assign(
@@ -1543,10 +1575,10 @@ test("Map duplicate property keys deterministically pick a single representative
   );
   const objectAssignment = c.assign({ 0: "string" });
 
-  assert.equal(mapAssignment.key, objectAssignment.key);
-  assert.equal(mapAssignment.hash, objectAssignment.hash);
-  assert.equal(reverseMapAssignment.key, objectAssignment.key);
-  assert.equal(reverseMapAssignment.hash, objectAssignment.hash);
+  assert.equal(mapAssignment.key, reverseMapAssignment.key);
+  assert.equal(mapAssignment.hash, reverseMapAssignment.hash);
+  assert.ok(mapAssignment.key !== objectAssignment.key);
+  assert.ok(mapAssignment.hash !== objectAssignment.hash);
 });
 
 test("Cat32 normalizes duplicate-like Map entries deterministically", () => {
