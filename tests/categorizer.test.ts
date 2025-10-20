@@ -1278,12 +1278,15 @@ test("functions and symbols serialize to bare strings", () => {
   assert.equal(c.assign(sym).key, String(sym));
 });
 
-test("string sentinel matches date value", () => {
+test("string sentinel literal is distinct from date value", () => {
   const c = new Cat32();
   const iso = "2024-01-02T03:04:05.000Z";
-  const sentinelAssignment = c.assign(`__date__:${iso}`);
+  const literal = `__date__:${iso}`;
+  const sentinelAssignment = c.assign(literal);
   const dateAssignment = c.assign(new Date(iso));
-  assert.equal(sentinelAssignment.key, dateAssignment.key);
+  assert.ok(sentinelAssignment.key !== dateAssignment.key);
+  assert.equal(sentinelAssignment.key, JSON.stringify(`__string__:${literal}`));
+  assert.equal(dateAssignment.key, JSON.stringify(`__date__:${iso}`));
 });
 
 test("deterministic mapping for bigint values", () => {
@@ -1420,8 +1423,11 @@ test("NaN serialized distinctly from null", () => {
   assert.equal(nanAssignment.hash === nullAssignment.hash, false);
 });
 
-test("stableStringify leaves sentinel-like strings untouched", () => {
-  assert.equal(stableStringify("__undefined__"), JSON.stringify("__undefined__"));
+test("stableStringify escapes undefined sentinel string literal", () => {
+  assert.equal(
+    stableStringify("__undefined__"),
+    JSON.stringify("__string__:__undefined__"),
+  );
 });
 
 test("stableStringify serializes undefined and Date sentinels", () => {
@@ -1490,23 +1496,33 @@ test("values containing __string__ escape exactly once", () => {
   assert.equal(stableStringify(sentinel), JSON.stringify(sentinel));
 });
 
-test("undefined sentinel string matches literal undefined in arrays", () => {
+test("undefined sentinel string literal differs from literal undefined in arrays", () => {
   const c = new Cat32();
   const sentinelAssignment = c.assign({ list: ["__undefined__"] });
   const literalAssignment = c.assign({ list: [undefined] });
 
-  assert.equal(sentinelAssignment.key, literalAssignment.key);
-  assert.equal(sentinelAssignment.hash, literalAssignment.hash);
+  const sentinelKey = stableStringify({ list: ["__undefined__"] });
+  const literalKey = stableStringify({ list: [undefined] });
+
+  assert.equal(sentinelAssignment.key, sentinelKey);
+  assert.equal(literalAssignment.key, literalKey);
+  assert.ok(sentinelAssignment.key !== literalAssignment.key);
+  assert.ok(sentinelAssignment.hash !== literalAssignment.hash);
 });
 
-test("date sentinel string matches Date instance in arrays", () => {
+test("date sentinel string literal differs from Date instance in arrays", () => {
   const c = new Cat32();
   const iso = "2024-04-01T12:34:56.789Z";
   const sentinelAssignment = c.assign({ list: [`__date__:${iso}`] });
   const literalAssignment = c.assign({ list: [new Date(iso)] });
 
-  assert.equal(sentinelAssignment.key, literalAssignment.key);
-  assert.equal(sentinelAssignment.hash, literalAssignment.hash);
+  const sentinelKey = stableStringify({ list: [`__date__:${iso}`] });
+  const literalKey = stableStringify({ list: [new Date(iso)] });
+
+  assert.equal(sentinelAssignment.key, sentinelKey);
+  assert.equal(literalAssignment.key, literalKey);
+  assert.ok(sentinelAssignment.key !== literalAssignment.key);
+  assert.ok(sentinelAssignment.hash !== literalAssignment.hash);
 });
 
 test("Map keys align with plain object representation when property keys are unique", () => {
@@ -1752,13 +1768,15 @@ test("bigint sentinel string differs from bigint value", () => {
   assert.ok(bigintAssignment.hash !== stringAssignment.hash);
 });
 
-test("undefined sentinel string matches undefined value", () => {
+test("undefined sentinel string literal differs from undefined value", () => {
   const c = new Cat32();
   const undefinedAssignment = c.assign(undefined);
   const stringAssignment = c.assign("__undefined__");
 
-  assert.equal(undefinedAssignment.key, stringAssignment.key);
-  assert.equal(undefinedAssignment.hash, stringAssignment.hash);
+  assert.equal(undefinedAssignment.key, JSON.stringify("__undefined__"));
+  assert.equal(stringAssignment.key, JSON.stringify("__string__:__undefined__"));
+  assert.ok(undefinedAssignment.key !== stringAssignment.key);
+  assert.ok(undefinedAssignment.hash !== stringAssignment.hash);
 });
 
 test("top-level undefined serializes with sentinel string", () => {
@@ -1792,7 +1810,7 @@ test("top-level sparse arrays differ from empty arrays", () => {
   assert.ok(sparseAssignment.hash !== emptyAssignment.hash);
 });
 
-test("sentinel strings align with actual values at top level", () => {
+test("sentinel string literals remain distinct from actual values at top level", () => {
   const c = new Cat32();
 
   const bigintValue = c.assign(1n);
@@ -1802,14 +1820,21 @@ test("sentinel strings align with actual values at top level", () => {
 
   const undefinedValue = c.assign(undefined);
   const undefinedSentinel = c.assign("__undefined__");
-  assert.equal(undefinedValue.key, undefinedSentinel.key);
-  assert.equal(undefinedValue.hash, undefinedSentinel.hash);
+  assert.equal(undefinedValue.key, JSON.stringify("__undefined__"));
+  assert.equal(undefinedSentinel.key, JSON.stringify("__string__:__undefined__"));
+  assert.ok(undefinedValue.key !== undefinedSentinel.key);
+  assert.ok(undefinedValue.hash !== undefinedSentinel.hash);
 
   const date = new Date("2024-01-02T03:04:05.678Z");
   const dateValue = c.assign(date);
   const dateSentinel = c.assign("__date__:" + date.toISOString());
-  assert.equal(dateValue.key, dateSentinel.key);
-  assert.equal(dateValue.hash, dateSentinel.hash);
+  assert.equal(dateValue.key, JSON.stringify(`__date__:${date.toISOString()}`));
+  assert.equal(
+    dateSentinel.key,
+    JSON.stringify(`__string__:__date__:${date.toISOString()}`),
+  );
+  assert.ok(dateValue.key !== dateSentinel.key);
+  assert.ok(dateValue.hash !== dateSentinel.hash);
 });
 
 test("sentinel string literals match nested undefined/date but not bigint", () => {
@@ -1822,14 +1847,24 @@ test("sentinel string literals match nested undefined/date but not bigint", () =
 
   const undefinedValue = c.assign({ value: undefined });
   const undefinedLiteral = c.assign({ value: "__undefined__" });
-  assert.equal(undefinedValue.key, undefinedLiteral.key);
-  assert.equal(undefinedValue.hash, undefinedLiteral.hash);
+  assert.equal(undefinedValue.key, stableStringify({ value: undefined }));
+  assert.equal(
+    undefinedLiteral.key,
+    stableStringify({ value: "__undefined__" }),
+  );
+  assert.ok(undefinedValue.key !== undefinedLiteral.key);
+  assert.ok(undefinedValue.hash !== undefinedLiteral.hash);
 
   const date = new Date("2024-01-02T03:04:05.678Z");
   const dateValue = c.assign({ value: date });
   const dateLiteral = c.assign({ value: "__date__:" + date.toISOString() });
-  assert.equal(dateValue.key, dateLiteral.key);
-  assert.equal(dateValue.hash, dateLiteral.hash);
+  assert.equal(dateValue.key, stableStringify({ value: date }));
+  assert.equal(
+    dateLiteral.key,
+    stableStringify({ value: "__date__:" + date.toISOString() }),
+  );
+  assert.ok(dateValue.key !== dateLiteral.key);
+  assert.ok(dateValue.hash !== dateLiteral.hash);
 });
 
 test("date object property serializes with sentinel", () => {
