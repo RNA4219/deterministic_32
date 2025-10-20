@@ -15,6 +15,11 @@ const SYMBOL_SENTINEL_PREFIX = "__symbol__:";
 const STRING_LITERAL_SENTINEL_PREFIX = "__string__:";
 const REGEXP_SENTINEL_TYPE = "regexp";
 const HEX_DIGITS = "0123456789abcdef";
+const ARRAY_BUFFER_LIKE_SENTINEL_PREFIXES = [
+  `${SENTINEL_PREFIX}typedarray:`,
+  `${SENTINEL_PREFIX}arraybuffer:`,
+  `${SENTINEL_PREFIX}sharedarraybuffer:`,
+] as const;
 
 type DateSentinelParts = {
   payload: string;
@@ -416,6 +421,15 @@ function isSentinelStringOfType(value: string, type: string): boolean {
   );
 }
 
+function hasArrayBufferLikeSentinelPrefix(value: string): boolean {
+  for (const prefix of ARRAY_BUFFER_LIKE_SENTINEL_PREFIXES) {
+    if (value.startsWith(prefix)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 function needsStringLiteralSentinelEscape(value: string): boolean {
   if (value === HOLE_SENTINEL_RAW) {
     return true;
@@ -430,6 +444,10 @@ function needsStringLiteralSentinelEscape(value: string): boolean {
   }
 
   if (value.startsWith(DATE_SENTINEL_PREFIX)) {
+    return true;
+  }
+
+  if (hasArrayBufferLikeSentinelPrefix(value)) {
     return true;
   }
 
