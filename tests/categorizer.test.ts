@@ -485,6 +485,30 @@ test("Cat32 assign distinguishes Map keys when String(key) collides", () => {
   assert.ok(mixedAssignment.key !== stringOnlyAssignment.key);
 });
 
+test(
+  "Cat32 assign differentiates Map object keys from sentinel-style string keys",
+  () => {
+    const cat = new Cat32();
+
+    const objectKeyAssignment = cat.assign(
+      new Map<unknown, string>([
+        [{}, "a"],
+        [{}, "b"],
+      ]),
+    );
+
+    const stringKeyAssignment = cat.assign(
+      new Map<string, string>([
+        ["[object Object]", "a"],
+        ["[object Object]\u0000cat32:map-entry-index:1\u0000", "b"],
+      ]),
+    );
+
+    assert.ok(objectKeyAssignment.key !== stringKeyAssignment.key);
+    assert.ok(objectKeyAssignment.hash !== stringKeyAssignment.hash);
+  },
+);
+
 test("Cat32 distinguishes Map symbol keys from string descriptions", () => {
   const symbolKey = Symbol("id");
   const cat = new Cat32();
