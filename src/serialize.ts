@@ -409,6 +409,13 @@ function normalizeStringLiteral(value: string): string {
   return value;
 }
 
+function isSentinelStringOfType(value: string, type: string): boolean {
+  return (
+    value.startsWith(`${SENTINEL_PREFIX}${type}:`) &&
+    value.endsWith(SENTINEL_SUFFIX)
+  );
+}
+
 function needsStringLiteralSentinelEscape(value: string): boolean {
   if (value === HOLE_SENTINEL_RAW) {
     return true;
@@ -423,6 +430,18 @@ function needsStringLiteralSentinelEscape(value: string): boolean {
   }
 
   if (value.startsWith(DATE_SENTINEL_PREFIX)) {
+    return true;
+  }
+
+  if (isSentinelStringOfType(value, "typedarray")) {
+    return true;
+  }
+
+  if (isSentinelStringOfType(value, "arraybuffer")) {
+    return true;
+  }
+
+  if (isSentinelStringOfType(value, "sharedarraybuffer")) {
     return true;
   }
 
