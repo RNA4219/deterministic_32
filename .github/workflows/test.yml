@@ -76,7 +76,19 @@ jobs:
             exit 1
           fi
       - name: Security audit
-        run: npm audit --audit-level=moderate
+        run: |
+          set +e
+          output="$(npm audit --audit-level=moderate 2>&1)"
+          status=$?
+          set -e
+          printf '%s\n' "$output"
+          if [ "$status" -ne 0 ]; then
+            if printf '%s\n' "$output" | grep -qiE 'service unavailable'; then
+              echo "npm audit skipped: registry responded with Service Unavailable (503)." >&2
+            else
+              exit "$status"
+            fi
+          fi
       - uses: actions/upload-artifact@v4
         if: always()
         with: { name: 'test-logs-${{ github.job }}', path: workflow-cookbook/logs/* }
