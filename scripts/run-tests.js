@@ -18,8 +18,10 @@ const testSegmentPattern = /^(?:tests|__tests__)$|(?:\.spec(?:\.[^.]+)?$)|(?:\.t
 
 const testSkipPatternFlag = "--test-skip-pattern";
 
-const mapArgument = (argument) => {
-  if (argument.startsWith("--")) {
+const mapArgument = (argument, options = {}) => {
+  const { forceTarget = false } = options;
+
+  if (!forceTarget && argument.startsWith("--")) {
     return { value: argument, isTarget: false };
   }
 
@@ -54,14 +56,14 @@ const mapArgument = (argument) => {
   }
 
   if (matchedAbsolutePath === null || projectRelativePath === null) {
-    return { value: argument, isTarget: false };
+    return { value: argument, isTarget: forceTarget };
   }
 
   const pathSegments = projectRelativePath.split(path.sep);
   const hasTestSegment = pathSegments.some((segment) => testSegmentPattern.test(segment));
 
   if (!hasTestSegment) {
-    return { value: argument, isTarget: false };
+    return { value: argument, isTarget: forceTarget };
   }
 
   const mapTsTarget = (extension, replacement) => {
@@ -143,9 +145,9 @@ const throwMissingFlagValueError = (flag) => {
 };
 
 const cliArguments = process.argv.slice(2);
-const filteredCliArguments = cliArguments.filter((argument) => argument !== "--");
 const mappedArguments = [];
 let pendingValueFlag = null;
+let forceTargetMode = false;
 
 const ensurePendingFlagConsumed = (pendingFlag) => {
   if (pendingFlag === null) {
@@ -155,23 +157,32 @@ const ensurePendingFlagConsumed = (pendingFlag) => {
   throwMissingFlagValueError(pendingFlag);
 };
 
-for (const argument of filteredCliArguments) {
+for (const argument of cliArguments) {
+  if (argument === "--") {
+    ensurePendingFlagConsumed(pendingValueFlag);
+    pendingValueFlag = null;
+    forceTargetMode = true;
+    mappedArguments.push({ value: argument, isTarget: false });
+    continue;
+  }
+
   if (pendingValueFlag !== null) {
     mappedArguments.push({ value: argument, isTarget: false });
     pendingValueFlag = null;
     continue;
   }
 
-  if (flagsWithValues.has(argument)) {
+  if (!forceTargetMode && flagsWithValues.has(argument)) {
     mappedArguments.push({ value: argument, isTarget: false });
     pendingValueFlag = argument;
     continue;
   }
 
-  const mapped = mapArgument(argument);
+  const mapped = mapArgument(argument, { forceTarget: forceTargetMode });
   mappedArguments.push(mapped);
 
   if (
+    !forceTargetMode &&
     typeof mapped.value === "string" &&
     flagsWithValues.has(mapped.value)
   ) {
