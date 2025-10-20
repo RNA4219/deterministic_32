@@ -75,6 +75,15 @@ jobs:
           if [ "$s" != pass ]; then
             exit 1
           fi
+      - name: Check bundle size
+        run: |
+          set -Eeuo pipefail
+          start=$(date +%s%3N)
+          if npm run size; then s=pass; else s=fail; fi
+          echo "{\"name\":\"size\",\"status\":\"$s\",\"duration_ms\":$(( $(date +%s%3N)-start ))}" >> workflow-cookbook/logs/test.jsonl
+          if [ "$s" != pass ]; then
+            exit 1
+          fi
       - name: Security audit
         run: |
           set +e
