@@ -28,3 +28,59 @@ test("Cat32 assign key differs for ArrayBuffers with different content", () => {
   assert.ok(assignmentLeft.key !== assignmentRight.key);
   assert.ok(assignmentLeft.hash !== assignmentRight.hash);
 });
+
+test("Cat32 assign distinguishes typed array from its serialized string", () => {
+  const cat = new Cat32();
+  const typedArray = new Uint8Array([1, 2, 3]);
+  const serialized = JSON.parse(stableStringify(typedArray));
+
+  const typedAssignment = cat.assign(typedArray);
+  const stringAssignment = cat.assign(serialized);
+
+  assert.ok(typedAssignment.key !== stringAssignment.key);
+  assert.ok(typedAssignment.hash !== stringAssignment.hash);
+});
+
+test("Cat32 assign distinguishes ArrayBuffer from its serialized string", () => {
+  const cat = new Cat32();
+  const arrayBuffer = new Uint8Array([4, 5]).buffer;
+  const serialized = JSON.parse(stableStringify(arrayBuffer));
+
+  const bufferAssignment = cat.assign(arrayBuffer);
+  const stringAssignment = cat.assign(serialized);
+
+  assert.ok(bufferAssignment.key !== stringAssignment.key);
+  assert.ok(bufferAssignment.hash !== stringAssignment.hash);
+});
+
+test("Cat32 assign distinguishes SharedArrayBuffer from its serialized string", () => {
+  if (typeof SharedArrayBuffer !== "function") {
+    assert.ok(true, "SharedArrayBuffer unavailable in this runtime");
+    return;
+  }
+
+  const cat = new Cat32();
+  const shared = new SharedArrayBuffer(4);
+  const view = new Uint8Array(shared);
+  view.set([6, 7, 8, 9]);
+  const serialized = JSON.parse(stableStringify(shared));
+
+  const bufferAssignment = cat.assign(shared);
+  const stringAssignment = cat.assign(serialized);
+
+  assert.ok(bufferAssignment.key !== stringAssignment.key);
+  assert.ok(bufferAssignment.hash !== stringAssignment.hash);
+});
+
+test("Cat32 assign distinguishes Map with typed array key from serialized key", () => {
+  const cat = new Cat32();
+  const typedArray = new Uint8Array([10, 11]);
+  const mapWithTypedKey = new Map([[typedArray, 1]]);
+  const mapWithSerializedKey = new Map([[stableStringify(typedArray), 1]]);
+
+  const typedAssignment = cat.assign(mapWithTypedKey);
+  const stringAssignment = cat.assign(mapWithSerializedKey);
+
+  assert.ok(typedAssignment.key !== stringAssignment.key);
+  assert.ok(typedAssignment.hash !== stringAssignment.hash);
+});
