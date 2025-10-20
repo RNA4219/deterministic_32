@@ -1547,15 +1547,16 @@ test("Map keys align with plain object representation when property keys are uni
   assert.ok(duplicateKeyMapAssignment.hash !== duplicateKeyObjectAssignment.hash);
 });
 
-test("Map Date key matches plain object string key", () => {
+test("Map Date key uses ISO sentinel distinct from plain object string key", () => {
   const c = new Cat32();
   const date = new Date("2024-05-01T00:00:00.000Z");
 
   const mapAssignment = c.assign(new Map([[date, "value"]]));
   const objectAssignment = c.assign({ [String(date)]: "value" });
 
-  assert.equal(mapAssignment.key, objectAssignment.key);
-  assert.equal(mapAssignment.hash, objectAssignment.hash);
+  assert.ok(mapAssignment.key.includes(`"__date__:${date.toISOString()}"`));
+  assert.ok(mapAssignment.key !== objectAssignment.key);
+  assert.ok(mapAssignment.hash !== objectAssignment.hash);
 });
 
 test("Map duplicate property keys retain distinct entries per key type", () => {
