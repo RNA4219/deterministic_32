@@ -450,6 +450,23 @@ test("Cat32 assign retains distinct Map entries for identical property keys", ()
   assert.ok(first.hash !== second.hash);
 });
 
+test("Map serialization differentiates duplicate-like object entries", () => {
+  const withDuplicates = new Map<unknown, string>([
+    [{}, "a"],
+    [{}, "b"],
+  ]);
+  const singleEntry = new Map<unknown, string>([[{}, "a"]]);
+
+  assert.ok(stableStringify(withDuplicates) !== stableStringify(singleEntry));
+
+  const cat = new Cat32();
+  const withDuplicatesAssignment = cat.assign(withDuplicates);
+  const singleEntryAssignment = cat.assign(singleEntry);
+
+  assert.ok(withDuplicatesAssignment.key !== singleEntryAssignment.key);
+  assert.ok(withDuplicatesAssignment.hash !== singleEntryAssignment.hash);
+});
+
 test("Cat32 assign distinguishes Map keys when String(key) collides", () => {
   const obj = { foo: 1 };
   const instance = new Cat32();

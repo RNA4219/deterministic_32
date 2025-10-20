@@ -184,12 +184,17 @@ function _stringify(v: unknown, stack: Set<unknown>): string {
     };
     const normalizedEntries: Record<
       string,
-      { propertyKey: string; entries: SerializedEntry[] }
+      {
+        propertyKey: string;
+        entries: SerializedEntry[];
+        shouldDedupe: boolean;
+      }
     > = Object.create(null);
     for (const [rawKey, rawValue] of v.entries()) {
       const serializedKey = _stringify(rawKey, stack);
       const { bucketKey, propertyKey } = toMapPropertyKey(rawKey, serializedKey);
       const serializedValue = _stringify(rawValue, stack);
+      const shouldDedupe = typeof rawKey !== "symbol";
       const bucket = normalizedEntries[bucketKey];
       if (bucket) {
         bucket.entries.push({
@@ -197,6 +202,7 @@ function _stringify(v: unknown, stack: Set<unknown>): string {
           serializedValue,
           order: bucket.entries.length,
         });
+        bucket.shouldDedupe &&= shouldDedupe;
       } else {
         normalizedEntries[bucketKey] = {
           propertyKey,
@@ -207,6 +213,7 @@ function _stringify(v: unknown, stack: Set<unknown>): string {
               order: 0,
             },
           ],
+          shouldDedupe,
         };
       }
     }
@@ -226,9 +233,16 @@ function _stringify(v: unknown, stack: Set<unknown>): string {
       if (!bucket?.entries.length) continue;
       const entries = bucket.entries;
       entries.sort(compareSerializedEntry);
-      for (const entry of entries) {
+      for (let index = 0; index < entries.length; index += 1) {
+        const entry = entries[index]!;
         if (bodyParts.length) bodyParts.push(",");
-        bodyParts.push(JSON.stringify(bucket.propertyKey), ":", entry.serializedValue);
+        const propertyKey = mapEntryPropertyKey(
+          bucket.propertyKey,
+          index,
+          entries.length,
+          bucket.shouldDedupe,
+        );
+        bodyParts.push(JSON.stringify(propertyKey), ":", entry.serializedValue);
       }
     }
     stack.delete(v);
@@ -308,6 +322,19 @@ function compareSerializedEntry(
   if (left.order < right.order) return -1;
   if (left.order > right.order) return 1;
   return 0;
+}
+
+function mapEntryPropertyKey(
+  baseKey: string,
+  entryIndex: number,
+  totalEntries: number,
+  shouldDedupe: boolean,
+): string {
+  if (!shouldDedupe || totalEntries <= 1 || entryIndex === 0) {
+    return baseKey;
+  }
+
+  return `${baseKey}${typeSentinel("map-entry-index", String(entryIndex))}`;
 }
 
 function mapBucketTypeTag(rawKey: unknown): string {
