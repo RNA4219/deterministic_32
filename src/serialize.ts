@@ -17,6 +17,11 @@ const REGEXP_SENTINEL_TYPE = "regexp";
 const MAP_ENTRY_INDEX_LITERAL_SEGMENT =
   `${STRING_LITERAL_SENTINEL_PREFIX}${SENTINEL_PREFIX}map-entry-index:`;
 const HEX_DIGITS = "0123456789abcdef";
+const ARRAY_BUFFER_LIKE_SENTINEL_PREFIXES = [
+  `${SENTINEL_PREFIX}typedarray:`,
+  `${SENTINEL_PREFIX}arraybuffer:`,
+  `${SENTINEL_PREFIX}sharedarraybuffer:`,
+] as const;
 
 type DateSentinelParts = {
   payload: string;
@@ -415,11 +420,13 @@ function normalizeStringLiteral(value: string): string {
   return value;
 }
 
-function isSentinelStringOfType(value: string, type: string): boolean {
-  return (
-    value.startsWith(`${SENTINEL_PREFIX}${type}:`) &&
-    value.endsWith(SENTINEL_SUFFIX)
-  );
+function hasArrayBufferLikeSentinelPrefix(value: string): boolean {
+  for (const prefix of ARRAY_BUFFER_LIKE_SENTINEL_PREFIXES) {
+    if (value.startsWith(prefix)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function needsStringLiteralSentinelEscape(value: string): boolean {
@@ -439,20 +446,30 @@ function needsStringLiteralSentinelEscape(value: string): boolean {
     return true;
   }
 
-  if (isSentinelStringOfType(value, REGEXP_SENTINEL_TYPE)) {
+  if (hasArrayBufferLikeSentinelPrefix(value)) {
     return true;
   }
 
-  if (isSentinelStringOfType(value, "typedarray")) {
-    return true;
-  }
-
-  if (isSentinelStringOfType(value, "arraybuffer")) {
-    return true;
-  }
-
-  if (isSentinelStringOfType(value, "sharedarraybuffer")) {
-    return true;
+  if (
+    value.startsWith(SENTINEL_PREFIX) &&
+    value.endsWith(SENTINEL_SUFFIX)
+  ) {
+    const inner = value.slice(
+      SENTINEL_PREFIX.length,
+      -SENTINEL_SUFFIX.length,
+    );
+    const separatorIndex = inner.indexOf(":");
+    if (separatorIndex !== -1) {
+      const type = inner.slice(0, separatorIndex);
+      if (
+        type === REGEXP_SENTINEL_TYPE ||
+        type === "typedarray" ||
+        type === "arraybuffer" ||
+        type === "sharedarraybuffer"
+      ) {
+        return true;
+      }
+    }
   }
 
   if (value.includes(MAP_ENTRY_INDEX_LITERAL_SEGMENT)) {

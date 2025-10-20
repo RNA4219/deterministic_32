@@ -41,6 +41,13 @@ test("Cat32 assign distinguishes typed array from its serialized string", () => 
   assert.ok(typedAssignment.hash !== stringAssignment.hash);
 });
 
+test("stableStringify distinguishes typed array sentinel string literal", () => {
+  const typedArray = new Uint8Array([2, 3, 4]);
+  const sentinelString = JSON.parse(stableStringify(typedArray));
+
+  assert.ok(stableStringify(typedArray) !== stableStringify(sentinelString));
+});
+
 test("Cat32 assign distinguishes ArrayBuffer from its serialized string", () => {
   const cat = new Cat32();
   const arrayBuffer = new Uint8Array([4, 5]).buffer;
@@ -51,6 +58,13 @@ test("Cat32 assign distinguishes ArrayBuffer from its serialized string", () => 
 
   assert.ok(bufferAssignment.key !== stringAssignment.key);
   assert.ok(bufferAssignment.hash !== stringAssignment.hash);
+});
+
+test("stableStringify distinguishes ArrayBuffer sentinel string literal", () => {
+  const arrayBuffer = new Uint8Array([5, 6]).buffer;
+  const sentinelString = JSON.parse(stableStringify(arrayBuffer));
+
+  assert.ok(stableStringify(arrayBuffer) !== stableStringify(sentinelString));
 });
 
 test("Cat32 assign distinguishes SharedArrayBuffer from its serialized string", () => {
@@ -70,6 +84,20 @@ test("Cat32 assign distinguishes SharedArrayBuffer from its serialized string", 
 
   assert.ok(bufferAssignment.key !== stringAssignment.key);
   assert.ok(bufferAssignment.hash !== stringAssignment.hash);
+});
+
+test("stableStringify distinguishes SharedArrayBuffer sentinel string literal", () => {
+  if (typeof SharedArrayBuffer !== "function") {
+    assert.ok(true, "SharedArrayBuffer unavailable in this runtime");
+    return;
+  }
+
+  const shared = new SharedArrayBuffer(6);
+  const view = new Uint8Array(shared);
+  view.set([7, 8, 9, 10, 11, 12]);
+  const sentinelString = JSON.parse(stableStringify(shared));
+
+  assert.ok(stableStringify(shared) !== stableStringify(sentinelString));
 });
 
 test("Cat32 assign distinguishes Map with typed array key from serialized key", () => {
