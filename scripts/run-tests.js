@@ -4,7 +4,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import process from "node:process";
 
-const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
+const scriptPath = fileURLToPath(import.meta.url);
+const scriptDirectory = path.dirname(scriptPath);
 const projectRoot = scriptDirectory.endsWith(`${path.sep}dist${path.sep}scripts`)
   ? path.resolve(scriptDirectory, "..", "..")
   : path.resolve(scriptDirectory, "..");
@@ -193,107 +194,147 @@ const flagsWithValues = new Set([
   "-r",
 ]);
 
-const throwMissingFlagValueError = (flag) => {
-  process.exitCode = 2;
-  throw new RangeError(`Missing value for ${flag}`);
-};
-
-const cliArguments = process.argv.slice(2);
-const mappedArguments = [];
-let pendingValueFlag = null;
-let forceTargetMode = false;
-let hasCliSentinel = false;
-
-const ensurePendingFlagConsumed = (pendingFlag) => {
+const ensurePendingFlagConsumed = (
+  pendingFlag,
+  handleMissingFlagValue,
+) => {
   if (pendingFlag === null) {
     return;
   }
 
-  throwMissingFlagValueError(pendingFlag);
+  handleMissingFlagValue(pendingFlag);
 };
 
-for (const argument of cliArguments) {
-  if (argument === "--") {
-    ensurePendingFlagConsumed(pendingValueFlag);
-    pendingValueFlag = null;
-    forceTargetMode = true;
-    hasCliSentinel = true;
-    continue;
+export const createNodeTestInvocation = ({
+  argv = process.argv.slice(2),
+  setExitCode = (value) => {
+    process.exitCode = value;
+  },
+} = {}) => {
+  const cliArguments = [...argv];
+  const mappedArguments = [];
+  let pendingValueFlag = null;
+  let forceTargetMode = false;
+  let hasCliSentinel = false;
+
+  const handleMissingFlagValue = (flag) => {
+    setExitCode(2);
+    throw new RangeError(`Missing value for ${flag}`);
+  };
+
+  for (const argument of cliArguments) {
+    if (argument === "--") {
+      ensurePendingFlagConsumed(pendingValueFlag, handleMissingFlagValue);
+      pendingValueFlag = null;
+      forceTargetMode = true;
+      hasCliSentinel = true;
+      continue;
+    }
+
+    if (pendingValueFlag !== null) {
+      mappedArguments.push({ value: argument, isTarget: false });
+      pendingValueFlag = null;
+      continue;
+    }
+
+    if (flagsWithValues.has(argument)) {
+      mappedArguments.push({ value: argument, isTarget: false });
+      pendingValueFlag = argument;
+      continue;
+    }
+
+    const mapped = mapArgument(argument, { forceTarget: forceTargetMode });
+    mappedArguments.push(mapped);
+
+    if (
+      !forceTargetMode &&
+      typeof mapped.value === "string" &&
+      flagsWithValues.has(mapped.value)
+    ) {
+      pendingValueFlag = mapped.value;
+    }
   }
 
-  if (pendingValueFlag !== null) {
-    mappedArguments.push({ value: argument, isTarget: false });
-    pendingValueFlag = null;
-    continue;
+  ensurePendingFlagConsumed(pendingValueFlag, handleMissingFlagValue);
+
+  const flagArguments = [];
+  const targetArguments = [];
+
+  for (const entry of mappedArguments) {
+    if (entry.isTarget) {
+      targetArguments.push(entry.value);
+    } else {
+      flagArguments.push(entry.value);
+    }
   }
 
-  if (flagsWithValues.has(argument)) {
-    mappedArguments.push({ value: argument, isTarget: false });
-    pendingValueFlag = argument;
-    continue;
+  const effectiveTargets =
+    targetArguments.length > 0 ? targetArguments : [...defaultTargets];
+
+  const nodeTestArgs = ["--test", ...flagArguments];
+
+  if (hasCliSentinel) {
+    nodeTestArgs.push("--");
   }
 
-  const mapped = mapArgument(argument, { forceTarget: forceTargetMode });
-  mappedArguments.push(mapped);
+  nodeTestArgs.push(...effectiveTargets);
 
-  if (
-    !forceTargetMode &&
-    typeof mapped.value === "string" &&
-    flagsWithValues.has(mapped.value)
-  ) {
-    pendingValueFlag = mapped.value;
-  }
-}
+  return {
+    command: process.execPath,
+    args: nodeTestArgs,
+    options: {
+      cwd: projectRoot,
+      stdio: "inherit",
+    },
+  };
+};
 
-ensurePendingFlagConsumed(pendingValueFlag);
+export const runNodeTests = (options = {}) => {
+  const {
+    argv = process.argv.slice(2),
+    spawn: spawnOverride,
+    execPath = process.execPath,
+    setExitCode = (value) => {
+      process.exitCode = value;
+    },
+  } = options;
 
-const flagArguments = [];
-const targetArguments = [];
+  const spawnOverrideFromGlobal =
+    typeof globalThis === "object" &&
+    globalThis !== null &&
+    typeof globalThis.__CAT32_TEST_SPAWN__ === "function"
+      ? globalThis.__CAT32_TEST_SPAWN__
+      : null;
 
-for (const entry of mappedArguments) {
-  if (entry.isTarget) {
-    targetArguments.push(entry.value);
-  } else {
-    flagArguments.push(entry.value);
-  }
-}
+  const invocation = createNodeTestInvocation({ argv, setExitCode });
 
-const effectiveTargets =
-  targetArguments.length > 0 ? targetArguments : [...defaultTargets];
+  const spawnImplementation =
+    spawnOverride ?? spawnOverrideFromGlobal ?? spawn;
 
-const nodeTestArgs = ["--test", ...flagArguments];
+  const child = spawnImplementation(execPath, invocation.args, invocation.options);
 
-if (hasCliSentinel) {
-  nodeTestArgs.push("--");
-}
+  child.on("exit", (code, signal) => {
+    if (signal) {
+      process.kill(process.pid, signal);
+      return;
+    }
 
-nodeTestArgs.push(...effectiveTargets);
+    process.exit(code ?? 0);
+  });
 
-const spawnOverride =
+  child.on("error", (error) => {
+    throw error;
+  });
+
+  return child;
+};
+
+const entryScriptPath = path.resolve(process.argv[1] ?? "");
+const hasSpawnOverride =
   typeof globalThis === "object" &&
   globalThis !== null &&
-  typeof globalThis.__CAT32_TEST_SPAWN__ === "function"
-    ? globalThis.__CAT32_TEST_SPAWN__
-    : null;
+  typeof globalThis.__CAT32_TEST_SPAWN__ === "function";
 
-const spawnImplementation = spawnOverride ?? spawn;
-
-const spawnOptions = {
-  cwd: projectRoot,
-  stdio: "inherit",
-};
-
-const child = spawnImplementation(process.execPath, nodeTestArgs, spawnOptions);
-
-child.on("exit", (code, signal) => {
-  if (signal) {
-    process.kill(process.pid, signal);
-    return;
-  }
-
-  process.exit(code ?? 0);
-});
-
-child.on("error", (error) => {
-  throw error;
-});
+if (entryScriptPath === scriptPath && !hasSpawnOverride) {
+  runNodeTests();
+}

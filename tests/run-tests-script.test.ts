@@ -155,13 +155,36 @@ const runScriptWithEnvironment = async (
   });
 
   try {
-    await import(`${scriptUrl.href}?t=${Date.now()}`);
+    const module = (await dynamicImport(scriptUrl.href)) as {
+      runNodeTests?: (options?: {
+        argv?: string[];
+        spawn?: unknown;
+        setExitCode?: (code: number) => void;
+      }) => unknown;
+    };
+
+    const runNodeTests = module.runNodeTests;
+    if (typeof runNodeTests !== "function") {
+      throw new TypeError("run-tests module missing runNodeTests export");
+    }
+
+    runNodeTests({
+      argv: options.argv,
+      spawn: spawnOverride,
+      setExitCode: (code) => {
+        recordedExitCode = code;
+        processWithExitCode.exitCode = code;
+      },
+    });
+
     const invocation = spawnCalls[0];
     invocation?.child.emit("exit", 0, null);
   } catch (error) {
     importError = error;
   } finally {
-    recordedExitCode = processWithExitCode.exitCode;
+    if (recordedExitCode === undefined) {
+      recordedExitCode = processWithExitCode.exitCode;
+    }
     while (cleanups.length > 0) {
       cleanups.pop()?.();
     }
@@ -1179,7 +1202,20 @@ for (const directoryName of ["frontend", "dist"]) {
       });
 
       try {
-        await import(`${scriptUrl.href}?t=${Date.now()}`);
+        const module = (await dynamicImport(scriptUrl.href)) as {
+          runNodeTests?: (options?: {
+            argv?: string[];
+            spawn?: unknown;
+          }) => unknown;
+        };
+
+        const runNodeTests = module.runNodeTests;
+        if (typeof runNodeTests !== "function") {
+          throw new TypeError("run-tests module missing runNodeTests export");
+        }
+
+        runNodeTests({ argv: [], spawn: spawnOverride });
+
         const invocation = spawnCalls[0];
         invocation?.child.emit("exit", 0, null);
       } catch (error) {
