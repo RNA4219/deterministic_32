@@ -4,6 +4,14 @@ import assert from "node:assert/strict";
 import { Cat32 } from "../src/index.js";
 import { stableStringify } from "../src/serialize.js";
 
+test("stableStringify on invalid Date uses invalid sentinel payload", () => {
+  const date = new Date(NaN);
+
+  const serialized = stableStringify(date);
+
+  assert.equal(serialized, JSON.stringify("__date__:invalid"));
+});
+
 test("Map with Date key serializes using ISO sentinel", () => {
   const date = new Date("2020-01-01T00:00:00Z");
   const map = new Map([[date, "v"]]);
@@ -16,12 +24,12 @@ test("Map with Date key serializes using ISO sentinel", () => {
 
 test("Map with invalid Date key serializes using invalid sentinel", () => {
   const date = new Date(NaN);
-  const map = new Map([[date, "v"]]);
+  const map = new Map([[date, 1]]);
 
   const serialized = stableStringify(map);
   const expectedKey = "__date__:invalid";
 
-  assert.deepEqual(JSON.parse(serialized), { [expectedKey]: "v" });
+  assert.deepEqual(JSON.parse(serialized), { [expectedKey]: 1 });
 });
 
 test("Cat32.assign uses ISO sentinel for Map Date keys", () => {
