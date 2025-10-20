@@ -50,6 +50,10 @@ function buildArrayBufferPayload(length: number, bytes: Uint8Array): string {
   return `byteLength=${length};hex=${toHex(bytes)}`;
 }
 
+function buildRegExpPayload(value: RegExp): string {
+  return JSON.stringify([value.source, value.flags]);
+}
+
 function getArrayBufferViewTag(view: ArrayBufferView): string {
   const raw = Object.prototype.toString.call(view);
   return raw.slice(8, -1);
@@ -221,6 +225,12 @@ function _stringify(v: unknown, stack: Set<unknown>): string {
     return out;
   }
 
+  if (v instanceof RegExp) {
+    return stringifySentinelLiteral(
+      typeSentinel("regexp", buildRegExpPayload(v)),
+    );
+  }
+
   // Plain object
   const o = v as Record<string, unknown>;
   if (stack.has(o)) throw new TypeError("Cyclic object");
@@ -286,6 +296,7 @@ function mapBucketTypeTag(rawKey: unknown): string {
   if (rawKey instanceof Date) return "date";
   if (rawKey instanceof Map) return "map";
   if (rawKey instanceof Set) return "set";
+  if (rawKey instanceof RegExp) return "regexp";
   if (Array.isArray(rawKey)) return "array";
   if (sharedArrayBufferCtor && rawKey instanceof sharedArrayBufferCtor) return "sharedarraybuffer";
   if (rawKey instanceof ArrayBuffer || ArrayBuffer.isView(rawKey)) return "arraybuffer";
@@ -385,6 +396,18 @@ function reviveSentinelValue(value: unknown): unknown {
           return value;
         }
       }
+      if (type === "regexp") {
+        try {
+          const parsed = JSON.parse(payload) as unknown;
+          if (Array.isArray(parsed) && typeof parsed[0] === "string") {
+            const flags = typeof parsed[1] === "string" ? parsed[1] : "";
+            return new RegExp(parsed[0], flags);
+          }
+        } catch {
+          return value;
+        }
+        return value;
+      }
     }
   }
   return value;
@@ -411,6 +434,26 @@ function toPropertyKeyString(
       return escapeSentinelString(revivedKey);
     }
     return `${DATE_SENTINEL_PREFIX}${getDateSentinelPayload(rawKey)}`;
+  }
+
+  if (rawKey instanceof RegExp) {
+    const normalizedFromRaw = normalizePlainObjectKey(
+      escapeSentinelString(typeSentinel("regexp", buildRegExpPayload(rawKey))),
+    );
+    if (revivedKey instanceof RegExp) {
+      return normalizePlainObjectKey(
+        escapeSentinelString(typeSentinel("regexp", buildRegExpPayload(revivedKey))),
+      );
+    }
+    if (typeof revivedKey === "string") {
+      const normalizedRevived = normalizePlainObjectKey(
+        escapeSentinelString(revivedKey),
+      );
+      if (normalizedRevived !== normalizedFromRaw) {
+        return normalizedRevived;
+      }
+    }
+    return normalizedFromRaw;
   }
 
   const rawType = typeof rawKey;
