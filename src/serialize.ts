@@ -14,6 +14,8 @@ const DATE_SENTINEL_PREFIX = "__date__:";
 const SYMBOL_SENTINEL_PREFIX = "__symbol__:";
 const STRING_LITERAL_SENTINEL_PREFIX = "__string__:";
 const REGEXP_SENTINEL_TYPE = "regexp";
+const MAP_ENTRY_INDEX_LITERAL_SEGMENT =
+  `${STRING_LITERAL_SENTINEL_PREFIX}${SENTINEL_PREFIX}map-entry-index:`;
 const HEX_DIGITS = "0123456789abcdef";
 
 type DateSentinelParts = {
@@ -334,7 +336,11 @@ function mapEntryPropertyKey(
     return baseKey;
   }
 
-  return `${baseKey}${typeSentinel("map-entry-index", String(entryIndex))}`;
+  const indexSuffix = `${STRING_LITERAL_SENTINEL_PREFIX}${typeSentinel(
+    "map-entry-index",
+    String(entryIndex),
+  )}`;
+  return `${baseKey}${indexSuffix}`;
 }
 
 function mapBucketTypeTag(rawKey: unknown): string {
@@ -446,6 +452,10 @@ function needsStringLiteralSentinelEscape(value: string): boolean {
   }
 
   if (isSentinelStringOfType(value, "sharedarraybuffer")) {
+    return true;
+  }
+
+  if (value.includes(MAP_ENTRY_INDEX_LITERAL_SEGMENT)) {
     return true;
   }
 
