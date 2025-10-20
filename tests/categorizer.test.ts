@@ -427,6 +427,19 @@ test("Cat32 assign handles Map input deterministically", () => {
   assert.equal(assignment.key, "{\"k\":1}");
 });
 
+test("Cat32 assign retains distinct Map entries for identical property keys", () => {
+  const c = new Cat32();
+  const first = c.assign(
+    new Map<unknown, string>([
+      [{}, "a"],
+      [{}, "b"],
+    ]),
+  );
+  const second = c.assign(new Map<unknown, string>([[{}, "a"]]));
+  assert.ok(first.key !== second.key);
+  assert.ok(first.hash !== second.hash);
+});
+
 test("Cat32 assign distinguishes Map keys when String(key) collides", () => {
   const obj = { foo: 1 };
   const instance = new Cat32();

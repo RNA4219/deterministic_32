@@ -176,24 +176,36 @@ function _stringify(v: unknown, stack: Set<unknown>): string {
   if (v instanceof Map) {
     if (stack.has(v)) throw new TypeError("Cyclic object");
     stack.add(v);
-    type SerializedEntry = { serializedKey: string; serializedValue: string };
+    type SerializedEntry = {
+      serializedKey: string;
+      serializedValue: string;
+      order: number;
+    };
     const normalizedEntries: Record<
       string,
-      { propertyKey: string; entries: SerializedEntry[]; shouldDedupe: boolean }
+      { propertyKey: string; entries: SerializedEntry[] }
     > = Object.create(null);
     for (const [rawKey, rawValue] of v.entries()) {
       const serializedKey = _stringify(rawKey, stack);
       const { bucketKey, propertyKey } = toMapPropertyKey(rawKey, serializedKey);
-      const shouldDedupe = typeof rawKey !== "symbol";
+      const serializedValue = _stringify(rawValue, stack);
       const bucket = normalizedEntries[bucketKey];
       if (bucket) {
-        bucket.entries.push({ serializedKey, serializedValue: _stringify(rawValue, stack) });
-        bucket.shouldDedupe &&= shouldDedupe;
+        bucket.entries.push({
+          serializedKey,
+          serializedValue,
+          order: bucket.entries.length,
+        });
       } else {
         normalizedEntries[bucketKey] = {
           propertyKey,
-          entries: [{ serializedKey, serializedValue: _stringify(rawValue, stack) }],
-          shouldDedupe,
+          entries: [
+            {
+              serializedKey,
+              serializedValue,
+              order: 0,
+            },
+          ],
         };
       }
     }
@@ -213,8 +225,7 @@ function _stringify(v: unknown, stack: Set<unknown>): string {
       if (!bucket?.entries.length) continue;
       const entries = bucket.entries;
       entries.sort(compareSerializedEntry);
-      const entriesToEmit = bucket.shouldDedupe ? [entries[0]] : entries;
-      for (const entry of entriesToEmit) {
+      for (const entry of entries) {
         if (bodyParts.length) bodyParts.push(",");
         bodyParts.push(JSON.stringify(bucket.propertyKey), ":", entry.serializedValue);
       }
@@ -286,13 +297,15 @@ function _stringify(v: unknown, stack: Set<unknown>): string {
 }
 
 function compareSerializedEntry(
-  left: { serializedKey: string; serializedValue: string },
-  right: { serializedKey: string; serializedValue: string },
+  left: { serializedKey: string; serializedValue: string; order: number },
+  right: { serializedKey: string; serializedValue: string; order: number },
 ): number {
   if (left.serializedKey < right.serializedKey) return -1;
   if (left.serializedKey > right.serializedKey) return 1;
   if (left.serializedValue < right.serializedValue) return -1;
   if (left.serializedValue > right.serializedValue) return 1;
+  if (left.order < right.order) return -1;
+  if (left.order > right.order) return 1;
   return 0;
 }
 
