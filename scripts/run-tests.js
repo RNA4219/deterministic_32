@@ -130,6 +130,8 @@ const flagsWithValues = new Set([
   "--test-concurrency",
   "--test-name-pattern",
   "--test-match",
+  "--test-ignore",
+  "--test-runner",
   "--test-reporter",
   "--test-reporter-destination",
   testSkipPatternFlag,
@@ -148,6 +150,7 @@ const cliArguments = process.argv.slice(2);
 const mappedArguments = [];
 let pendingValueFlag = null;
 let forceTargetMode = false;
+let hasCliSentinel = false;
 
 const ensurePendingFlagConsumed = (pendingFlag) => {
   if (pendingFlag === null) {
@@ -162,7 +165,7 @@ for (const argument of cliArguments) {
     ensurePendingFlagConsumed(pendingValueFlag);
     pendingValueFlag = null;
     forceTargetMode = true;
-    mappedArguments.push({ value: argument, isTarget: false });
+    hasCliSentinel = true;
     continue;
   }
 
@@ -172,7 +175,7 @@ for (const argument of cliArguments) {
     continue;
   }
 
-  if (!forceTargetMode && flagsWithValues.has(argument)) {
+  if (flagsWithValues.has(argument)) {
     mappedArguments.push({ value: argument, isTarget: false });
     pendingValueFlag = argument;
     continue;
@@ -206,6 +209,14 @@ for (const entry of mappedArguments) {
 const effectiveTargets =
   targetArguments.length > 0 ? targetArguments : [...defaultTargets];
 
+const nodeTestArgs = ["--test", ...flagArguments];
+
+if (hasCliSentinel) {
+  nodeTestArgs.push("--");
+}
+
+nodeTestArgs.push(...effectiveTargets);
+
 const spawnOverride =
   typeof globalThis === "object" &&
   globalThis !== null &&
@@ -219,12 +230,6 @@ const spawnOptions = {
   cwd: projectRoot,
   stdio: "inherit",
 };
-
-const nodeTestArgs = [
-  "--test",
-  ...flagArguments,
-  ...effectiveTargets,
-];
 
 const child = spawnImplementation(process.execPath, nodeTestArgs, spawnOptions);
 
