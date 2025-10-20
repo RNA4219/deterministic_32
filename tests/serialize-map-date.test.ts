@@ -1,5 +1,5 @@
 import test from "node:test";
-import assert from "node:assert";
+import assert from "node:assert/strict";
 
 import { Cat32 } from "../src/index.js";
 import { stableStringify } from "../src/serialize.js";
@@ -9,13 +9,9 @@ test("Map with Date key serializes using ISO sentinel", () => {
   const map = new Map([[date, "v"]]);
 
   const serialized = stableStringify(map);
-  const parsed = JSON.parse(serialized) as Record<string, string>;
-  const keys = Object.keys(parsed);
   const expectedKey = `__date__:${date.toISOString()}`;
 
-  assert.equal(keys.length, 1);
-  assert.equal(keys[0], expectedKey);
-  assert.equal(parsed[expectedKey], "v");
+  assert.deepEqual(JSON.parse(serialized), { [expectedKey]: "v" });
 });
 
 test("Cat32.assign uses ISO sentinel for Map Date keys", () => {
@@ -25,7 +21,8 @@ test("Cat32.assign uses ISO sentinel for Map Date keys", () => {
   const cat = new Cat32();
   const assignment = cat.assign(map);
   const serialized = stableStringify(map);
+  const expectedKey = `__date__:${date.toISOString()}`;
 
   assert.equal(assignment.key, serialized);
-  assert.ok(assignment.key.includes(date.toISOString()));
+  assert.deepEqual(JSON.parse(assignment.key), { [expectedKey]: "v" });
 });
