@@ -11,5 +11,12 @@
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "typeRoots": ["./types", "./node_modules/@types"]
   },
-  "include": ["src", "tests", "scripts", "frontend/src", "frontend/tests"]
+  "include": [
+    "src",
+    "tests",
+    "scripts",
+    "frontend/src",
+    "frontend/tests",
+    "./*.test.ts"
+  ]
 }

@@ -127,6 +127,7 @@ const flagsWithValues = new Set([
   "--loader",
   "--print",
   "--require",
+  "--test-ignore",
   "--test-concurrency",
   "--test-name-pattern",
   "--test-match",
