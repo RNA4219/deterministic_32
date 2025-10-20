@@ -14,6 +14,29 @@ const DATE_SENTINEL_PREFIX = "__date__:";
 const STRING_LITERAL_SENTINEL_PREFIX = "__string__:";
 const HEX_DIGITS = "0123456789abcdef";
 
+function isBoxedPrimitive(value: unknown): value is Number | Boolean | BigInt {
+  return (
+    value instanceof Number ||
+    value instanceof Boolean ||
+    value instanceof BigInt
+  );
+}
+
+function unwrapBoxedPrimitive(value: unknown): unknown {
+  if (isBoxedPrimitive(value)) {
+    const primitive = value.valueOf();
+    const primitiveType = typeof primitive;
+    if (
+      primitiveType === "number" ||
+      primitiveType === "boolean" ||
+      primitiveType === "bigint"
+    ) {
+      return primitive;
+    }
+  }
+  return value;
+}
+
 function serializeArrayBufferLikeSentinel(
   type: string,
   buffer: ArrayBufferLike,
@@ -86,6 +109,10 @@ export function stableStringify(v: unknown): string {
 
 function _stringify(v: unknown, stack: Set<unknown>): string {
   if (v === null) return "null";
+  const unboxed = unwrapBoxedPrimitive(v);
+  if (!Object.is(unboxed, v)) {
+    return _stringify(unboxed, stack);
+  }
   const t = typeof v;
 
   if (t === "string") {
@@ -104,10 +131,6 @@ function _stringify(v: unknown, stack: Set<unknown>): string {
   if (t === "undefined") return stringifySentinelLiteral(UNDEFINED_SENTINEL);
   if (t === "function" || t === "symbol") {
     return String(v);
-  }
-
-  if (v instanceof Number || v instanceof Boolean || v instanceof BigInt) {
-    return _stringify(v.valueOf(), stack);
   }
 
   if (Array.isArray(v)) {
@@ -268,8 +291,9 @@ function compareSerializedEntry(
 }
 
 function mapBucketTypeTag(rawKey: unknown): string {
-  if (rawKey instanceof Number || rawKey instanceof Boolean || rawKey instanceof BigInt) {
-    return mapBucketTypeTag(rawKey.valueOf());
+  const unboxedKey = unwrapBoxedPrimitive(rawKey);
+  if (!Object.is(unboxedKey, rawKey)) {
+    return mapBucketTypeTag(unboxedKey);
   }
   if (typeof rawKey === "symbol") return "symbol";
   if (rawKey === null) return "null";
@@ -372,8 +396,9 @@ function toPropertyKeyString(
   revivedKey: unknown,
   serializedKey: string,
 ): string {
-  if (rawKey instanceof Number || rawKey instanceof Boolean || rawKey instanceof BigInt) {
-    return toPropertyKeyString(rawKey.valueOf(), revivedKey, serializedKey);
+  const unboxedKey = unwrapBoxedPrimitive(rawKey);
+  if (!Object.is(unboxedKey, rawKey)) {
+    return toPropertyKeyString(unboxedKey, revivedKey, serializedKey);
   }
   if (typeof rawKey === "symbol") {
     return (rawKey as symbol).toString();
