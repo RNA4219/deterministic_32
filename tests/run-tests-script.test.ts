@@ -535,6 +535,7 @@ test(
     const expectedTarget = env.pathModule.join(
       env.repoRootPath,
       "dist",
+      "tests",
       "--edge-case.test.js",
     );
     const targetIndex = args.indexOf(expectedTarget);
@@ -545,6 +546,42 @@ test(
     assert.ok(
       sentinelIndex < targetIndex,
       `expected -- sentinel to appear before ${expectedTarget}, received: ${args.join(", ")}`,
+    );
+
+    assert.deepEqual(result.exitCodes, [0]);
+  },
+);
+
+test(
+  "run-tests script maps hyphen-prefixed TS targets without CLI sentinel",
+  async () => {
+    const env = await loadEnvironment();
+
+    const result = await runScriptWithEnvironment(env, {
+      argv: ["--edge-case.test.ts"],
+    });
+
+    assert.equal(result.importError, undefined);
+    assert.equal(result.spawnCalls.length, 1);
+
+    const invocation = result.spawnCalls[0]!;
+    assert.ok(Array.isArray(invocation.args));
+    const args = invocation.args as string[];
+
+    const expectedArgs = [
+      "--test",
+      env.pathModule.join(
+        env.repoRootPath,
+        "dist",
+        "tests",
+        "--edge-case.test.js",
+      ),
+    ];
+
+    assert.deepEqual(
+      args,
+      expectedArgs,
+      `expected spawn args to equal ${expectedArgs.join(", ")}, received: ${args.join(", ")}`,
     );
 
     assert.deepEqual(result.exitCodes, [0]);

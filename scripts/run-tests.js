@@ -14,6 +14,28 @@ const defaultTargets = [
   path.join(projectRoot, "dist", "frontend", "tests"),
 ];
 
+const distDirectory = path.join(projectRoot, "dist");
+
+const defaultSourceDirectories = Array.from(
+  new Set(
+    defaultTargets
+      .map((target) => {
+        const relativeFromDist = path.relative(distDirectory, target);
+
+        if (
+          relativeFromDist === "" ||
+          relativeFromDist.startsWith("..") ||
+          path.isAbsolute(relativeFromDist)
+        ) {
+          return null;
+        }
+
+        return path.join(projectRoot, relativeFromDist);
+      })
+      .filter((value) => value !== null),
+  ),
+);
+
 const testSegmentPattern = /^(?:tests|__tests__)$|(?:\.spec(?:\.[^.]+)?$)|(?:\.test(?:\.[^.]+)?$)/u;
 
 const testSkipPatternFlag = "--test-skip-pattern";
@@ -21,16 +43,45 @@ const testSkipPatternFlag = "--test-skip-pattern";
 const mapArgument = (argument, options = {}) => {
   const { forceTarget = false } = options;
 
-  if (!forceTarget && argument.startsWith("--")) {
+  const argumentSegments = argument
+    .split(/[\\/]/u)
+    .filter((segment) => segment !== "" && segment !== ".");
+  const argumentLooksLikeTestTarget = argumentSegments.some((segment) =>
+    testSegmentPattern.test(segment),
+  );
+
+  if (!forceTarget && argument.startsWith("--") && !argumentLooksLikeTestTarget) {
     return { value: argument, isTarget: false };
   }
 
   const candidatePaths = path.isAbsolute(argument)
     ? [argument]
-    : [
-        path.resolve(projectRoot, argument),
-        path.resolve(process.cwd(), argument),
-      ];
+    : (() => {
+        const bases = [];
+        const argumentContainsPathSeparator = /[\\/]/u.test(argument);
+
+        if (!argumentContainsPathSeparator) {
+          bases.push(...defaultSourceDirectories);
+        }
+
+        bases.push(projectRoot);
+        bases.push(process.cwd());
+
+        const seen = new Set();
+        const resolvedCandidates = [];
+
+        for (const base of bases) {
+          const candidate = path.resolve(base, argument);
+          if (seen.has(candidate)) {
+            continue;
+          }
+
+          seen.add(candidate);
+          resolvedCandidates.push(candidate);
+        }
+
+        return resolvedCandidates;
+      })();
 
   let matchedAbsolutePath = null;
   let projectRelativePath = null;
@@ -129,6 +180,7 @@ const flagsWithValues = new Set([
   "--require",
   "--test-concurrency",
   "--test-name-pattern",
+  "--test-ignore",
   "--test-match",
   "--test-reporter",
   "--test-reporter-destination",
