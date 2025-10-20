@@ -232,6 +232,30 @@ test(
   },
 );
 
+test(
+  "prepareRunnerOptions maps arguments after option terminator to dist targets",
+  async () => {
+    const prepareRunnerOptions = await loadPrepareRunnerOptions(
+      "terminator-target",
+    );
+
+    const result = prepareRunnerOptions(
+      ["node", "script", "--", "--edge-case.test.ts"],
+      {
+        existsSync: (candidate) =>
+          typeof candidate === "string" &&
+          (candidate.includes("tests/--edge-case.test.ts") ||
+            candidate.includes("dist/tests/--edge-case.test.js") ||
+            candidate.endsWith("dist/tests")),
+        defaultTargets: ["dist/tests"],
+      },
+    );
+
+    assert.deepEqual(result.targets, ["dist/tests/--edge-case.test.js"]);
+    assert.deepEqual(result.passthroughArgs, ["--"]);
+  },
+);
+
 test("JSON reporter runner uses dist target when invoked with TS input", async () => {
   const { createRequire } = (await dynamicImport("node:module")) as {
     createRequire: (specifier: string | URL) => (id: string) => unknown;
