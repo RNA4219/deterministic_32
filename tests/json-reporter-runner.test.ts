@@ -130,6 +130,26 @@ test(
 );
 
 test(
+  "prepareRunnerOptions resolves targets following double dash sentinel",
+  async () => {
+    const prepareRunnerOptions = await loadPrepareRunnerOptions("double-dash");
+
+    const result = prepareRunnerOptions(
+      ["node", "script", "--", "--edge-case.test.ts"],
+      {
+        existsSync: (candidate) =>
+          typeof candidate === "string" &&
+          (candidate.endsWith("--edge-case.test.ts") ||
+            candidate.endsWith("dist/--edge-case.test.js")),
+      },
+    );
+
+    assert.deepEqual(result.passthroughArgs, ["--"]);
+    assert.deepEqual(result.targets, ["dist/--edge-case.test.js"]);
+  },
+);
+
+test(
   "prepareRunnerOptions maps .mts target to dist .mjs path",
   async () => {
     const prepareRunnerOptions = await loadPrepareRunnerOptions("mts-target");
