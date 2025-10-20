@@ -195,6 +195,16 @@ test("stableStringify matches JSON.stringify for sentinel-like string literals",
   assert.equal(stableStringify(sentinelLike), JSON.stringify(sentinelLike));
 });
 
+test("stableStringify distinguishes symbol keys from their string descriptions", () => {
+  const symbolKey = Symbol("id");
+  const objectWithSymbol: Record<PropertyKey, number> = { [symbolKey]: 1 };
+  const objectWithString = { [String(symbolKey)]: 1 };
+
+  assert.ok(
+    stableStringify(objectWithSymbol) !== stableStringify(objectWithString),
+  );
+});
+
 test(
   "stableStringify distinguishes prefixed string literals from hole sentinels",
   () => {
@@ -456,6 +466,21 @@ test("Cat32 assign distinguishes Map keys when String(key) collides", () => {
 
   assert.ok(mixedAssignment.hash !== stringOnlyAssignment.hash);
   assert.ok(mixedAssignment.key !== stringOnlyAssignment.key);
+});
+
+test("Cat32 distinguishes Map symbol keys from string descriptions", () => {
+  const symbolKey = Symbol("id");
+  const cat = new Cat32();
+
+  const symbolMapAssignment = cat.assign(new Map([[symbolKey, 1]]));
+  const stringMapAssignment = cat.assign(new Map([[String(symbolKey), 1]]));
+
+  assert.ok(
+    stableStringify(new Map([[symbolKey, 1]])) !==
+      stableStringify(new Map([[String(symbolKey), 1]])),
+  );
+  assert.ok(symbolMapAssignment.key !== stringMapAssignment.key);
+  assert.ok(symbolMapAssignment.hash !== stringMapAssignment.hash);
 });
 
 test("stableStringify retains compatibility for single Map object keys", () => {

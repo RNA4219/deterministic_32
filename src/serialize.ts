@@ -11,6 +11,7 @@ const HOLE_SENTINEL_RAW = typeSentinel("hole", HOLE_SENTINEL_PAYLOAD);
 const HOLE_SENTINEL = JSON.stringify(HOLE_SENTINEL_RAW);
 const UNDEFINED_SENTINEL = "__undefined__";
 const DATE_SENTINEL_PREFIX = "__date__:";
+const SYMBOL_SENTINEL_PREFIX = "__symbol__:";
 const STRING_LITERAL_SENTINEL_PREFIX = "__string__:";
 const REGEXP_SENTINEL_TYPE = "regexp";
 const HEX_DIGITS = "0123456789abcdef";
@@ -345,6 +346,13 @@ function toMapPropertyKey(
       propertyKey: escapedDateKey,
     };
   }
+  if (typeof rawKey === "symbol") {
+    const propertyKey = toPropertyKeyString(rawKey, revivedKey, serializedKey);
+    return {
+      bucketKey: `${bucketTag}|${propertyKey}`,
+      propertyKey,
+    };
+  }
   if (rawKey instanceof RegExp) {
     const propertyKey = toPropertyKeyString(rawKey, revivedKey, serializedKey);
     return {
@@ -380,6 +388,10 @@ function needsStringLiteralSentinelEscape(value: string): boolean {
   }
 
   if (value === UNDEFINED_SENTINEL) {
+    return true;
+  }
+
+  if (value.startsWith(SYMBOL_SENTINEL_PREFIX)) {
     return true;
   }
 
@@ -474,6 +486,15 @@ function reviveSentinelValue(value: unknown): unknown {
   return value;
 }
 
+function toSymbolSentinel(symbol: symbol): string {
+  const globalKey = typeof Symbol.keyFor === "function" ? Symbol.keyFor(symbol) : undefined;
+  if (globalKey !== undefined) {
+    return `${SYMBOL_SENTINEL_PREFIX}${globalKey}`;
+  }
+  const description = symbol.description;
+  return `${SYMBOL_SENTINEL_PREFIX}${description ?? ""}`;
+}
+
 function toPropertyKeyString(
   rawKey: unknown,
   revivedKey: unknown,
@@ -483,7 +504,7 @@ function toPropertyKeyString(
     return toPropertyKeyString(rawKey.valueOf(), revivedKey, serializedKey);
   }
   if (typeof rawKey === "symbol") {
-    return (rawKey as symbol).toString();
+    return toSymbolSentinel(rawKey as symbol);
   }
 
   if (rawKey === null) {
