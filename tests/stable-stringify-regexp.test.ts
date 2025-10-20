@@ -23,6 +23,18 @@ test("stableStringify distinguishes RegExp variants", () => {
   assert.ok(JSON.parse(fooGlobal).startsWith("\u0000cat32:regexp:"));
 });
 
+test("stableStringify distinguishes RegExp from RegExp sentinel string literals", () => {
+  const regex = stableStringify(/foo/);
+  const sentinelLiteral = typeSentinel("regexp", JSON.stringify(["foo", ""]));
+  const stringLiteral = stableStringify(sentinelLiteral);
+
+  assert.ok(regex !== stringLiteral);
+  assert.ok(JSON.parse(regex).startsWith("\u0000cat32:regexp:"));
+  assert.ok(
+    JSON.parse(stringLiteral).startsWith("__string__:\u0000cat32:regexp:"),
+  );
+});
+
 test("Cat32.assign produces distinct keys and hashes for RegExp variants", () => {
   const cat = new Cat32();
 
