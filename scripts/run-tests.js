@@ -18,8 +18,8 @@ const testSegmentPattern = /^(?:tests|__tests__)$|(?:\.spec(?:\.[^.]+)?$)|(?:\.t
 
 const testSkipPatternFlag = "--test-skip-pattern";
 
-const mapArgument = (argument) => {
-  if (argument.startsWith("--")) {
+const mapArgument = (argument, { forceTarget = false } = {}) => {
+  if (!forceTarget && argument.startsWith("--")) {
     return { value: argument, isTarget: false };
   }
 
@@ -53,14 +53,14 @@ const mapArgument = (argument) => {
     }
   }
 
-  if (matchedAbsolutePath === null || projectRelativePath === null) {
+  if (!forceTarget && (matchedAbsolutePath === null || projectRelativePath === null)) {
     return { value: argument, isTarget: false };
   }
 
   const pathSegments = projectRelativePath.split(path.sep);
   const hasTestSegment = pathSegments.some((segment) => testSegmentPattern.test(segment));
 
-  if (!hasTestSegment) {
+  if (!hasTestSegment && !forceTarget) {
     return { value: argument, isTarget: false };
   }
 
@@ -143,9 +143,10 @@ const throwMissingFlagValueError = (flag) => {
 };
 
 const cliArguments = process.argv.slice(2);
-const filteredCliArguments = cliArguments.filter((argument) => argument !== "--");
 const mappedArguments = [];
 let pendingValueFlag = null;
+let treatRemainingAsTargets = false;
+let scriptArgumentSeparatorConsumed = false;
 
 const ensurePendingFlagConsumed = (pendingFlag) => {
   if (pendingFlag === null) {
@@ -155,23 +156,40 @@ const ensurePendingFlagConsumed = (pendingFlag) => {
   throwMissingFlagValueError(pendingFlag);
 };
 
-for (const argument of filteredCliArguments) {
+for (const argument of cliArguments) {
   if (pendingValueFlag !== null) {
     mappedArguments.push({ value: argument, isTarget: false });
     pendingValueFlag = null;
     continue;
   }
 
-  if (flagsWithValues.has(argument)) {
+  if (argument === "--") {
+    if (!scriptArgumentSeparatorConsumed && mappedArguments.length === 0) {
+      scriptArgumentSeparatorConsumed = true;
+      continue;
+    }
+
+    if (!treatRemainingAsTargets) {
+      treatRemainingAsTargets = true;
+    }
+
+    mappedArguments.push({ value: argument, isTarget: false });
+    continue;
+  }
+
+  if (!treatRemainingAsTargets && flagsWithValues.has(argument)) {
     mappedArguments.push({ value: argument, isTarget: false });
     pendingValueFlag = argument;
     continue;
   }
 
-  const mapped = mapArgument(argument);
+  const mapped = mapArgument(argument, {
+    forceTarget: treatRemainingAsTargets,
+  });
   mappedArguments.push(mapped);
 
   if (
+    !treatRemainingAsTargets &&
     typeof mapped.value === "string" &&
     flagsWithValues.has(mapped.value)
   ) {

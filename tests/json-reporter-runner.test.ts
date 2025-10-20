@@ -232,6 +232,30 @@ test(
   },
 );
 
+test(
+  "prepareRunnerOptions keeps -- terminator while mapping following hyphen target",
+  async () => {
+    const prepareRunnerOptions = await loadPrepareRunnerOptions("double-dash");
+
+    const result = prepareRunnerOptions(
+      [
+        "node",
+        "script.mjs",
+        "--",
+        "--edge-case.test.ts",
+      ],
+      {
+        defaultTargets: [],
+        existsSync: (candidate) =>
+          typeof candidate === "string" && candidate.includes("--edge-case.test"),
+      },
+    );
+
+    assert.deepEqual(result.targets, ["dist/--edge-case.test.js"]);
+    assert.deepEqual(result.passthroughArgs, ["--"]);
+  },
+);
+
 test("JSON reporter runner uses dist target when invoked with TS input", async () => {
   const { createRequire } = (await dynamicImport("node:module")) as {
     createRequire: (specifier: string | URL) => (id: string) => unknown;

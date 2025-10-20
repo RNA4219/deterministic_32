@@ -167,6 +167,7 @@ const prepareRunnerOptions = (
   const seenTargets = new Set();
   let destinationOverride = null;
   let pendingOption = null;
+  let treatRemainingArgumentsAsTargets = false;
 
   const addResolvedTarget = (candidate, bucket) => {
     if (!candidate) {
@@ -286,6 +287,24 @@ const prepareRunnerOptions = (
         passthroughArgs.push(argument);
       }
       pendingOption = null;
+      continue;
+    }
+
+    if (argument === '--') {
+      passthroughArgs.push(argument);
+      treatRemainingArgumentsAsTargets = true;
+      continue;
+    }
+
+    if (treatRemainingArgumentsAsTargets) {
+      const resolvedTarget = resolveTargetCandidate(argument);
+
+      if (resolvedTarget) {
+        addResolvedTarget(resolvedTarget, explicitTargets);
+        continue;
+      }
+
+      passthroughArgs.push(argument);
       continue;
     }
 
