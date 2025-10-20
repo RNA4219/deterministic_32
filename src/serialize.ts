@@ -14,12 +14,19 @@ const DATE_SENTINEL_PREFIX = "__date__:";
 const STRING_LITERAL_SENTINEL_PREFIX = "__string__:";
 const HEX_DIGITS = "0123456789abcdef";
 
-function getDateSentinelPayload(date: Date): string {
+type DateSentinelParts = {
+  payload: string;
+  key: string;
+};
+
+function getDateSentinelParts(date: Date): DateSentinelParts {
   const time = date.getTime();
   if (!Number.isFinite(time)) {
-    return "invalid";
+    const payload = "invalid";
+    return { payload, key: `${DATE_SENTINEL_PREFIX}${payload}` };
   }
-  return date.toISOString();
+  const payload = date.toISOString();
+  return { payload, key: `${DATE_SENTINEL_PREFIX}${payload}` };
 }
 
 function serializeArrayBufferLikeSentinel(
@@ -141,9 +148,8 @@ function _stringify(v: unknown, stack: Set<unknown>): string {
 
   // Date
   if (v instanceof Date) {
-    return stringifySentinelLiteral(
-      `${DATE_SENTINEL_PREFIX}${getDateSentinelPayload(v)}`,
-    );
+    const { key } = getDateSentinelParts(v);
+    return stringifySentinelLiteral(key);
   }
 
   if (ArrayBuffer.isView(v)) {
@@ -311,11 +317,9 @@ function toMapPropertyKey(
   const revivedKey = reviveFromSerialized(serializedKey);
   if (rawKey instanceof Date) {
     const revivedString = typeof revivedKey === "string" ? revivedKey : "";
-    const payload = getDateSentinelPayload(rawKey);
+    const { key } = getDateSentinelParts(rawKey);
     const normalizedDateKey =
-      revivedString && revivedString.startsWith(DATE_SENTINEL_PREFIX)
-        ? revivedString
-        : `${DATE_SENTINEL_PREFIX}${revivedString || payload}`;
+      revivedString.startsWith(DATE_SENTINEL_PREFIX) ? revivedString : key;
     const escapedDateKey = escapeSentinelString(normalizedDateKey);
     return {
       bucketKey: `${bucketTag}|${escapedDateKey}`,
@@ -370,6 +374,21 @@ function reviveFromSerialized(serialized: string): unknown {
 }
 
 function reviveSentinelValue(value: unknown): unknown {
+  if (
+    typeof value === "string" &&
+    value.startsWith(DATE_SENTINEL_PREFIX)
+  ) {
+    const payload = value.slice(DATE_SENTINEL_PREFIX.length);
+    if (payload === "invalid") {
+      return new Date(Number.NaN);
+    }
+    const revivedDate = new Date(payload);
+    if (Number.isFinite(revivedDate.getTime())) {
+      return revivedDate;
+    }
+    return value;
+  }
+
   if (
     typeof value === "string" &&
     value.startsWith(SENTINEL_PREFIX) &&
@@ -430,10 +449,14 @@ function toPropertyKeyString(
   }
 
   if (rawKey instanceof Date) {
-    if (typeof revivedKey === "string") {
+    if (
+      typeof revivedKey === "string" &&
+      revivedKey.startsWith(DATE_SENTINEL_PREFIX)
+    ) {
       return escapeSentinelString(revivedKey);
     }
-    return `${DATE_SENTINEL_PREFIX}${getDateSentinelPayload(rawKey)}`;
+    const { key } = getDateSentinelParts(rawKey);
+    return escapeSentinelString(key);
   }
 
   if (rawKey instanceof RegExp) {
