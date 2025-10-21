@@ -67,7 +67,8 @@ function getLocalSymbolSentinelRecord(
   const identifier = nextLocalSymbolSentinelId.toString(36);
   nextLocalSymbolSentinelId += 1;
   const description = symbol.description ?? "";
-  const payload = JSON.stringify(["local", identifier, description]);
+  const descriptionJson = JSON.stringify(description);
+  const payload = `["local","${identifier}",${descriptionJson}]`;
   const sentinel = `${SYMBOL_SENTINEL_PREFIX}${payload}`;
 
   const record: LocalSymbolSentinelRecord = { identifier, sentinel };

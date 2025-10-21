@@ -42,7 +42,8 @@ export const createRefreshQueueStore = (): RefreshQueueStore => {
       return;
     }
     record.attempts += 1;
-    record.lastAttemptedAt = new Date();
+    const now = Date.now();
+    record.lastAttemptedAt = new Date(now);
   };
 
   const recordFailure = (id: string, error: unknown): void => {
