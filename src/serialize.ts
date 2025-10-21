@@ -589,11 +589,10 @@ function reviveSentinelValue(value: unknown): unknown {
 
 function toSymbolSentinel(symbol: symbol): string {
   const globalKey = typeof Symbol.keyFor === "function" ? Symbol.keyFor(symbol) : undefined;
-  if (globalKey !== undefined) {
-    return `${SYMBOL_SENTINEL_PREFIX}global:${globalKey}`;
-  }
-  const description = symbol.description;
-  return `${SYMBOL_SENTINEL_PREFIX}local:${description ?? ""}`;
+  const scope = globalKey !== undefined ? "global" : "local";
+  const identifier = globalKey ?? symbol.description ?? "";
+  const payload = JSON.stringify([scope, identifier]);
+  return `${SYMBOL_SENTINEL_PREFIX}${payload}`;
 }
 
 function toPropertyKeyString(
