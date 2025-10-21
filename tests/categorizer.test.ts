@@ -801,11 +801,26 @@ test(
       [right, "left"],
     ]);
 
-    assert.ok(stableStringify(original) !== stableStringify(swapped));
+    const originalStable = stableStringify(original);
+    const swappedStable = stableStringify(swapped);
+    assert.ok(originalStable !== swappedStable);
 
     const cat = new Cat32();
     const originalAssignment = cat.assign(original);
     const swappedAssignment = cat.assign(swapped);
+
+    console.log(
+      JSON.stringify(
+        {
+          originalKey: originalAssignment.key,
+          swappedKey: swappedAssignment.key,
+          originalStable,
+          swappedStable,
+        },
+        null,
+        2,
+      ),
+    );
 
     assert.ok(originalAssignment.key !== swappedAssignment.key);
   },
