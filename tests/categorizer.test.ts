@@ -481,6 +481,10 @@ function createNonEnumerableToStringObject(literal: string): Record<string, neve
   return object;
 }
 
+function customObjectReturning(literal: string): Record<string, never> {
+  return createNonEnumerableToStringObject(literal);
+}
+
 test(
   "stableStringify differentiates Map entries from sentinel-style literal strings",
   () => {
@@ -568,6 +572,50 @@ test("Cat32 assign distinguishes Map keys when String(key) collides", () => {
 });
 
 test(
+  "stableStringify and Cat32 assign distinguish Map array key collisions",
+  () => {
+    const mapWithArrayKey = new Map<unknown, string>([
+      [[1, 2], "array"],
+      ["1,2", "string"],
+    ]);
+    const mapWithStringKey = new Map<string, string>([["1,2", "string"]]);
+
+    assert.ok(
+      stableStringify(mapWithArrayKey) !==
+        stableStringify(mapWithStringKey),
+    );
+
+    const cat = new Cat32();
+    const arrayAssignment = cat.assign(mapWithArrayKey);
+    const stringAssignment = cat.assign(mapWithStringKey);
+
+    assert.ok(arrayAssignment.key !== stringAssignment.key);
+  },
+);
+
+test(
+  "stableStringify and Cat32 assign distinguish Map toString collisions",
+  () => {
+    const mapWithCustomObject = new Map<unknown, string>([
+      [customObjectReturning("1,2"), "array"],
+      ["1,2", "string"],
+    ]);
+    const mapWithStringKey = new Map<string, string>([["1,2", "string"]]);
+
+    assert.ok(
+      stableStringify(mapWithCustomObject) !==
+        stableStringify(mapWithStringKey),
+    );
+
+    const cat = new Cat32();
+    const customObjectAssignment = cat.assign(mapWithCustomObject);
+    const stringAssignment = cat.assign(mapWithStringKey);
+
+    assert.ok(customObjectAssignment.key !== stringAssignment.key);
+  },
+);
+
+test(
   "Cat32 assign differentiates Map object keys from sentinel-style string keys",
   () => {
     const cat = new Cat32();
@@ -606,20 +654,20 @@ test("Cat32 distinguishes Map symbol keys from string descriptions", () => {
   assert.ok(symbolMapAssignment.hash !== stringMapAssignment.hash);
 });
 
-test("stableStringify retains compatibility for single Map object keys", () => {
+test("stableStringify distinguishes Map object keys from plain object keys", () => {
   const obj = { foo: 1 };
 
   const mapKey = stableStringify(new Map([[obj, "value"]]));
   const objectKey = stableStringify({ [String(obj)]: "value" });
 
-  assert.equal(mapKey, objectKey);
+  assert.ok(mapKey !== objectKey);
 
   const cat = new Cat32();
   const mapAssignment = cat.assign(new Map([[obj, "value"]]));
   const objectAssignment = cat.assign({ [String(obj)]: "value" });
 
-  assert.equal(mapAssignment.key, objectAssignment.key);
-  assert.equal(mapAssignment.hash, objectAssignment.hash);
+  assert.ok(mapAssignment.key !== objectAssignment.key);
+  assert.ok(mapAssignment.hash !== objectAssignment.hash);
 });
 
 test("Map serialization preserves entries when String(key) collisions occur", () => {
@@ -1817,19 +1865,19 @@ test("Map values serialize identically to plain object values", () => {
   assert.equal(mapAssignment.hash, objectAssignment.hash);
 });
 
-test("Map object key matches plain object string key", () => {
+test("Map object key differs from plain object string key", () => {
   const obj = { foo: 1 };
   const map = new Map([[obj, "value"]]);
   const plainObject = { [String(obj)]: "value" };
 
-  assert.equal(stableStringify(map), stableStringify(plainObject));
+  assert.ok(stableStringify(map) !== stableStringify(plainObject));
 
   const cat = new Cat32();
   const mapAssignment = cat.assign(map);
   const objectAssignment = cat.assign(plainObject);
 
-  assert.equal(mapAssignment.key, objectAssignment.key);
-  assert.equal(mapAssignment.hash, objectAssignment.hash);
+  assert.ok(mapAssignment.key !== objectAssignment.key);
+  assert.ok(mapAssignment.hash !== objectAssignment.hash);
 });
 
 test("Map function value matches plain object value", () => {
