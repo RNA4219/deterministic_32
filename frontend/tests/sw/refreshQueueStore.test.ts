@@ -228,6 +228,74 @@ test("recordAttempt updates attempt metadata", async () => {
   );
 });
 
+test("recordAttempt records Date.now value on each attempt", () => {
+  const store = createRefreshQueueStore();
+  const request = createRequest("https://example.test/api", { method: "POST" });
+
+  const { id } = store.enqueue(request);
+
+  const timestamps = [1_000, 2_000, 3_000];
+  let nowCallIndex = 0;
+  const originalNow = Date.now;
+  Date.now = () => {
+    const value = timestamps[nowCallIndex] ?? timestamps[timestamps.length - 1];
+    nowCallIndex = Math.min(nowCallIndex + 1, timestamps.length);
+    return value;
+  };
+
+  try {
+    const observedTimes: number[] = [];
+    for (const [index, expectedTimestamp] of timestamps.entries()) {
+      store.recordAttempt(id);
+
+      const record = store.get(id);
+      assert.ok(record, "record should exist while recording attempts");
+      if (!record) {
+        throw new Error("record must exist for attempt assertions");
+      }
+
+      assert.equal(
+        record.attempts,
+        index + 1,
+        "attempts should increment for each recordAttempt call",
+      );
+
+      const { lastAttemptedAt } = record;
+      assert.ok(
+        lastAttemptedAt instanceof Date,
+        "lastAttemptedAt should be a Date instance after each attempt",
+      );
+      if (!(lastAttemptedAt instanceof Date)) {
+        throw new Error("lastAttemptedAt should be set after recordAttempt");
+      }
+
+      const recordedTime = lastAttemptedAt.getTime();
+      observedTimes.push(recordedTime);
+
+      assert.equal(
+        recordedTime,
+        expectedTimestamp,
+        "lastAttemptedAt should reflect the mocked Date.now value",
+      );
+
+      if (index > 0) {
+        assert.ok(
+          recordedTime !== observedTimes[index - 1],
+          "lastAttemptedAt should update to a new timestamp for each attempt",
+        );
+      }
+    }
+
+    assert.deepEqual(
+      observedTimes,
+      timestamps,
+      "recordAttempt should capture each mocked Date.now value in sequence",
+    );
+  } finally {
+    Date.now = originalNow;
+  }
+});
+
 test("enqueue stores cloned request with matching data", async () => {
   const store = createRefreshQueueStore();
   const request = createRequest("https://example.test/api?query=1", {
