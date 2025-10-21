@@ -680,20 +680,17 @@ function toSymbolSentinel(symbol: symbol): string {
 }
 
 function getLocalSymbolSentinelIdentifier(symbol: symbol): string {
-  for (const holder of LOCAL_SYMBOL_HOLDERS) {
-    if (holder.symbol === symbol) {
-      const existing = LOCAL_SYMBOL_SENTINEL_REGISTRY.get(holder);
-      if (existing !== undefined) {
-        return existing;
-      }
-    }
+  const existingRecord = LOCAL_SYMBOL_SENTINEL_REGISTRY.get(symbol);
+  if (existingRecord !== undefined) {
+    return existingRecord.identifier;
   }
 
-  const holder: LocalSymbolHolder = { symbol };
   const identifier = nextLocalSymbolSentinelId.toString(36);
   nextLocalSymbolSentinelId += 1;
-  LOCAL_SYMBOL_HOLDERS.push(holder);
-  LOCAL_SYMBOL_SENTINEL_REGISTRY.set(holder, identifier);
+  const description = symbol.description ?? "";
+  const payload = JSON.stringify(["local", identifier, description]);
+  const sentinel = `${SYMBOL_SENTINEL_PREFIX}${payload}`;
+  LOCAL_SYMBOL_SENTINEL_REGISTRY.set(symbol, { identifier, sentinel });
   return identifier;
 }
 
