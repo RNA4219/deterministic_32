@@ -400,28 +400,14 @@ function toMapPropertyKey(
   const bucketTag = mapBucketTypeTag(rawKey);
   const revivedKey = reviveFromSerialized(serializedKey);
   if (rawKey instanceof Date) {
-    const revivedString = typeof revivedKey === "string" ? revivedKey : "";
-    const { key } = getDateSentinelParts(rawKey);
-    const normalizedDateKey =
-      revivedString.startsWith(DATE_SENTINEL_PREFIX) ? revivedString : key;
-    const escapedDateKey =
-      normalizedDateKey === key
-        ? key
-        : escapeSentinelString(normalizedDateKey);
-    return {
-      bucketKey: `${bucketTag}|${escapedDateKey}`,
-      propertyKey: escapedDateKey,
-    };
-  }
-  if (typeof rawKey === "symbol") {
     const propertyKey = toPropertyKeyString(rawKey, revivedKey, serializedKey);
     return {
       bucketKey: `${bucketTag}|${propertyKey}`,
       propertyKey,
     };
   }
-  if (rawKey instanceof RegExp) {
-    const propertyKey = toPropertyKeyString(rawKey, revivedKey, serializedKey);
+  const propertyKey = toPropertyKeyString(rawKey, revivedKey, serializedKey);
+  if (typeof rawKey === "symbol" || rawKey instanceof RegExp) {
     return {
       bucketKey: `${bucketTag}|${propertyKey}`,
       propertyKey,
@@ -429,7 +415,7 @@ function toMapPropertyKey(
   }
   return {
     bucketKey: `${bucketTag}|${serializedKey}`,
-    propertyKey: toPropertyKeyString(rawKey, revivedKey, serializedKey),
+    propertyKey,
   };
 }
 
@@ -669,13 +655,17 @@ function toPropertyKeyString(
   if (
     rawType === "number" ||
     rawType === "bigint" ||
-    rawType === "boolean"
+    rawType === "boolean" ||
+    rawType === "undefined"
   ) {
-    return String(rawKey);
-  }
-
-  if (rawType === "undefined") {
-    return "undefined";
+    const stringifiedPrimitive = String(
+      rawKey as number | bigint | boolean | undefined,
+    );
+    return buildPropertyKeySentinel(
+      rawKey,
+      serializedKey,
+      stringifiedPrimitive,
+    );
   }
 
   if (rawType === "object" || rawType === "function") {
@@ -686,22 +676,7 @@ function toPropertyKeyString(
       stringified = undefined;
     }
 
-    const propertyKeySentinel = buildPropertyKeySentinel(
-      rawKey,
-      serializedKey,
-      stringified,
-    );
-
-    if (typeof revivedKey === "string") {
-      const normalizedRevived = normalizePlainObjectKey(
-        escapeSentinelString(revivedKey),
-      );
-      if (normalizedRevived !== propertyKeySentinel) {
-        return normalizedRevived;
-      }
-    }
-
-    return propertyKeySentinel;
+    return buildPropertyKeySentinel(rawKey, serializedKey, stringified);
   }
 
   if (typeof revivedKey === "string") {
