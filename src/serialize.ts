@@ -58,6 +58,7 @@ const STRING_LITERAL_ESCAPED_SENTINEL_TYPES = new Set<string>([
   "bigint",
   "hole",
   PROPERTY_KEY_SENTINEL_TYPE,
+  "set",
 ]);
 const ARRAY_BUFFER_LIKE_SENTINEL_PREFIXES = [
   `${SENTINEL_PREFIX}typedarray:`,
@@ -339,7 +340,8 @@ function _stringify(v: unknown, stack: Set<unknown>): string {
       return 0;
     });
     const body = entries.map((entry) => entry.serializedValue);
-    const out = "[" + body.join(",") + "]";
+    const payload = "[" + body.join(",") + "]";
+    const out = stringifySentinelLiteral(typeSentinel("set", payload));
     stack.delete(v);
     return out;
   }

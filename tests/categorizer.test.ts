@@ -2520,15 +2520,15 @@ test("map payload remains distinct from plain object with numeric keys", () => {
   );
 });
 
-test("set serialization matches array entries regardless of insertion order", () => {
+test("set serialization matches across insertion order but differs from arrays", () => {
   const c = new Cat32();
   const values = [1, 2, 3];
 
   const setAssignment = c.assign(new Set(values));
   const arrayAssignment = c.assign([...values]);
 
-  assert.equal(setAssignment.key, arrayAssignment.key);
-  assert.equal(setAssignment.hash, arrayAssignment.hash);
+  assert.ok(setAssignment.key !== arrayAssignment.key);
+  assert.ok(setAssignment.hash !== arrayAssignment.hash);
 
   const reorderedSetAssignment = c.assign(new Set([...values].reverse()));
 
