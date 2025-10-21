@@ -1,6 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
+const { performance } = globalThis;
+
 import { Cat32, stableStringify } from "../src/index.js";
 
 test("string literals matching sentinel encodings are escaped", () => {
@@ -151,4 +153,27 @@ test("maps with duplicate-description symbol keys use map-entry sentinel", () =>
   assert.ok(firstString.includes("map-entry-index"));
   assert.ok(secondString.includes("map-entry-index"));
   assert.ok(firstString !== secondString);
+});
+
+test("stable stringify maintains throughput with many duplicate-description symbols", () => {
+  const symbolCount = 25_000;
+  const duplicateDescriptions = 8;
+
+  const symbols = Array.from({ length: symbolCount }, (_, index) =>
+    Symbol(`duplicate-${index % duplicateDescriptions}`),
+  );
+  const set = new Set(symbols);
+
+  const start = performance.now();
+  const serialized = stableStringify(set);
+  const elapsedMs = performance.now() - start;
+
+  const maxElapsedMs = 250;
+  assert.ok(serialized.length > 0);
+  assert.ok(
+    elapsedMs < maxElapsedMs,
+    `stableStringify(${symbolCount} local symbols) exceeded ${maxElapsedMs}ms (${elapsedMs.toFixed(
+      2,
+    )}ms)`,
+  );
 });
