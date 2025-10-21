@@ -676,7 +676,25 @@ function toPropertyKeyString(
       stringified = undefined;
     }
 
-    return buildPropertyKeySentinel(rawKey, serializedKey, stringified);
+    const propertyKeySentinel = buildPropertyKeySentinel(
+      rawKey,
+      serializedKey,
+      stringified,
+    );
+
+    if (typeof revivedKey === "string") {
+      if (needsStringLiteralSentinelEscape(revivedKey)) {
+        return propertyKeySentinel;
+      }
+      const normalizedRevived = normalizePlainObjectKey(
+        escapeSentinelString(revivedKey),
+      );
+      if (normalizedRevived !== propertyKeySentinel) {
+        return normalizedRevived;
+      }
+    }
+
+    return propertyKeySentinel;
   }
 
   if (typeof revivedKey === "string") {
