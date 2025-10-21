@@ -770,6 +770,31 @@ test("Cat32 distinguishes Map symbol keys from string descriptions", () => {
   assert.ok(symbolMapAssignment.hash !== stringMapAssignment.hash);
 });
 
+test(
+  "stableStringify and Cat32 assign distinguish duplicate symbol sentinel collisions",
+  () => {
+    const left = Symbol("dup");
+    const right = Symbol("dup");
+
+    const original = new Map<symbol, string>([
+      [left, "left"],
+      [right, "right"],
+    ]);
+    const swapped = new Map<symbol, string>([
+      [left, "right"],
+      [right, "left"],
+    ]);
+
+    assert.ok(stableStringify(original) !== stableStringify(swapped));
+
+    const cat = new Cat32();
+    const originalAssignment = cat.assign(original);
+    const swappedAssignment = cat.assign(swapped);
+
+    assert.ok(originalAssignment.key !== swappedAssignment.key);
+  },
+);
+
 test("stableStringify distinguishes Map object keys from plain object keys", () => {
   const obj = { foo: 1 };
 
@@ -1042,26 +1067,31 @@ test("Cat32 treats enumerable Symbol keys consistently between objects and maps"
   assert.equal(objectWithSymbol.hash, mapWithSymbol.hash);
 });
 
-test("Cat32 serializes Maps with distinct Symbols sharing descriptions", () => {
-  const cat = new Cat32();
-  const symbolA = Symbol("duplicate");
-  const symbolB = Symbol("duplicate");
+test(
+  "Cat32 assigns Maps with distinct Symbols sharing descriptions uniquely",
+  () => {
+    const cat = new Cat32();
+    const symbolA = Symbol("duplicate");
+    const symbolB = Symbol("duplicate");
 
-  const mapWithDuplicateSymbols = cat.assign(
-    new Map<symbol, string>([
+    const mapWithDuplicateSymbols = new Map<symbol, string>([
       [symbolA, "first"],
       [symbolB, "second"],
-    ]),
-  );
+    ]);
+    const objectWithDuplicateSymbols = {
+      [symbolA]: "first",
+      [symbolB]: "second",
+    };
 
-  const objectWithDuplicateSymbols = cat.assign({
-    [symbolA]: "first",
-    [symbolB]: "second",
-  });
+    const mapAssignment = cat.assign(mapWithDuplicateSymbols);
+    const objectAssignment = cat.assign(objectWithDuplicateSymbols);
 
-  assert.equal(mapWithDuplicateSymbols.key, objectWithDuplicateSymbols.key);
-  assert.equal(mapWithDuplicateSymbols.hash, objectWithDuplicateSymbols.hash);
-});
+    assert.ok(mapAssignment.key !== objectAssignment.key);
+    assert.ok(mapAssignment.hash !== objectAssignment.hash);
+    assert.equal(mapAssignment.key, stableStringify(mapWithDuplicateSymbols));
+    assert.equal(objectAssignment.key, stableStringify(objectWithDuplicateSymbols));
+  },
+);
 
 test("dist entry point exports Cat32", async () => {
   const sourceImportMetaUrl = import.meta.url.includes("/dist/tests/")
