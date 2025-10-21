@@ -31,6 +31,7 @@ canary rules.
 ![lead_time_p95_hours](https://img.shields.io/badge/lead__time__p95__hours-72h-blue)
 ![mttr_p95_minutes](https://img.shields.io/badge/mttr__p95__minutes-60m-blue)
 ![change_failure_rate_max](https://img.shields.io/badge/change__failure__rate__max-0.10-blue)
+![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)
 <!-- markdownlint-enable MD013 -->
 
 > バッジ値は `governance/policy.yaml` の `slo` と同期。更新時は同ファイルの値を修正し、上記3つのバッジ表示を揃える。
@@ -41,3 +42,7 @@ canary rules.
 - fix: 〜 を修正
 - chore/docs: 〜 を整備
 - semver:major/minor/patch ラベルでリリース自動分類
+
+## License
+
+Apache-2.0. Unless noted otherwise, files copied from this repo into other projects remain Apache-2.0 and require retaining NOTICE text in redistributions.
