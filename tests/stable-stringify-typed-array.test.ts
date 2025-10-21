@@ -114,6 +114,79 @@ test("Cat32 assign distinguishes Map with typed array key from serialized key", 
 });
 
 test(
+  "stableStringify and Cat32 assign distinguish Map typed array key from sentinel string key",
+  () => {
+    const cat = new Cat32();
+    const typedArray = new Uint8Array([21, 22]);
+    const mapWithTypedKey = new Map([[typedArray, 1]]);
+    const sentinelKey = JSON.parse(stableStringify(typedArray));
+    const mapWithSentinelKey = new Map([[sentinelKey, 1]]);
+
+    assert.ok(
+      stableStringify(mapWithTypedKey) !==
+        stableStringify(mapWithSentinelKey),
+    );
+
+    const typedAssignment = cat.assign(mapWithTypedKey);
+    const sentinelAssignment = cat.assign(mapWithSentinelKey);
+
+    assert.ok(typedAssignment.key !== sentinelAssignment.key);
+    assert.ok(typedAssignment.hash !== sentinelAssignment.hash);
+  },
+);
+
+test(
+  "stableStringify and Cat32 assign distinguish Map ArrayBuffer key from sentinel string key",
+  () => {
+    const cat = new Cat32();
+    const arrayBuffer = new Uint8Array([23, 24]).buffer;
+    const mapWithBufferKey = new Map([[arrayBuffer, 1]]);
+    const sentinelKey = JSON.parse(stableStringify(arrayBuffer));
+    const mapWithSentinelKey = new Map([[sentinelKey, 1]]);
+
+    assert.ok(
+      stableStringify(mapWithBufferKey) !==
+        stableStringify(mapWithSentinelKey),
+    );
+
+    const bufferAssignment = cat.assign(mapWithBufferKey);
+    const sentinelAssignment = cat.assign(mapWithSentinelKey);
+
+    assert.ok(bufferAssignment.key !== sentinelAssignment.key);
+    assert.ok(bufferAssignment.hash !== sentinelAssignment.hash);
+  },
+);
+
+test(
+  "stableStringify and Cat32 assign distinguish Map SharedArrayBuffer key from sentinel string key",
+  () => {
+    if (typeof SharedArrayBuffer !== "function") {
+      assert.ok(true, "SharedArrayBuffer unavailable in this runtime");
+      return;
+    }
+
+    const cat = new Cat32();
+    const shared = new SharedArrayBuffer(4);
+    const view = new Uint8Array(shared);
+    view.set([25, 26, 27, 28]);
+    const mapWithSharedKey = new Map([[shared, 1]]);
+    const sentinelKey = JSON.parse(stableStringify(shared));
+    const mapWithSentinelKey = new Map([[sentinelKey, 1]]);
+
+    assert.ok(
+      stableStringify(mapWithSharedKey) !==
+        stableStringify(mapWithSentinelKey),
+    );
+
+    const sharedAssignment = cat.assign(mapWithSharedKey);
+    const sentinelAssignment = cat.assign(mapWithSentinelKey);
+
+    assert.ok(sharedAssignment.key !== sentinelAssignment.key);
+    assert.ok(sharedAssignment.hash !== sentinelAssignment.hash);
+  },
+);
+
+test(
   "Cat32 assign distinguishes Map typed array key collision with sentinel string",
   () => {
     const cat = new Cat32();

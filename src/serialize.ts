@@ -692,6 +692,9 @@ function toPropertyKeyString(
     );
 
     if (typeof revivedKey === "string") {
+      if (needsStringLiteralSentinelEscape(revivedKey)) {
+        return propertyKeySentinel;
+      }
       const normalizedRevived = normalizePlainObjectKey(
         escapeSentinelString(revivedKey),
       );
