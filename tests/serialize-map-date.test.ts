@@ -57,3 +57,20 @@ test("Cat32.assign uses invalid sentinel for Map invalid Date keys", () => {
   assert.equal(assignment.key, serialized);
   assert.deepEqual(JSON.parse(assignment.key), { [expectedKey]: "v" });
 });
+
+test("Map Date key canonical key differs from __string__ Date sentinel", () => {
+  const date = new Date("2020-01-01T00:00:00Z");
+  const dateMap = new Map([[date, 1]]);
+  const stringKey = `__string__:__date__:${date.toISOString()}`;
+  const stringMap = new Map([[stringKey, 1]]);
+
+  const cat = new Cat32();
+  const dateAssignment = cat.assign(dateMap);
+  const stringAssignment = cat.assign(stringMap);
+
+  assert.ok(dateAssignment.key !== stringAssignment.key);
+  assert.ok(dateAssignment.hash !== stringAssignment.hash);
+  assert.deepEqual(JSON.parse(stringAssignment.key), {
+    [`__string__:${stringKey}`]: 1,
+  });
+});

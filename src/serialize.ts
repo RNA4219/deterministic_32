@@ -428,6 +428,16 @@ function normalizeStringLiteral(value: string): string {
     if (needsStringLiteralSentinelEscape(value)) {
       return `${STRING_LITERAL_SENTINEL_PREFIX}${value}`;
     }
+
+    let innerValue = value.slice(STRING_LITERAL_SENTINEL_PREFIX.length);
+    while (innerValue.startsWith(STRING_LITERAL_SENTINEL_PREFIX)) {
+      innerValue = innerValue.slice(STRING_LITERAL_SENTINEL_PREFIX.length);
+    }
+
+    if (needsNestedStringLiteralSentinelEscape(innerValue)) {
+      return `${STRING_LITERAL_SENTINEL_PREFIX}${value}`;
+    }
+
     return value;
   }
 
@@ -436,6 +446,10 @@ function normalizeStringLiteral(value: string): string {
   }
 
   return value;
+}
+
+function needsNestedStringLiteralSentinelEscape(value: string): boolean {
+  return value.startsWith(DATE_SENTINEL_PREFIX);
 }
 
 function hasArrayBufferLikeSentinelPrefix(value: string): boolean {
