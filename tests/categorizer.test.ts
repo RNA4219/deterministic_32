@@ -1093,6 +1093,34 @@ test(
   },
 );
 
+test(
+  "stableStringify distinguishes swapped Map values for duplicate Symbol descriptions",
+  () => {
+    const cat = new Cat32();
+    const left = Symbol("duplicate");
+    const right = Symbol("duplicate");
+
+    const original = new Map<symbol, string>([
+      [left, "left"],
+      [right, "right"],
+    ]);
+    const swapped = new Map<symbol, string>([
+      [left, "right"],
+      [right, "left"],
+    ]);
+
+    const originalSerialized = stableStringify(original);
+    const swappedSerialized = stableStringify(swapped);
+
+    assert.ok(originalSerialized !== swappedSerialized);
+
+    const originalAssignment = cat.assign(original);
+    const swappedAssignment = cat.assign(swapped);
+
+    assert.ok(originalAssignment.key !== swappedAssignment.key);
+  },
+);
+
 test("dist entry point exports Cat32", async () => {
   const sourceImportMetaUrl = import.meta.url.includes("/dist/tests/")
     ? new URL("../../tests/categorizer.test.ts", import.meta.url)

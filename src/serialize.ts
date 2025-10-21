@@ -20,7 +20,12 @@ const MAP_ENTRY_INDEX_SENTINEL_SEGMENT = `${SENTINEL_PREFIX}map-entry-index:`;
 const HEX_DIGITS = "0123456789abcdef";
 const PROPERTY_KEY_SENTINEL_TYPE = "propertykey";
 
-const LOCAL_SYMBOL_SENTINEL_REGISTRY = new Map<symbol, string>();
+type LocalSymbolSentinelRecord = {
+  identifier: string;
+  sentinel: string;
+};
+
+const LOCAL_SYMBOL_SENTINEL_REGISTRY = new Map<symbol, LocalSymbolSentinelRecord>();
 let nextLocalSymbolSentinelId = 0;
 
 const STRING_LITERAL_ESCAPED_SENTINEL_TYPES = new Set<string>([
@@ -639,15 +644,17 @@ function toSymbolSentinel(symbol: symbol): string {
     const payload = JSON.stringify(["global", globalKey]);
     return `${SYMBOL_SENTINEL_PREFIX}${payload}`;
   }
-  let identifier = LOCAL_SYMBOL_SENTINEL_REGISTRY.get(symbol);
-  if (identifier === undefined) {
-    identifier = nextLocalSymbolSentinelId.toString(36);
-    nextLocalSymbolSentinelId += 1;
-    LOCAL_SYMBOL_SENTINEL_REGISTRY.set(symbol, identifier);
+  const existing = LOCAL_SYMBOL_SENTINEL_REGISTRY.get(symbol);
+  if (existing) {
+    return existing.sentinel;
   }
+  const identifier = nextLocalSymbolSentinelId.toString(36);
+  nextLocalSymbolSentinelId += 1;
   const description = symbol.description ?? "";
   const payload = JSON.stringify(["local", identifier, description]);
-  return `${SYMBOL_SENTINEL_PREFIX}${payload}`;
+  const sentinel = `${SYMBOL_SENTINEL_PREFIX}${payload}`;
+  LOCAL_SYMBOL_SENTINEL_REGISTRY.set(symbol, { identifier, sentinel });
+  return sentinel;
 }
 
 function toPropertyKeyString(
