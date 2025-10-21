@@ -200,13 +200,7 @@ function readStdin(): Promise<string> {
       }
       settled = true;
       cleanup();
-      let finalData = data;
-      if (finalData.endsWith("\r\n")) {
-        finalData = finalData.slice(0, -2);
-      } else if (finalData.endsWith("\n")) {
-        finalData = finalData.slice(0, -1);
-      }
-      resolve(finalData);
+      resolve(data);
     }
 
     function onData(chunk: string) {
