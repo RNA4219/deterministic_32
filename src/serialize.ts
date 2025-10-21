@@ -421,6 +421,9 @@ function stringifyStringLiteral(value: string): string {
 
 function normalizeStringLiteral(value: string): string {
   if (value.startsWith(STRING_LITERAL_SENTINEL_PREFIX)) {
+    if (needsStringLiteralSentinelEscape(value)) {
+      return `${STRING_LITERAL_SENTINEL_PREFIX}${value}`;
+    }
     return value;
   }
 
