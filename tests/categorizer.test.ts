@@ -1431,6 +1431,45 @@ test("Cat32 salt namespace options avoid literal collision", () => {
   assert.ok(literal.hash !== namespaced.hash);
 });
 
+test("salt/namespace combinations yield distinct canonical key/hash pairs", () => {
+  const input = { value: "payload" };
+  const baseCanonicalKey = new Cat32().assign(input).key;
+
+  const combinations = [
+    { name: "default", options: {} },
+    { name: "namespace empty", options: { namespace: "" } },
+    { name: "salt only", options: { salt: "salt-value" } },
+    { name: "salt with empty namespace", options: { salt: "salt-value", namespace: "" } },
+    { name: "namespace provided", options: { namespace: "namespace-value" } },
+    { name: "salt and namespace provided", options: { salt: "salt-value", namespace: "namespace-value" } },
+  ];
+
+  const seenPairs = new Map<string, string>();
+  const seenHashes = new Map<string, string>();
+
+  for (const { name, options } of combinations) {
+    const assignment = new Cat32(options).assign(input);
+    assert.equal(assignment.key, baseCanonicalKey);
+
+    const pair = `${assignment.key}|${assignment.hash}`;
+    const previousPair = seenPairs.get(pair);
+    assert.equal(
+      previousPair,
+      undefined,
+      `combination "${name}" reuses canonical key/hash from "${previousPair}"`,
+    );
+    seenPairs.set(pair, name);
+
+    const previousHash = seenHashes.get(assignment.hash);
+    assert.equal(
+      previousHash,
+      undefined,
+      `combination "${name}" reuses hash from "${previousHash}"`,
+    );
+    seenHashes.set(assignment.hash, name);
+  }
+});
+
 test("canonical key encodes undefined sentinel", () => {
   const c = new Cat32();
   const assignment = c.assign({ value: undefined });
