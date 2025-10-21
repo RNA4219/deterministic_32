@@ -140,7 +140,7 @@ async function main() {
   }
   const key = args._;
   const salt = typeof args.salt === "string" ? args.salt : "";
-  const namespace = typeof args.namespace === "string" ? args.namespace : "";
+  const namespace = typeof args.namespace === "string" ? args.namespace : undefined;
   const normalize = parseNormalizeOption(
     typeof args.normalize === "string" ? args.normalize : undefined,
   );

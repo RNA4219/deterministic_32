@@ -187,16 +187,14 @@ function deriveSaltedKey(
   options?: Pick<CategorizerOptions, "salt" | "namespace">,
 ): string {
   const baseSalt = options?.salt ?? "";
-  const namespaceValue =
-    options?.namespace !== undefined && options.namespace !== ""
-      ? options.namespace
-      : undefined;
+  const namespaceValue = options?.namespace;
+  const hasNamespace = namespaceValue !== undefined;
 
-  if (!baseSalt && namespaceValue === undefined) {
+  if (!baseSalt && !hasNamespace) {
     return key;
   }
 
-  if (namespaceValue === undefined) {
+  if (!hasNamespace) {
     return `${key}|salt:${baseSalt}`;
   }
 

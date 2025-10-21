@@ -26,7 +26,7 @@ const DEFAULT_LABELS = [
 export class Cat32 {
   private labels: string[];
   private salt: string;
-  private namespaceValue?: string;
+  private saltNamespaceEncoding?: string;
   private normalize: NormalizeMode;
   private overrides: Map<string, number>;
 
@@ -36,10 +36,15 @@ export class Cat32 {
       throw new RangeError("labels length must be 32");
     }
     this.salt = opts.salt ?? "";
-    this.namespaceValue =
-      opts.namespace !== undefined && opts.namespace !== ""
-        ? opts.namespace
-        : undefined;
+    const namespaceValue = opts.namespace;
+    if (!this.salt && namespaceValue === undefined) {
+      this.saltNamespaceEncoding = undefined;
+    } else if (namespaceValue === undefined) {
+      this.saltNamespaceEncoding = `|salt:${this.salt}`;
+    } else {
+      const encoded = JSON.stringify([this.salt, namespaceValue]);
+      this.saltNamespaceEncoding = `|saltns:${encoded}`;
+    }
 
     const normalize = opts.normalize ?? "nfkc";
     if (normalize !== "none" && normalize !== "nfc" && normalize !== "nfkc" && normalize !== "nfkd") {
@@ -84,16 +89,11 @@ export class Cat32 {
   }
 
   private salted(s: string): string {
-    if (!this.salt && this.namespaceValue === undefined) {
+    if (this.saltNamespaceEncoding === undefined) {
       return s;
     }
 
-    if (this.namespaceValue === undefined) {
-      return `${s}|salt:${this.salt}`;
-    }
-
-    const encoded = JSON.stringify([this.salt, this.namespaceValue]);
-    return `${s}|saltns:${encoded}`;
+    return `${s}${this.saltNamespaceEncoding}`;
   }
 
   private canonicalKey(input: unknown): string {
