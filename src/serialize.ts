@@ -25,6 +25,7 @@ const STRING_LITERAL_ESCAPED_SENTINEL_TYPES = new Set<string>([
   "sharedarraybuffer",
   "number",
   "bigint",
+  "hole",
 ]);
 const ARRAY_BUFFER_LIKE_SENTINEL_PREFIXES = [
   `${SENTINEL_PREFIX}typedarray:`,

@@ -209,19 +209,23 @@ test("stableStringify distinguishes symbol keys from their string descriptions",
 });
 
 test(
-  "stableStringify distinguishes prefixed string literals from hole sentinels",
+  "stableStringify escapes hole sentinels without colliding with sparse arrays",
   () => {
     const prefixedLiteral = `__string__:${typeSentinel("hole")}`;
     const sentinelLiteral = typeSentinel("hole");
+    const holeSentinelLiteral = typeSentinel("hole", "__hole__");
     const sparseArray = new Array(1);
 
     const prefixedResult = stableStringify([prefixedLiteral]);
     const sentinelResult = stableStringify([sentinelLiteral]);
+    const holeSentinelResult = stableStringify([holeSentinelLiteral]);
     const sparseResult = stableStringify(sparseArray);
 
-    assert.ok(prefixedResult !== sentinelResult);
+    assert.equal(prefixedResult, sentinelResult);
     assert.ok(prefixedResult !== sparseResult);
     assert.ok(sentinelResult !== sparseResult);
+    assert.ok(holeSentinelResult !== sparseResult);
+    assert.ok(holeSentinelResult !== prefixedResult);
   },
 );
 
@@ -288,23 +292,27 @@ test("Cat32 assign keeps literal sentinel-like keys distinct from NaN", () => {
 });
 
 test(
-  "Cat32 assign keeps prefixed string literals distinct from hole sentinels",
+  "Cat32 assign keeps hole sentinel literals distinct from sparse array holes",
   () => {
     const categorizer = new Cat32();
     const prefixedLiteral = `__string__:${typeSentinel("hole")}`;
     const sentinelLiteral = typeSentinel("hole");
+    const holeSentinelLiteral = typeSentinel("hole", "__hole__");
     const sparseArray = new Array(1);
 
     const prefixedAssignment = categorizer.assign([prefixedLiteral]);
     const sentinelAssignment = categorizer.assign([sentinelLiteral]);
+    const holeSentinelAssignment = categorizer.assign([holeSentinelLiteral]);
     const sparseAssignment = categorizer.assign(sparseArray);
 
-    assert.ok(prefixedAssignment.key !== sentinelAssignment.key);
+    assert.equal(prefixedAssignment.key, sentinelAssignment.key);
+    assert.equal(prefixedAssignment.hash, sentinelAssignment.hash);
     assert.ok(prefixedAssignment.key !== sparseAssignment.key);
-    assert.ok(sentinelAssignment.key !== sparseAssignment.key);
-    assert.ok(prefixedAssignment.hash !== sentinelAssignment.hash);
     assert.ok(prefixedAssignment.hash !== sparseAssignment.hash);
-    assert.ok(sentinelAssignment.hash !== sparseAssignment.hash);
+    assert.ok(holeSentinelAssignment.key !== sparseAssignment.key);
+    assert.ok(holeSentinelAssignment.hash !== sparseAssignment.hash);
+    assert.ok(holeSentinelAssignment.key !== prefixedAssignment.key);
+    assert.ok(holeSentinelAssignment.hash !== prefixedAssignment.hash);
   },
 );
 
@@ -374,28 +382,34 @@ test(
 
     const prefixedLiteral = `__string__:${typeSentinel("hole")}`;
     const sentinelLiteral = typeSentinel("hole");
+    const holeSentinelLiteral = typeSentinel("hole", "__hole__");
     const sparseArray = new Array(1);
 
     const prefixedKey = distStableStringify([prefixedLiteral]);
     const sentinelKey = distStableStringify([sentinelLiteral]);
+    const holeSentinelKey = distStableStringify([holeSentinelLiteral]);
     const sparseKey = distStableStringify(sparseArray);
 
-    assert.ok(prefixedKey !== sentinelKey);
+    assert.equal(prefixedKey, sentinelKey);
     assert.ok(prefixedKey !== sparseKey);
     assert.ok(sentinelKey !== sparseKey);
+    assert.ok(holeSentinelKey !== sparseKey);
+    assert.ok(holeSentinelKey !== prefixedKey);
 
     const categorizer = new DistCat32();
     const prefixedAssignment = categorizer.assign([prefixedLiteral]);
     const sentinelAssignment = categorizer.assign([sentinelLiteral]);
+    const holeSentinelAssignment = categorizer.assign([holeSentinelLiteral]);
     const sparseAssignment = categorizer.assign(sparseArray);
 
-    assert.ok(prefixedAssignment.key !== sentinelAssignment.key);
+    assert.equal(prefixedAssignment.key, sentinelAssignment.key);
+    assert.equal(prefixedAssignment.hash, sentinelAssignment.hash);
     assert.ok(prefixedAssignment.key !== sparseAssignment.key);
-    assert.ok(sentinelAssignment.key !== sparseAssignment.key);
-
-    assert.ok(prefixedAssignment.hash !== sentinelAssignment.hash);
     assert.ok(prefixedAssignment.hash !== sparseAssignment.hash);
-    assert.ok(sentinelAssignment.hash !== sparseAssignment.hash);
+    assert.ok(holeSentinelAssignment.key !== sparseAssignment.key);
+    assert.ok(holeSentinelAssignment.hash !== sparseAssignment.hash);
+    assert.ok(holeSentinelAssignment.key !== prefixedAssignment.key);
+    assert.ok(holeSentinelAssignment.hash !== prefixedAssignment.hash);
   },
 );
 
