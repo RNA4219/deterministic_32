@@ -17,6 +17,14 @@ const REGEXP_SENTINEL_TYPE = "regexp";
 const MAP_ENTRY_INDEX_LITERAL_SEGMENT =
   `${STRING_LITERAL_SENTINEL_PREFIX}${SENTINEL_PREFIX}map-entry-index:`;
 const HEX_DIGITS = "0123456789abcdef";
+const STRING_LITERAL_ESCAPED_SENTINEL_TYPES = new Set<string>([
+  REGEXP_SENTINEL_TYPE,
+  "typedarray",
+  "arraybuffer",
+  "sharedarraybuffer",
+  "number",
+  "bigint",
+]);
 const ARRAY_BUFFER_LIKE_SENTINEL_PREFIXES = [
   `${SENTINEL_PREFIX}typedarray:`,
   `${SENTINEL_PREFIX}arraybuffer:`,
@@ -461,12 +469,7 @@ function needsStringLiteralSentinelEscape(value: string): boolean {
     const separatorIndex = inner.indexOf(":");
     if (separatorIndex !== -1) {
       const type = inner.slice(0, separatorIndex);
-      if (
-        type === REGEXP_SENTINEL_TYPE ||
-        type === "typedarray" ||
-        type === "arraybuffer" ||
-        type === "sharedarraybuffer"
-      ) {
+      if (STRING_LITERAL_ESCAPED_SENTINEL_TYPES.has(type)) {
         return true;
       }
     }

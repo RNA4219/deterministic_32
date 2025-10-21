@@ -190,9 +190,12 @@ test("stableStringify preserves prefixed sentinel string literal content", () =>
   assert.equal(stableStringify(value), JSON.stringify(value));
 });
 
-test("stableStringify matches JSON.stringify for sentinel-like string literals", () => {
+test("stableStringify escapes sentinel-like string literals", () => {
   const sentinelLike = "\u0000cat32:number:Infinity\u0000";
-  assert.equal(stableStringify(sentinelLike), JSON.stringify(sentinelLike));
+  assert.equal(
+    stableStringify(sentinelLike),
+    JSON.stringify(`__string__:${sentinelLike}`),
+  );
 });
 
 test("stableStringify distinguishes symbol keys from their string descriptions", () => {
@@ -251,10 +254,13 @@ test("Cat32 assign key preserves prefixed sentinel string literal content", () =
   assert.equal(assignment.key, JSON.stringify(value));
 });
 
-test("Cat32 assign key matches JSON.stringify for sentinel-like string literals", () => {
+test("Cat32 assign escapes sentinel-like string literal keys", () => {
   const sentinelLike = "\u0000cat32:number:Infinity\u0000";
   const assignment = new Cat32().assign(sentinelLike);
-  assert.equal(assignment.key, JSON.stringify(sentinelLike));
+  assert.equal(
+    assignment.key,
+    JSON.stringify(`__string__:${sentinelLike}`),
+  );
 });
 
 test("Cat32 assign differentiates sentinel key from literal NaN key", () => {
@@ -312,8 +318,8 @@ test("Cat32 assign treats prefixed literal strings as distinct from NaN", () => 
 
   assert.ok(literalAssignment.key !== nanAssignment.key);
   assert.ok(literalAssignment.hash !== nanAssignment.hash);
-  assert.ok(literalAssignment.key !== sentinelAssignment.key);
-  assert.ok(literalAssignment.hash !== sentinelAssignment.hash);
+  assert.equal(literalAssignment.key, sentinelAssignment.key);
+  assert.equal(literalAssignment.hash, sentinelAssignment.hash);
 });
 
 test("dist stableStringify handles Map bucket ordering", async () => {
@@ -1800,14 +1806,18 @@ test("Infinity serialized distinctly from string sentinel", () => {
   assert.equal(infinityAssignment.hash === sentinelAssignment.hash, false);
 });
 
-test("raw number sentinel string matches Infinity value", () => {
+test("raw number sentinel string remains distinct from Infinity value", () => {
   const c = new Cat32();
   const sentinelLiteral = typeSentinel("number", "Infinity");
   const sentinelAssignment = c.assign(sentinelLiteral);
   const infinityAssignment = c.assign(Infinity);
 
-  assert.equal(sentinelAssignment.key, infinityAssignment.key);
-  assert.equal(sentinelAssignment.hash, infinityAssignment.hash);
+  assert.ok(sentinelAssignment.key !== infinityAssignment.key);
+  assert.ok(sentinelAssignment.hash !== infinityAssignment.hash);
+  assert.equal(
+    sentinelAssignment.key,
+    JSON.stringify(`__string__:${sentinelLiteral}`),
+  );
 });
 
 test("top-level bigint differs from number", () => {
