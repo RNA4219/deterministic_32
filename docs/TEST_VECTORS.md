@@ -59,3 +59,17 @@ FNV-1a32 over UTF-8 for salted key `{"id":123,"tags":["a","b"]}|saltns:["projX",
 - index = `23`
 
 **Note:** Different key order → same canonical string → same hash/index.
+
+### Sentinel examples (TypedArray / ArrayBuffer)
+
+```
+stableStringify(new Uint8Array([1, 2, 3]))
+→ "\"\\u0000cat32:typedarray:kind=Uint8Array;byteOffset=0;byteLength=3;length=3;hex=010203\\u0000\""
+
+stableStringify(new ArrayBuffer(2))
+→ "\"\\u0000cat32:arraybuffer:byteLength=2;hex=0000\\u0000\""
+
+// SharedArrayBuffer はランタイムがサポートしている場合に限り利用可能。
+stableStringify(new SharedArrayBuffer(2))
+→ "\"\\u0000cat32:sharedarraybuffer:byteLength=2;hex=0000\\u0000\""
+```
