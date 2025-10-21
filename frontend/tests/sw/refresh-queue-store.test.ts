@@ -183,3 +183,31 @@ test("retryQueueEntry records failure metadata and preserves entry", async () =>
   assert.equal(record.lastError, error, "recordFailure should store the thrown error");
   assert.ok(record.failedAt instanceof Date, "failure timestamp should be saved");
 });
+
+test("retryQueueEntry resolves with attempt result and removes entry on success", async () => {
+  const store = createRefreshQueueStore();
+  const request = new RequestCtor("https://example.test/refresh", { method: "PATCH" });
+  const { id } = store.enqueue(request);
+
+  const attemptResult = { status: "ok" };
+
+  const result = await retryQueueEntry(store, id, async () => {
+    const recordDuringAttempt = store.get(id);
+    if (!recordDuringAttempt) {
+      throw new Error("record should exist during successful attempt");
+    }
+    assert.equal(
+      recordDuringAttempt.attempts,
+      1,
+      "recordAttempt should increment attempts before running attempt",
+    );
+    assert.ok(
+      recordDuringAttempt.lastAttemptedAt instanceof Date,
+      "recordAttempt should set lastAttemptedAt before attempt resolves",
+    );
+    return attemptResult;
+  });
+
+  assert.equal(result, attemptResult, "retryQueueEntry should resolve with attempt result");
+  assert.equal(store.get(id), undefined, "recordSuccess should remove the successful record");
+});
