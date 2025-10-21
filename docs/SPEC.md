@@ -38,7 +38,13 @@ input (unknown)
   - **循環参照**を検出したら **`TypeError("Cyclic object")`** を投げる。
 - 実装ノート:
   - JSON表現は**ASCIIエスケープ不要**（UTF‑8運用を前提）。
-  - TypedArray/ArrayBuffer等は**`String(v)`** か実装外とし、必要なら将来の拡張（`namespace`切替）で対応。
+  - **TypedArray**: `"\u0000cat32:typedarray:kind=<ViewName>;byteOffset=<n>;byteLength=<n>;length=<len?>;hex=<bytes>\u0000"`
+    - `length` パラメータは `view.length` が存在する場合のみ付与。
+    - バイト列は **16進小文字** (`00`-`ff`) で連結し、センチネル末尾 `\u0000` を付ける。
+  - **ArrayBuffer**: `"\u0000cat32:arraybuffer:byteLength=<n>;hex=<bytes>\u0000"`
+  - **SharedArrayBuffer**: `"\u0000cat32:sharedarraybuffer:byteLength=<n>;hex=<bytes>\u0000"`
+    - ArrayBuffer/SharedArrayBuffer の各バイトも TypedArray と同様に 16進列へ変換。
+  - 上記センチネル文字列は `stableStringify` が JSON 文字列として返し、`JSON.parse` するとセンチネル本体を得る。
 
 ## 5. ハッシュ（FNV‑1a 32-bit）
 - 定数: `offset = 0x811C9DC5`、`prime = 0x01000193`。

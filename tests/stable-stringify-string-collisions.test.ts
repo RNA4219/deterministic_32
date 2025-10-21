@@ -110,31 +110,45 @@ test("local symbols with identical descriptions remain distinct", () => {
   assert.ok(stableStringify(setWithFirst) !== stableStringify(setWithSecond));
 });
 
-test("cat assign distinguishes local symbols sharing descriptions", () => {
+test("sets with duplicate-description symbols remain distinguishable", () => {
   const cat = new Cat32();
   const description = "duplicate";
 
-  const first = Symbol(description);
-  const second = Symbol(description);
+  const firstPair = new Set([Symbol(description), Symbol(description)]);
+  const secondPair = new Set([Symbol(description), Symbol(description)]);
 
-  const firstSymbolAssignment = cat.assign(first);
-  const secondSymbolAssignment = cat.assign(second);
+  const firstAssignment = cat.assign(firstPair);
+  const secondAssignment = cat.assign(secondPair);
 
-  assert.ok(firstSymbolAssignment.key !== secondSymbolAssignment.key);
-  assert.ok(firstSymbolAssignment.hash !== secondSymbolAssignment.hash);
+  assert.ok(firstAssignment.key !== secondAssignment.key);
+  assert.ok(firstAssignment.hash !== secondAssignment.hash);
 
-  const firstSetAssignment = cat.assign(new Set([first]));
-  const secondSetAssignment = cat.assign(new Set([second]));
+  assert.ok(stableStringify(firstPair) !== stableStringify(secondPair));
+});
 
-  assert.ok(firstSetAssignment.key !== secondSetAssignment.key);
-  assert.ok(firstSetAssignment.hash !== secondSetAssignment.hash);
+test("maps with duplicate-description symbol keys use map-entry sentinel", () => {
+  const cat = new Cat32();
+  const description = "duplicate";
 
-  assert.ok(
-    firstSetAssignment.key === stableStringify(new Set([first])),
-    "set canonical key should match stable stringify output",
-  );
-  assert.ok(
-    secondSetAssignment.key === stableStringify(new Set([second])),
-    "set canonical key should match stable stringify output",
-  );
+  const firstMap = new Map([
+    [Symbol(description), 1],
+    [Symbol(description), 2],
+  ]);
+  const secondMap = new Map([
+    [Symbol(description), 1],
+    [Symbol(description), 2],
+  ]);
+
+  const firstAssignment = cat.assign(firstMap);
+  const secondAssignment = cat.assign(secondMap);
+
+  assert.ok(firstAssignment.key !== secondAssignment.key);
+  assert.ok(firstAssignment.hash !== secondAssignment.hash);
+
+  const firstString = stableStringify(firstMap);
+  const secondString = stableStringify(secondMap);
+
+  assert.ok(firstString.includes("map-entry-index"));
+  assert.ok(secondString.includes("map-entry-index"));
+  assert.ok(firstString !== secondString);
 });
