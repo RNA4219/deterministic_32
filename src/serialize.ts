@@ -22,23 +22,73 @@ const HEX_DIGITS = "0123456789abcdef";
 const PROPERTY_KEY_SENTINEL_TYPE = "propertykey";
 const MAP_SENTINEL_TYPE = "map";
 
+type SymbolObject = symbol & object;
+
+type LocalSymbolFinalizerHolder = {
+  ref: WeakRef<SymbolObject>;
+};
+
 type LocalSymbolSentinelRecord = {
   identifier: string;
   sentinel: string;
+  finalizerHolder?: LocalSymbolFinalizerHolder;
 };
 
-const LOCAL_SYMBOL_SENTINEL_REGISTRY = new Map<symbol, LocalSymbolSentinelRecord>();
+const HAS_WEAK_REFS = typeof WeakRef === "function";
+const HAS_FINALIZATION_REGISTRY = typeof FinalizationRegistry === "function";
+
+const LOCAL_SYMBOL_SENTINELS = new WeakMap<SymbolObject, LocalSymbolSentinelRecord>();
+const LOCAL_SYMBOL_IDENTIFIER_INDEX =
+  HAS_WEAK_REFS && HAS_FINALIZATION_REGISTRY
+    ? new Map<string, WeakRef<SymbolObject>>()
+    : undefined;
+const LOCAL_SYMBOL_FINALIZER =
+  HAS_WEAK_REFS && HAS_FINALIZATION_REGISTRY
+    ? new FinalizationRegistry<string>((identifier) => {
+        LOCAL_SYMBOL_IDENTIFIER_INDEX?.delete(identifier);
+      })
+    : undefined;
+
 let nextLocalSymbolSentinelId = 0;
 
-function getLocalSymbolSentinelIdentifier(symbol: symbol): string | undefined {
-  return LOCAL_SYMBOL_SENTINEL_REGISTRY.get(symbol);
+function toSymbolObject(symbol: symbol): SymbolObject {
+  return symbol as SymbolObject;
 }
 
-function setLocalSymbolSentinelIdentifier(
+function getLocalSymbolSentinelRecord(
   symbol: symbol,
-  identifier: string,
-): void {
-  LOCAL_SYMBOL_SENTINEL_REGISTRY.set(symbol, identifier);
+): LocalSymbolSentinelRecord {
+  const symbolObject = toSymbolObject(symbol);
+  const existing = LOCAL_SYMBOL_SENTINELS.get(symbolObject);
+  if (existing !== undefined) {
+    return existing;
+  }
+
+  const identifier = nextLocalSymbolSentinelId.toString(36);
+  nextLocalSymbolSentinelId += 1;
+  const description = symbol.description ?? "";
+  const payload = JSON.stringify(["local", identifier, description]);
+  const sentinel = `${SYMBOL_SENTINEL_PREFIX}${payload}`;
+
+  const record: LocalSymbolSentinelRecord = { identifier, sentinel };
+
+  if (
+    LOCAL_SYMBOL_IDENTIFIER_INDEX !== undefined &&
+    LOCAL_SYMBOL_FINALIZER !== undefined
+  ) {
+    const ref = new WeakRef(symbolObject);
+    const holder: LocalSymbolFinalizerHolder = { ref };
+    LOCAL_SYMBOL_IDENTIFIER_INDEX.set(identifier, ref);
+    LOCAL_SYMBOL_FINALIZER.register(holder, identifier);
+    record.finalizerHolder = holder;
+  }
+
+  LOCAL_SYMBOL_SENTINELS.set(symbolObject, record);
+  return record;
+}
+
+function getLocalSymbolSentinelIdentifier(symbol: symbol): string {
+  return getLocalSymbolSentinelRecord(symbol).identifier;
 }
 
 function getSymbolBucketKey(symbol: symbol): string {
@@ -47,8 +97,7 @@ function getSymbolBucketKey(symbol: symbol): string {
   if (globalKey !== undefined) {
     return `global:${globalKey}`;
   }
-  const description = symbol.description ?? "";
-  return `local:${description}`;
+  return `local:${getLocalSymbolSentinelIdentifier(symbol)}`;
 }
 
 const STRING_LITERAL_ESCAPED_SENTINEL_TYPES = new Set<string>([
@@ -700,34 +749,7 @@ function toSymbolSentinel(symbol: symbol): string {
     const payload = JSON.stringify(["global", globalKey]);
     return `${SYMBOL_SENTINEL_PREFIX}${payload}`;
   }
-  let identifier = getLocalSymbolSentinelIdentifier(symbol);
-  if (identifier === undefined) {
-    identifier = nextLocalSymbolSentinelId.toString(36);
-    nextLocalSymbolSentinelId += 1;
-    setLocalSymbolSentinelIdentifier(symbol, identifier);
-  }
-  const identifier = nextLocalSymbolSentinelId.toString(36);
-  nextLocalSymbolSentinelId += 1;
-  const description = symbol.description ?? "";
-  const payload = JSON.stringify(["local", identifier, description]);
-  const sentinel = `${SYMBOL_SENTINEL_PREFIX}${payload}`;
-  LOCAL_SYMBOL_SENTINEL_REGISTRY.set(symbol, { identifier, sentinel });
-  return sentinel;
-}
-
-function getLocalSymbolSentinelIdentifier(symbol: symbol): string {
-  const existingRecord = LOCAL_SYMBOL_SENTINEL_REGISTRY.get(symbol);
-  if (existingRecord !== undefined) {
-    return existingRecord.identifier;
-  }
-
-  const identifier = nextLocalSymbolSentinelId.toString(36);
-  nextLocalSymbolSentinelId += 1;
-  const description = symbol.description ?? "";
-  const payload = JSON.stringify(["local", identifier, description]);
-  const sentinel = `${SYMBOL_SENTINEL_PREFIX}${payload}`;
-  LOCAL_SYMBOL_SENTINEL_REGISTRY.set(symbol, { identifier, sentinel });
-  return identifier;
+  return getLocalSymbolSentinelRecord(symbol).sentinel;
 }
 
 function getSymbolSortKey(symbol: symbol): string {
