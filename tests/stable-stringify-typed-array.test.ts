@@ -112,3 +112,30 @@ test("Cat32 assign distinguishes Map with typed array key from serialized key", 
   assert.ok(typedAssignment.key !== stringAssignment.key);
   assert.ok(typedAssignment.hash !== stringAssignment.hash);
 });
+
+test(
+  "Cat32 assign distinguishes Map typed array key collision with sentinel string",
+  () => {
+    const cat = new Cat32();
+    const first = new Uint8Array([12, 13]);
+    const second = new Uint8Array([12, 13]);
+    const mapWithTypedKeys = new Map<unknown, number>([
+      [first, 1],
+      [second, 2],
+    ]);
+
+    const sentinelLiteral = JSON.parse(stableStringify(second));
+    const mapEntryIndexSentinel = "\u0000cat32:map-entry-index:1\u0000";
+    const collisionString = `__string__:${sentinelLiteral}${mapEntryIndexSentinel}`;
+    const mapWithCollisionString = new Map<unknown, number>([
+      [first, 1],
+      [collisionString, 2],
+    ]);
+
+    const typedAssignment = cat.assign(mapWithTypedKeys);
+    const stringAssignment = cat.assign(mapWithCollisionString);
+
+    assert.ok(typedAssignment.key !== stringAssignment.key);
+    assert.ok(typedAssignment.hash !== stringAssignment.hash);
+  },
+);
