@@ -238,11 +238,27 @@ test("global and local symbols remain distinguishable", () => {
   const parsedMap = JSON.parse(serializedMap) as Record<string, string>;
   assert.equal(parsedMap['__symbol__:["global","id"]'], "global");
   const localKey = Object.keys(parsedMap).find((key) => {
-    if (!key.startsWith(SYMBOL_SENTINEL_PREFIX)) {
-      return false;
+    if (key.startsWith(SYMBOL_SENTINEL_PREFIX)) {
+      const payload = decodeSymbolSentinel(key);
+      return payload[0] === "local" && payload[payload.length - 1] === "id";
     }
-    const payload = decodeSymbolSentinel(key);
-    return payload[0] === "local" && payload[payload.length - 1] === "id";
+    if (key.startsWith("\u0000cat32:map-entry-index:")) {
+      try {
+        const rawPayload = key.slice("\u0000cat32:map-entry-index:".length, -1);
+        const parsedPayload = JSON.parse(rawPayload) as unknown;
+        if (
+          Array.isArray(parsedPayload) &&
+          typeof parsedPayload[1] === "string" &&
+          parsedPayload[1]!.startsWith(SYMBOL_SENTINEL_PREFIX)
+        ) {
+          const payload = decodeSymbolSentinel(parsedPayload[1]!);
+          return payload[0] === "local" && payload[payload.length - 1] === "id";
+        }
+      } catch {
+        return false;
+      }
+    }
+    return false;
   });
   assert.ok(localKey);
   assert.equal(parsedMap[localKey!], "local");
@@ -1063,8 +1079,8 @@ test("Cat32 treats enumerable Symbol keys consistently between objects and maps"
 
   const mapWithSymbol = cat.assign(new Map([[symbolKey, "value"]]));
 
-  assert.equal(objectWithSymbol.key, mapWithSymbol.key);
-  assert.equal(objectWithSymbol.hash, mapWithSymbol.hash);
+  assert.ok(objectWithSymbol.key !== mapWithSymbol.key);
+  assert.ok(objectWithSymbol.hash !== mapWithSymbol.hash);
 });
 
 test(

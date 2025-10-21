@@ -20,7 +20,10 @@ const MAP_ENTRY_INDEX_SENTINEL_SEGMENT = `${SENTINEL_PREFIX}map-entry-index:`;
 const HEX_DIGITS = "0123456789abcdef";
 const PROPERTY_KEY_SENTINEL_TYPE = "propertykey";
 
-const LOCAL_SYMBOL_SENTINEL_REGISTRY = new Map<symbol, string>();
+type LocalSymbolHolder = { symbol: symbol };
+
+const LOCAL_SYMBOL_HOLDERS: LocalSymbolHolder[] = [];
+const LOCAL_SYMBOL_SENTINEL_REGISTRY = new WeakMap<LocalSymbolHolder, string>();
 let nextLocalSymbolSentinelId = 0;
 
 const STRING_LITERAL_ESCAPED_SENTINEL_TYPES = new Set<string>([
@@ -293,11 +296,24 @@ function _stringify(v: unknown, stack: Set<unknown>): string {
   if (v instanceof Set) {
     if (stack.has(v)) throw new TypeError("Cyclic object");
     stack.add(v);
-    const serializedValues = Array.from(v.values(), (value) =>
-      _stringify(value, stack),
-    );
-    serializedValues.sort();
-    const out = "[" + serializedValues.join(",") + "]";
+    type SerializedSetEntry = { sortKey: string; serializedValue: string };
+    const entries: SerializedSetEntry[] = [];
+    for (const value of v.values()) {
+      const serializedValue = _stringify(value, stack);
+      entries.push({
+        sortKey: buildSetSortKey(value, serializedValue),
+        serializedValue,
+      });
+    }
+    entries.sort((left, right) => {
+      if (left.sortKey < right.sortKey) return -1;
+      if (left.sortKey > right.sortKey) return 1;
+      if (left.serializedValue < right.serializedValue) return -1;
+      if (left.serializedValue > right.serializedValue) return 1;
+      return 0;
+    });
+    const body = entries.map((entry) => entry.serializedValue);
+    const out = "[" + body.join(",") + "]";
     stack.delete(v);
     return out;
   }
@@ -373,8 +389,17 @@ function mapEntryPropertyKey(
   shouldDedupeByType: boolean,
   hasDuplicatePropertyKey: boolean,
 ): string {
+  const isLocalSymbolProperty = entryPropertyKey.startsWith(
+    `${SYMBOL_SENTINEL_PREFIX}["local"`,
+  );
+
+  if (!shouldDedupeByType && isLocalSymbolProperty) {
+    const uniqueIndex = hasDuplicatePropertyKey ? entryOrder : entryIndex;
+    const payload = JSON.stringify([bucketKey, entryPropertyKey, uniqueIndex]);
+    return typeSentinel("map-entry-index", payload);
+  }
+
   if (
-    (!shouldDedupeByType && !hasDuplicatePropertyKey) ||
     totalEntries <= 1 ||
     (!hasDuplicatePropertyKey && entryIndex === 0)
   ) {
@@ -639,15 +664,45 @@ function toSymbolSentinel(symbol: symbol): string {
     const payload = JSON.stringify(["global", globalKey]);
     return `${SYMBOL_SENTINEL_PREFIX}${payload}`;
   }
-  let identifier = LOCAL_SYMBOL_SENTINEL_REGISTRY.get(symbol);
-  if (identifier === undefined) {
-    identifier = nextLocalSymbolSentinelId.toString(36);
-    nextLocalSymbolSentinelId += 1;
-    LOCAL_SYMBOL_SENTINEL_REGISTRY.set(symbol, identifier);
-  }
+  const identifier = getLocalSymbolSentinelIdentifier(symbol);
   const description = symbol.description ?? "";
   const payload = JSON.stringify(["local", identifier, description]);
   return `${SYMBOL_SENTINEL_PREFIX}${payload}`;
+}
+
+function getLocalSymbolSentinelIdentifier(symbol: symbol): string {
+  for (const holder of LOCAL_SYMBOL_HOLDERS) {
+    if (holder.symbol === symbol) {
+      const existing = LOCAL_SYMBOL_SENTINEL_REGISTRY.get(holder);
+      if (existing !== undefined) {
+        return existing;
+      }
+    }
+  }
+
+  const holder: LocalSymbolHolder = { symbol };
+  const identifier = nextLocalSymbolSentinelId.toString(36);
+  nextLocalSymbolSentinelId += 1;
+  LOCAL_SYMBOL_HOLDERS.push(holder);
+  LOCAL_SYMBOL_SENTINEL_REGISTRY.set(holder, identifier);
+  return identifier;
+}
+
+function getSymbolSortKey(symbol: symbol): string {
+  const globalKey =
+    typeof Symbol.keyFor === "function" ? Symbol.keyFor(symbol) : undefined;
+  if (globalKey !== undefined) {
+    return `global:${globalKey}`;
+  }
+  const identifier = getLocalSymbolSentinelIdentifier(symbol);
+  return `local:${identifier}`;
+}
+
+function buildSetSortKey(value: unknown, serializedValue: string): string {
+  if (typeof value === "symbol") {
+    return getSymbolSortKey(value as symbol);
+  }
+  return serializedValue;
 }
 
 function toPropertyKeyString(
