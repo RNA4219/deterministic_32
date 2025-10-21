@@ -190,6 +190,29 @@ test("stableStringify preserves prefixed sentinel string literal content", () =>
   assert.equal(stableStringify(value), JSON.stringify(value));
 });
 
+test("global and local symbols remain distinguishable", () => {
+  const cat32 = new Cat32();
+  const globalSymbol = Symbol.for("id");
+  const localSymbol = Symbol("id");
+
+  const globalAssignment = cat32.assign(globalSymbol);
+  const localAssignment = cat32.assign(localSymbol);
+
+  assert.ok(globalAssignment.key !== localAssignment.key);
+  assert.ok(globalAssignment.hash !== localAssignment.hash);
+
+  const serializedMap = stableStringify(
+    new Map([
+      [globalSymbol, "global"],
+      [localSymbol, "local"],
+    ]),
+  );
+
+  const parsedMap = JSON.parse(serializedMap) as Record<string, string>;
+  assert.equal(parsedMap["__symbol__:global:id"], "global");
+  assert.equal(parsedMap["__symbol__:local:id"], "local");
+});
+
 test("stableStringify escapes sentinel-like string literals", () => {
   const sentinelLike = "\u0000cat32:number:Infinity\u0000";
   assert.equal(
@@ -844,8 +867,12 @@ test("Cat32 normalizes Map keys with special numeric values", () => {
 
   const mapNaN = cat.assign(new Map([[Number.NaN, "v"]]));
   const objectNaN = cat.assign({ NaN: "v" });
-  assert.equal(mapNaN.key, objectNaN.key);
-  assert.equal(mapNaN.hash, objectNaN.hash);
+  assert.ok(mapNaN.key !== objectNaN.key);
+  assert.ok(mapNaN.hash !== objectNaN.hash);
+  assert.ok(
+    mapNaN.key.includes("\\u0000cat32:propertykey:"),
+    "Map NaN key should carry a property key sentinel",
+  );
 
   const sentinelNaNKey: string = typeSentinel("number", "NaN");
   const objectNaNSentinel = cat.assign(
@@ -856,8 +883,12 @@ test("Cat32 normalizes Map keys with special numeric values", () => {
 
   const mapInfinity = cat.assign(new Map([[Infinity, "v"]]));
   const objectInfinity = cat.assign({ Infinity: "v" });
-  assert.equal(mapInfinity.key, objectInfinity.key);
-  assert.equal(mapInfinity.hash, objectInfinity.hash);
+  assert.ok(mapInfinity.key !== objectInfinity.key);
+  assert.ok(mapInfinity.hash !== objectInfinity.hash);
+  assert.ok(
+    mapInfinity.key.includes("\\u0000cat32:propertykey:"),
+    "Map Infinity key should carry a property key sentinel",
+  );
 
   const sentinelInfinityKey: string = typeSentinel("number", "Infinity");
   const objectInfinitySentinel = cat.assign(
@@ -867,10 +898,13 @@ test("Cat32 normalizes Map keys with special numeric values", () => {
   assert.ok(mapInfinity.hash !== objectInfinitySentinel.hash);
 
   const mapBigInt = cat.assign(new Map([[1n, "v"]]));
-  const bigIntObjectKey: string = String(1n);
-  const objectBigInt = cat.assign({ [bigIntObjectKey]: "v" });
-  assert.equal(mapBigInt.key, objectBigInt.key);
-  assert.equal(mapBigInt.hash, objectBigInt.hash);
+  const objectBigInt = cat.assign({ [String(1n)]: "v" });
+  assert.ok(mapBigInt.key !== objectBigInt.key);
+  assert.ok(mapBigInt.hash !== objectBigInt.hash);
+  assert.ok(
+    mapBigInt.key.includes("\\u0000cat32:propertykey:"),
+    "Map bigint key should carry a property key sentinel",
+  );
 
   const sentinelBigIntKey: string = typeSentinel("bigint", "1");
   const objectBigIntSentinel = cat.assign(
@@ -1520,17 +1554,22 @@ test("canonical key matches stableStringify for basic primitives", () => {
   assert.equal(c.assign(symbolValue).key, stableStringify(symbolValue));
 });
 
-test("functions and symbols serialize to bare strings", () => {
+test("functions serialize to strings and symbols use canonical sentinels", () => {
   const fn = function foo() {};
-  const sym = Symbol("x");
+  const localSymbol = Symbol("x");
+  const globalSymbol = Symbol.for("x");
+  const localSentinel = JSON.stringify("__symbol__:local:x");
+  const globalSentinel = JSON.stringify("__symbol__:global:x");
 
   assert.equal(stableStringify(fn), String(fn));
-  assert.equal(stableStringify(sym), String(sym));
+  assert.equal(stableStringify(localSymbol), localSentinel);
+  assert.equal(stableStringify(globalSymbol), globalSentinel);
 
   const c = new Cat32();
 
   assert.equal(c.assign(fn).key, String(fn));
-  assert.equal(c.assign(sym).key, String(sym));
+  assert.equal(c.assign(localSymbol).key, localSentinel);
+  assert.equal(c.assign(globalSymbol).key, globalSentinel);
 });
 
 test("string sentinel literal is distinct from date value", () => {
@@ -1711,21 +1750,25 @@ test("Cat32 assign handles undefined and Date literals", () => {
   cat.assign(new Date(iso));
 });
 
-test("stableStringify uses String() for functions and symbols", () => {
+test("stableStringify uses String() for functions and sentinels for symbols", () => {
   const fn = function foo() {};
-  const sym = Symbol("x");
+  const localSymbol = Symbol("x");
+  const globalSymbol = Symbol.for("x");
 
   assert.equal(stableStringify(fn), String(fn));
-  assert.equal(stableStringify(sym), String(sym));
+  assert.equal(stableStringify(localSymbol), JSON.stringify("__symbol__:local:x"));
+  assert.equal(stableStringify(globalSymbol), JSON.stringify("__symbol__:global:x"));
 });
 
-test("canonical key follows String() for functions and symbols", () => {
+test("canonical key follows String() for functions and sentinel encoding for symbols", () => {
   const c = new Cat32();
   const fn = function foo() {};
-  const sym = Symbol("x");
+  const localSymbol = Symbol("x");
+  const globalSymbol = Symbol.for("x");
 
   assert.equal(c.assign(fn).key, String(fn));
-  assert.equal(c.assign(sym).key, String(sym));
+  assert.equal(c.assign(localSymbol).key, JSON.stringify("__symbol__:local:x"));
+  assert.equal(c.assign(globalSymbol).key, JSON.stringify("__symbol__:global:x"));
 });
 
 test("string sentinel literals remain literal canonical keys", () => {
@@ -1852,6 +1895,48 @@ test("Map duplicate property keys retain distinct entries per key type", () => {
   assert.ok(mapAssignment.key !== objectAssignment.key);
   assert.ok(mapAssignment.hash !== objectAssignment.hash);
 });
+
+test(
+  "Map canonicalization differentiates object keys sharing string identity",
+  () => {
+    const c = new Cat32();
+    const objectKey = { label: "duplicate" };
+    const stringKey = String(objectKey);
+
+    const map = new Map<unknown, string>([
+      [objectKey, "object"],
+      [stringKey, "string"],
+    ]);
+    const assignment = c.assign(map);
+    const serialized = stableStringify(map);
+
+    assert.ok(
+      serialized.includes("\\u0000cat32:propertykey:"),
+      "stableStringify should sentinelize non-string Map keys",
+    );
+    assert.ok(
+      assignment.key.includes("\\u0000cat32:propertykey:"),
+      "Cat32 canonical key should retain property key sentinel",
+    );
+
+    const reversedAssignment = c.assign(
+      new Map<unknown, string>([
+        [stringKey, "string"],
+        [objectKey, "object"],
+      ]),
+    );
+
+    assert.equal(assignment.key, reversedAssignment.key);
+    assert.equal(assignment.hash, reversedAssignment.hash);
+
+    const stringOnlyAssignment = c.assign(
+      new Map<string, string>([[stringKey, "string"]]),
+    );
+
+    assert.ok(assignment.key !== stringOnlyAssignment.key);
+    assert.ok(assignment.hash !== stringOnlyAssignment.hash);
+  },
+);
 
 test("Cat32 normalizes duplicate-like Map entries deterministically", () => {
   const c = new Cat32();
@@ -2162,7 +2247,7 @@ test("map object key differs from same-name string key", () => {
   assert.ok(a.key !== b.key);
 });
 
-test("map payload matches plain object with same entries", () => {
+test("map payload remains distinct from plain object with numeric keys", () => {
   const c = new Cat32();
   const mapInput = {
     payload: new Map<unknown, unknown>([
@@ -2180,8 +2265,12 @@ test("map payload matches plain object with same entries", () => {
   const mapAssignment = c.assign(mapInput);
   const objectAssignment = c.assign(objectInput);
 
-  assert.equal(mapAssignment.key, objectAssignment.key);
-  assert.equal(mapAssignment.hash, objectAssignment.hash);
+  assert.ok(mapAssignment.key !== objectAssignment.key);
+  assert.ok(mapAssignment.hash !== objectAssignment.hash);
+  assert.ok(
+    mapAssignment.key.includes("\\u0000cat32:propertykey:"),
+    "Map numeric keys should carry property key sentinels",
+  );
 });
 
 test("set serialization matches array entries regardless of insertion order", () => {
