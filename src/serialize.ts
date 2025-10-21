@@ -380,6 +380,15 @@ function mapBucketTypeTag(rawKey: unknown): string {
   return typeof rawKey;
 }
 
+const NULL_PROPERTY_KEY_SENTINEL_BUCKET_TAG = mapBucketTypeTag(null);
+
+function buildNullPropertyKeySentinel(serializedKey: string): string {
+  return typeSentinel(
+    PROPERTY_KEY_SENTINEL_TYPE,
+    JSON.stringify([NULL_PROPERTY_KEY_SENTINEL_BUCKET_TAG, serializedKey]),
+  );
+}
+
 function buildPropertyKeySentinel(
   rawKey: unknown,
   serializedKey: string,
@@ -608,7 +617,7 @@ function toPropertyKeyString(
   }
 
   if (rawKey === null) {
-    return buildPropertyKeySentinel(rawKey, serializedKey);
+    return buildNullPropertyKeySentinel(serializedKey);
   }
 
   if (rawKey instanceof Date) {
