@@ -4,6 +4,25 @@ import assert from "node:assert/strict";
 import { Cat32, stableStringify } from "../src/index.js";
 import { typeSentinel } from "../src/serialize.js";
 
+const MAP_SENTINEL_PREFIX = "\u0000cat32:map:";
+const SENTINEL_SUFFIX = "\u0000";
+
+type MapSentinelEntries = Array<[string, string]>;
+
+function decodeMapSentinel(serialized: string): MapSentinelEntries {
+  const sentinel = JSON.parse(serialized);
+  assert.equal(typeof sentinel, "string");
+  assert.ok(
+    sentinel.startsWith(MAP_SENTINEL_PREFIX) &&
+      sentinel.endsWith(SENTINEL_SUFFIX),
+  );
+  const payload = sentinel.slice(
+    MAP_SENTINEL_PREFIX.length,
+    -SENTINEL_SUFFIX.length,
+  );
+  return JSON.parse(payload) as MapSentinelEntries;
+}
+
 test("stableStringify distinguishes RegExp variants", () => {
   const foo = stableStringify(/foo/);
   const fooIgnoreCase = stableStringify(/foo/i);
@@ -69,15 +88,20 @@ test("stableStringify Map buckets RegExp keys without collisions", () => {
   ]);
 
   const serialized = stableStringify(map);
-  const parsed = JSON.parse(serialized) as Record<string, string>;
-  const keys = Object.keys(parsed);
-  const regexKeys = keys.filter((key) => key.startsWith("\u0000cat32:regexp:"));
+  const parsed = decodeMapSentinel(serialized);
+  const keys = parsed.map(([key]) => key);
+  const regexEntries = parsed.filter(([key]) =>
+    key.includes("\u0000cat32:regexp:"),
+  );
 
-  assert.equal(keys.length, 3);
+  assert.equal(parsed.length, 3);
   assert.equal(new Set(keys).size, 3);
-  assert.equal(regexKeys.length, 2);
-  assert.equal(new Set(regexKeys).size, 2);
-  assert.deepStrictEqual(regexKeys.map((key) => parsed[key]).sort(), ["a", "b"]);
+  assert.equal(regexEntries.length, 2);
+  assert.equal(new Set(regexEntries.map(([key]) => key)).size, 2);
+  assert.deepStrictEqual(
+    regexEntries.map(([, value]) => JSON.parse(value)).sort(),
+    ["a", "b"],
+  );
 });
 
 test("stableStringify Map separates RegExp keys from sentinel string literals", () => {
@@ -88,11 +112,10 @@ test("stableStringify Map separates RegExp keys from sentinel string literals", 
   ]);
 
   const serialized = stableStringify(map);
-  const parsed = JSON.parse(serialized) as Record<string, string>;
-  const entries = Object.entries(parsed);
+  const parsed = decodeMapSentinel(serialized);
 
-  assert.equal(entries.length, 2);
-  const values = new Set(entries.map(([, value]) => value));
+  assert.equal(parsed.length, 2);
+  const values = new Set(parsed.map(([, value]) => JSON.parse(value)));
   assert.ok(values.has("regex"));
   assert.ok(values.has("literal"));
 });

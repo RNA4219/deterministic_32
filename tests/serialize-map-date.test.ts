@@ -4,6 +4,25 @@ import assert from "node:assert/strict";
 import { Cat32 } from "../src/index.js";
 import { stableStringify } from "../src/serialize.js";
 
+const MAP_SENTINEL_PREFIX = "\u0000cat32:map:";
+const SENTINEL_SUFFIX = "\u0000";
+
+type MapSentinelEntries = Array<[string, string]>;
+
+function decodeMapSentinel(serialized: string): MapSentinelEntries {
+  const sentinel = JSON.parse(serialized);
+  assert.equal(typeof sentinel, "string");
+  assert.ok(
+    sentinel.startsWith(MAP_SENTINEL_PREFIX) &&
+      sentinel.endsWith(SENTINEL_SUFFIX),
+  );
+  const payload = sentinel.slice(
+    MAP_SENTINEL_PREFIX.length,
+    -SENTINEL_SUFFIX.length,
+  );
+  return JSON.parse(payload) as MapSentinelEntries;
+}
+
 test("stableStringify on invalid Date uses invalid sentinel payload", () => {
   const date = new Date(NaN);
 
@@ -19,7 +38,9 @@ test("Map with Date key serializes using ISO sentinel", () => {
   const serialized = stableStringify(map);
   const expectedKey = `__date__:${date.toISOString()}`;
 
-  assert.deepEqual(JSON.parse(serialized), { [expectedKey]: "v" });
+  assert.deepEqual(decodeMapSentinel(serialized), [
+    [expectedKey, stableStringify("v")],
+  ]);
 });
 
 test("Map with invalid Date key serializes using invalid sentinel", () => {
@@ -29,7 +50,9 @@ test("Map with invalid Date key serializes using invalid sentinel", () => {
   const serialized = stableStringify(map);
   const expectedKey = "__date__:invalid";
 
-  assert.deepEqual(JSON.parse(serialized), { [expectedKey]: 1 });
+  assert.deepEqual(decodeMapSentinel(serialized), [
+    [expectedKey, stableStringify(1)],
+  ]);
 });
 
 test("Cat32.assign uses ISO sentinel for Map Date keys", () => {
@@ -42,7 +65,9 @@ test("Cat32.assign uses ISO sentinel for Map Date keys", () => {
   const expectedKey = `__date__:${date.toISOString()}`;
 
   assert.equal(assignment.key, serialized);
-  assert.deepEqual(JSON.parse(assignment.key), { [expectedKey]: "v" });
+  assert.deepEqual(decodeMapSentinel(assignment.key), [
+    [expectedKey, stableStringify("v")],
+  ]);
 });
 
 test("Cat32.assign uses invalid sentinel for Map invalid Date keys", () => {
@@ -55,7 +80,9 @@ test("Cat32.assign uses invalid sentinel for Map invalid Date keys", () => {
   const expectedKey = "__date__:invalid";
 
   assert.equal(assignment.key, serialized);
-  assert.deepEqual(JSON.parse(assignment.key), { [expectedKey]: "v" });
+  assert.deepEqual(decodeMapSentinel(assignment.key), [
+    [expectedKey, stableStringify("v")],
+  ]);
 });
 
 test("Map Date key canonical key differs from __string__ Date sentinel", () => {
@@ -63,6 +90,7 @@ test("Map Date key canonical key differs from __string__ Date sentinel", () => {
   const dateMap = new Map([[date, 1]]);
   const stringKey = `__string__:__date__:${date.toISOString()}`;
   const stringMap = new Map([[stringKey, 1]]);
+  const expectedKey = `__date__:${date.toISOString()}`;
 
   const cat = new Cat32();
   const dateAssignment = cat.assign(dateMap);
@@ -70,7 +98,10 @@ test("Map Date key canonical key differs from __string__ Date sentinel", () => {
 
   assert.ok(dateAssignment.key !== stringAssignment.key);
   assert.ok(dateAssignment.hash !== stringAssignment.hash);
-  assert.deepEqual(JSON.parse(stringAssignment.key), {
-    [`__string__:${stringKey}`]: 1,
-  });
+  assert.deepEqual(decodeMapSentinel(dateAssignment.key), [
+    [expectedKey, stableStringify(1)],
+  ]);
+  assert.deepEqual(decodeMapSentinel(stringAssignment.key), [
+    [`__string__:${stringKey}`, stableStringify(1)],
+  ]);
 });

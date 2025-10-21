@@ -25,7 +25,7 @@ test("Cat32 canonical key is stable for random object permutations", () => {
   }
 });
 
-test("Cat32 Map canonical key matches equivalent objects", () => {
+test("Cat32 Map canonical key remains distinct from equivalent objects", () => {
   const categorizer = new Cat32();
   for (let i = 0; i < ITERATIONS; i += 1) {
     const entries = randomObjectEntries(1);
@@ -35,9 +35,11 @@ test("Cat32 Map canonical key matches equivalent objects", () => {
     const objectAssignment = categorizer.assign(plainObject);
     const mapAssignment = categorizer.assign(map);
 
-    assert.equal(mapAssignment.key, objectAssignment.key);
-    assert.equal(mapAssignment.index, objectAssignment.index);
-    assert.equal(stableStringify(map), stableStringify(plainObject));
+    assert.ok(stableStringify(map) !== stableStringify(plainObject));
+    assert.equal(mapAssignment.key, stableStringify(map));
+    assert.equal(objectAssignment.key, stableStringify(plainObject));
+    assert.ok(mapAssignment.key !== objectAssignment.key);
+    assert.ok(mapAssignment.hash !== objectAssignment.hash);
   }
 });
 

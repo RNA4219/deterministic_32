@@ -2,6 +2,7 @@
 import test from "node:test";
 import assert from "node:assert";
 import { Cat32 } from "../src/index.js";
+import { fnv1a32, toHex32 } from "../src/hash.js";
 import { escapeSentinelString, stableStringify, typeSentinel } from "../src/serialize.js";
 
 type SpawnOptions = {
@@ -56,6 +57,10 @@ const CLI_LITERAL_KEY_EVAL_SCRIPT = [
 ].join(" ");
 
 const SYMBOL_SENTINEL_PREFIX = "__symbol__:";
+const MAP_SENTINEL_PREFIX = "\u0000cat32:map:";
+const SENTINEL_SUFFIX = "\u0000";
+
+type MapSentinelEntries = Array<[string, string]>;
 
 function decodeSymbolSentinel(value: string): unknown[] {
   const raw = value.startsWith("\"") && value.endsWith("\"")
@@ -67,6 +72,20 @@ function decodeSymbolSentinel(value: string): unknown[] {
   const payload = JSON.parse(sentinel.slice(SYMBOL_SENTINEL_PREFIX.length)) as unknown;
   assert.ok(Array.isArray(payload));
   return payload as unknown[];
+}
+
+function decodeMapSentinel(serialized: string): MapSentinelEntries {
+  const sentinel = JSON.parse(serialized);
+  assert.equal(typeof sentinel, "string");
+  assert.ok(
+    sentinel.startsWith(MAP_SENTINEL_PREFIX) &&
+      sentinel.endsWith(SENTINEL_SUFFIX),
+  );
+  const payload = sentinel.slice(
+    MAP_SENTINEL_PREFIX.length,
+    -SENTINEL_SUFFIX.length,
+  );
+  return JSON.parse(payload) as MapSentinelEntries;
 }
 
 function expectLocalSymbolSentinel(value: string, description: string): void {
@@ -235,7 +254,13 @@ test("global and local symbols remain distinguishable", () => {
     ]),
   );
 
-  const parsedMap = JSON.parse(serializedMap) as Record<string, string>;
+  const parsedEntries = decodeMapSentinel(serializedMap);
+  const parsedMap = Object.fromEntries(
+    parsedEntries.map(([key, serializedValue]) => [
+      key,
+      JSON.parse(serializedValue) as string,
+    ]),
+  ) as Record<string, string>;
   assert.equal(parsedMap['__symbol__:["global","id"]'], "global");
   const localKey = Object.keys(parsedMap).find((key) => {
     if (key.startsWith(SYMBOL_SENTINEL_PREFIX)) {
@@ -551,16 +576,27 @@ test("dist Cat32 assign distinguishes Map keys when String(key) collides", async
 test("stableStringify maps simple entries without throwing", () => {
   const map = new Map([["k", 1]]);
   const result = stableStringify(map);
-  assert.equal(result, "{\"k\":1}");
+  assert.equal(
+    JSON.stringify(decodeMapSentinel(result)),
+    JSON.stringify([["k", stableStringify(1)]]),
+  );
 });
 
 test("Cat32 assign handles Map input deterministically", () => {
   const instance = new Cat32();
-  const assignment = instance.assign(new Map([["k", 1]]));
-  assert.equal(assignment.index, 23);
-  assert.equal(assignment.label, "X");
-  assert.equal(assignment.hash, "4f77d9b7");
-  assert.equal(assignment.key, "{\"k\":1}");
+  const map = new Map([["k", 1]]);
+  const assignment = instance.assign(map);
+  const expectedKey = stableStringify(map);
+  const hashValue = fnv1a32(expectedKey);
+  const expectedIndex = hashValue & 31;
+  const expectedLabel = "ABCDEFGHIJKLMNOPQRSTUVWXYZ012345".charAt(
+    expectedIndex,
+  );
+
+  assert.equal(assignment.key, expectedKey);
+  assert.equal(assignment.hash, toHex32(hashValue));
+  assert.equal(assignment.index, expectedIndex);
+  assert.equal(assignment.label, expectedLabel);
 });
 
 test("Cat32 assign retains distinct Map entries for identical property keys", () => {
@@ -2009,7 +2045,7 @@ test("date sentinel string literal differs from Date instance in arrays", () => 
   assert.ok(sentinelAssignment.hash !== literalAssignment.hash);
 });
 
-test("Map keys align with plain object representation when property keys are unique", () => {
+test("Map canonical key encodes unique property keys deterministically", () => {
   const c = new Cat32();
   const map = new Map<string, number>([
     ["10", 10],
@@ -2018,9 +2054,19 @@ test("Map keys align with plain object representation when property keys are uni
 
   const mapAssignment = c.assign(map);
   const objectAssignment = c.assign({ 2: 2, 10: 10 });
+  const expectedMapEntries: MapSentinelEntries = [
+    ["10", stableStringify(10)],
+    ["2", stableStringify(2)],
+  ];
 
-  assert.equal(mapAssignment.key, objectAssignment.key);
-  assert.equal(mapAssignment.hash, objectAssignment.hash);
+  assert.equal(mapAssignment.key, stableStringify(map));
+  assert.equal(
+    JSON.stringify(decodeMapSentinel(mapAssignment.key)),
+    JSON.stringify(expectedMapEntries),
+  );
+  assert.equal(objectAssignment.key, stableStringify({ 2: 2, 10: 10 }));
+  assert.ok(mapAssignment.key !== objectAssignment.key);
+  assert.ok(mapAssignment.hash !== objectAssignment.hash);
 
   const reorderedMapAssignment = c.assign(
     new Map<string, number>([
@@ -2030,8 +2076,11 @@ test("Map keys align with plain object representation when property keys are uni
   );
   const reorderedObjectAssignment = c.assign({ 10: 10, 2: 2 });
 
-  assert.equal(reorderedMapAssignment.key, objectAssignment.key);
-  assert.equal(reorderedMapAssignment.hash, objectAssignment.hash);
+  assert.equal(
+    JSON.stringify(decodeMapSentinel(reorderedMapAssignment.key)),
+    JSON.stringify(expectedMapEntries),
+  );
+  assert.equal(reorderedMapAssignment.key, stableStringify(map));
   assert.equal(reorderedObjectAssignment.key, objectAssignment.key);
   assert.equal(reorderedObjectAssignment.hash, objectAssignment.hash);
 
@@ -2054,7 +2103,14 @@ test("Map Date key uses ISO sentinel distinct from plain object string key", () 
   const mapAssignment = c.assign(new Map([[date, "value"]]));
   const objectAssignment = c.assign({ [String(date)]: "value" });
 
-  assert.ok(mapAssignment.key.includes(`"__date__:${date.toISOString()}"`));
+  const expectedEntries = [
+    [`__date__:${date.toISOString()}`, stableStringify("value")],
+  ];
+  assert.equal(mapAssignment.key, stableStringify(new Map([[date, "value"]])));
+  assert.equal(
+    JSON.stringify(decodeMapSentinel(mapAssignment.key)),
+    JSON.stringify(expectedEntries),
+  );
   assert.ok(mapAssignment.key !== objectAssignment.key);
   assert.ok(mapAssignment.hash !== objectAssignment.hash);
 });
@@ -2225,21 +2281,30 @@ test(
   },
 );
 
-test("Map values serialize identically to plain object values", () => {
+test("Map values retain the same serialized payload as plain object values", () => {
   const c = new Cat32();
   const fn = function foo() {};
   const sym = Symbol("x");
+  const map = new Map<string, unknown>([
+    ["fn", fn],
+    ["sym", sym],
+  ]);
+  const plainObject = { fn, sym };
 
-  const mapAssignment = c.assign(
-    new Map<string, unknown>([
-      ["fn", fn],
-      ["sym", sym],
-    ]),
+  const mapAssignment = c.assign(map);
+  const objectAssignment = c.assign(plainObject);
+  const expectedEntries: MapSentinelEntries = Array.from(map.entries()).map(
+    ([key, value]) => [key, stableStringify(value)],
+  ) as MapSentinelEntries;
+
+  assert.equal(mapAssignment.key, stableStringify(map));
+  assert.equal(objectAssignment.key, stableStringify(plainObject));
+  assert.equal(
+    JSON.stringify(decodeMapSentinel(mapAssignment.key)),
+    JSON.stringify(expectedEntries),
   );
-  const objectAssignment = c.assign({ fn, sym });
-
-  assert.equal(mapAssignment.key, objectAssignment.key);
-  assert.equal(mapAssignment.hash, objectAssignment.hash);
+  assert.ok(mapAssignment.key !== objectAssignment.key);
+  assert.ok(mapAssignment.hash !== objectAssignment.hash);
 });
 
 test("Map object key differs from plain object string key", () => {
@@ -2257,35 +2322,60 @@ test("Map object key differs from plain object string key", () => {
   assert.ok(mapAssignment.hash !== objectAssignment.hash);
 });
 
-test("Map function value matches plain object value", () => {
+test("Map function value serialization is preserved via sentinel", () => {
   const c = new Cat32();
   const fn = function foo() {};
+  const map = new Map([["fn", fn]]);
+  const plainObject = { fn };
 
-  const mapAssignment = c.assign(new Map([["fn", fn]]));
-  const objectAssignment = c.assign({ fn });
+  const mapAssignment = c.assign(map);
+  const objectAssignment = c.assign(plainObject);
 
-  assert.equal(mapAssignment.key, objectAssignment.key);
-  assert.equal(mapAssignment.hash, objectAssignment.hash);
+  assert.equal(mapAssignment.key, stableStringify(map));
+  assert.equal(objectAssignment.key, stableStringify(plainObject));
+  assert.equal(
+    JSON.stringify(decodeMapSentinel(mapAssignment.key)),
+    JSON.stringify([["fn", stableStringify(fn)]]),
+  );
+  assert.ok(mapAssignment.key !== objectAssignment.key);
+  assert.ok(mapAssignment.hash !== objectAssignment.hash);
 });
 
-test("Map symbol value matches plain object value", () => {
+test("Map symbol value serialization is preserved via sentinel", () => {
   const c = new Cat32();
   const sym = Symbol("x");
+  const map = new Map([["sym", sym]]);
+  const plainObject = { sym };
 
-  const mapAssignment = c.assign(new Map([["sym", sym]]));
-  const objectAssignment = c.assign({ sym });
+  const mapAssignment = c.assign(map);
+  const objectAssignment = c.assign(plainObject);
 
-  assert.equal(mapAssignment.key, objectAssignment.key);
-  assert.equal(mapAssignment.hash, objectAssignment.hash);
+  assert.equal(mapAssignment.key, stableStringify(map));
+  assert.equal(objectAssignment.key, stableStringify(plainObject));
+  assert.equal(
+    JSON.stringify(decodeMapSentinel(mapAssignment.key)),
+    JSON.stringify([["sym", stableStringify(sym)]]),
+  );
+  assert.ok(mapAssignment.key !== objectAssignment.key);
+  assert.ok(mapAssignment.hash !== objectAssignment.hash);
 });
 
-test("Map string sentinel key matches object property", () => {
+test("Map string sentinel key remains distinct from plain object property", () => {
   const c = new Cat32();
-  const mapAssignment = c.assign(new Map([["__undefined__", 1]]));
-  const objectAssignment = c.assign({ "__undefined__": 1 });
+  const map = new Map([["__undefined__", 1]]);
+  const plainObject = { "__undefined__": 1 };
 
-  assert.equal(mapAssignment.key, objectAssignment.key);
-  assert.equal(mapAssignment.hash, objectAssignment.hash);
+  const mapAssignment = c.assign(map);
+  const objectAssignment = c.assign(plainObject);
+
+  assert.equal(mapAssignment.key, stableStringify(map));
+  assert.equal(objectAssignment.key, stableStringify(plainObject));
+  assert.equal(
+    JSON.stringify(decodeMapSentinel(mapAssignment.key)),
+    JSON.stringify([["__string__:__undefined__", stableStringify(1)]]),
+  );
+  assert.ok(mapAssignment.key !== objectAssignment.key);
+  assert.ok(mapAssignment.hash !== objectAssignment.hash);
 });
 
 test("stableStringify accepts Map with sentinel-style string key", () => {
