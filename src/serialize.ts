@@ -147,9 +147,10 @@ function _stringify(v: unknown, stack: Set<unknown>): string {
   if (t === "boolean") return JSON.stringify(v);
   if (t === "bigint") return stringifySentinelLiteral(typeSentinel("bigint", (v as bigint).toString()));
   if (t === "undefined") return stringifySentinelLiteral(UNDEFINED_SENTINEL);
-  if (t === "function" || t === "symbol") {
-    return String(v);
+  if (t === "symbol") {
+    return stringifySentinelLiteral(toSymbolSentinel(v as symbol));
   }
+  if (t === "function") return String(v);
 
   if (v instanceof Number || v instanceof Boolean || v instanceof BigInt) {
     return _stringify(v.valueOf(), stack);
@@ -603,10 +604,10 @@ function reviveSentinelValue(value: unknown): unknown {
 function toSymbolSentinel(symbol: symbol): string {
   const globalKey = typeof Symbol.keyFor === "function" ? Symbol.keyFor(symbol) : undefined;
   if (globalKey !== undefined) {
-    return `${SYMBOL_SENTINEL_PREFIX}${globalKey}`;
+    return `${SYMBOL_SENTINEL_PREFIX}global:${globalKey}`;
   }
   const description = symbol.description;
-  return `${SYMBOL_SENTINEL_PREFIX}${description ?? ""}`;
+  return `${SYMBOL_SENTINEL_PREFIX}local:${description ?? ""}`;
 }
 
 function toPropertyKeyString(
