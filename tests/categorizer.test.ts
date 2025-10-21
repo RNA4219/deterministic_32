@@ -209,9 +209,41 @@ test("global and local symbols remain distinguishable", () => {
   );
 
   const parsedMap = JSON.parse(serializedMap) as Record<string, string>;
-  assert.equal(parsedMap["__symbol__:global:id"], "global");
-  assert.equal(parsedMap["__symbol__:local:id"], "local");
+  assert.equal(parsedMap['__symbol__:["global","id"]'], "global");
+  assert.equal(parsedMap['__symbol__:["local","id"]'], "local");
 });
+
+test(
+  "Cat32 assign distinguishes maps and objects keyed by global vs local symbols",
+  () => {
+    const cat32 = new Cat32();
+    const globalSymbol = Symbol.for("id");
+    const localSymbol = Symbol("id");
+
+    const mapGlobalAssignment = cat32.assign(
+      new Map([[globalSymbol, "value"]]),
+    );
+    const mapLocalAssignment = cat32.assign(
+      new Map([[localSymbol, "value"]]),
+    );
+
+    assert.ok(mapGlobalAssignment.key !== mapLocalAssignment.key);
+    assert.ok(mapGlobalAssignment.hash !== mapLocalAssignment.hash);
+
+    const objectWithGlobal: Record<PropertyKey, string> = {
+      [globalSymbol]: "value",
+    };
+    const objectWithLocal: Record<PropertyKey, string> = {
+      [localSymbol]: "value",
+    };
+
+    const objectGlobalAssignment = cat32.assign(objectWithGlobal);
+    const objectLocalAssignment = cat32.assign(objectWithLocal);
+
+    assert.ok(objectGlobalAssignment.key !== objectLocalAssignment.key);
+    assert.ok(objectGlobalAssignment.hash !== objectLocalAssignment.hash);
+  },
+);
 
 test("stableStringify escapes sentinel-like string literals", () => {
   const sentinelLike = "\u0000cat32:number:Infinity\u0000";
@@ -1558,8 +1590,8 @@ test("functions serialize to strings and symbols use canonical sentinels", () =>
   const fn = function foo() {};
   const localSymbol = Symbol("x");
   const globalSymbol = Symbol.for("x");
-  const localSentinel = JSON.stringify("__symbol__:local:x");
-  const globalSentinel = JSON.stringify("__symbol__:global:x");
+  const localSentinel = JSON.stringify(`__symbol__:["local","x"]`);
+  const globalSentinel = JSON.stringify(`__symbol__:["global","x"]`);
 
   assert.equal(stableStringify(fn), String(fn));
   assert.equal(stableStringify(localSymbol), localSentinel);
@@ -1756,8 +1788,14 @@ test("stableStringify uses String() for functions and sentinels for symbols", ()
   const globalSymbol = Symbol.for("x");
 
   assert.equal(stableStringify(fn), String(fn));
-  assert.equal(stableStringify(localSymbol), JSON.stringify("__symbol__:local:x"));
-  assert.equal(stableStringify(globalSymbol), JSON.stringify("__symbol__:global:x"));
+  assert.equal(
+    stableStringify(localSymbol),
+    JSON.stringify(`__symbol__:["local","x"]`),
+  );
+  assert.equal(
+    stableStringify(globalSymbol),
+    JSON.stringify(`__symbol__:["global","x"]`),
+  );
 });
 
 test("canonical key follows String() for functions and sentinel encoding for symbols", () => {
@@ -1767,8 +1805,14 @@ test("canonical key follows String() for functions and sentinel encoding for sym
   const globalSymbol = Symbol.for("x");
 
   assert.equal(c.assign(fn).key, String(fn));
-  assert.equal(c.assign(localSymbol).key, JSON.stringify("__symbol__:local:x"));
-  assert.equal(c.assign(globalSymbol).key, JSON.stringify("__symbol__:global:x"));
+  assert.equal(
+    c.assign(localSymbol).key,
+    JSON.stringify(`__symbol__:["local","x"]`),
+  );
+  assert.equal(
+    c.assign(globalSymbol).key,
+    JSON.stringify(`__symbol__:["global","x"]`),
+  );
 });
 
 test("string sentinel literals remain literal canonical keys", () => {
