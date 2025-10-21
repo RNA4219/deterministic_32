@@ -109,3 +109,32 @@ test("local symbols with identical descriptions remain distinct", () => {
 
   assert.ok(stableStringify(setWithFirst) !== stableStringify(setWithSecond));
 });
+
+test("cat assign distinguishes local symbols sharing descriptions", () => {
+  const cat = new Cat32();
+  const description = "duplicate";
+
+  const first = Symbol(description);
+  const second = Symbol(description);
+
+  const firstSymbolAssignment = cat.assign(first);
+  const secondSymbolAssignment = cat.assign(second);
+
+  assert.ok(firstSymbolAssignment.key !== secondSymbolAssignment.key);
+  assert.ok(firstSymbolAssignment.hash !== secondSymbolAssignment.hash);
+
+  const firstSetAssignment = cat.assign(new Set([first]));
+  const secondSetAssignment = cat.assign(new Set([second]));
+
+  assert.ok(firstSetAssignment.key !== secondSetAssignment.key);
+  assert.ok(firstSetAssignment.hash !== secondSetAssignment.hash);
+
+  assert.ok(
+    firstSetAssignment.key === stableStringify(new Set([first])),
+    "set canonical key should match stable stringify output",
+  );
+  assert.ok(
+    secondSetAssignment.key === stableStringify(new Set([second])),
+    "set canonical key should match stable stringify output",
+  );
+});
