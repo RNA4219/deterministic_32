@@ -1979,6 +1979,66 @@ test("Map collisions with identical property keys produce deterministic output",
   assert.equal(forwardAssignment.hash, reverseAssignment.hash);
 });
 
+test(
+  "Map numeric keys remain distinct from string keys in canonical form",
+  () => {
+    const c = new Cat32();
+    const mixedKeyMap = new Map<unknown, string>([
+      [1, "number"],
+      ["1", "string"],
+    ]);
+
+    const assignment = c.assign(mixedKeyMap);
+    const serialized = stableStringify(mixedKeyMap);
+
+    assert.ok(
+      serialized.includes("\\u0000cat32:propertykey:"),
+      "stableStringify should encode property key sentinel for numeric Map keys",
+    );
+    assert.ok(
+      assignment.key.includes("\\u0000cat32:propertykey:"),
+      "Cat32 canonical key should encode property key sentinel for numeric Map keys",
+    );
+
+    const stringOnlyAssignment = c.assign(
+      new Map<string, string>([["1", "string"]]),
+    );
+
+    assert.ok(assignment.key !== stringOnlyAssignment.key);
+    assert.ok(assignment.hash !== stringOnlyAssignment.hash);
+  },
+);
+
+test(
+  "Map bigint keys remain distinct from string keys in canonical form",
+  () => {
+    const c = new Cat32();
+    const mixedKeyMap = new Map<unknown, string>([
+      [1n, "bigint"],
+      ["1", "string"],
+    ]);
+
+    const assignment = c.assign(mixedKeyMap);
+    const serialized = stableStringify(mixedKeyMap);
+
+    assert.ok(
+      serialized.includes("\\u0000cat32:propertykey:"),
+      "stableStringify should encode property key sentinel for bigint Map keys",
+    );
+    assert.ok(
+      assignment.key.includes("\\u0000cat32:propertykey:"),
+      "Cat32 canonical key should encode property key sentinel for bigint Map keys",
+    );
+
+    const stringOnlyAssignment = c.assign(
+      new Map<string, string>([["1", "string"]]),
+    );
+
+    assert.ok(assignment.key !== stringOnlyAssignment.key);
+    assert.ok(assignment.hash !== stringOnlyAssignment.hash);
+  },
+);
+
 test("Map values serialize identically to plain object values", () => {
   const c = new Cat32();
   const fn = function foo() {};

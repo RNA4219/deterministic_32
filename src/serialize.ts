@@ -609,7 +609,7 @@ function toPropertyKeyString(
   }
 
   if (rawKey === null) {
-    return "null";
+    return buildPropertyKeySentinel(rawKey, serializedKey);
   }
 
   if (rawKey instanceof Date) {
@@ -658,14 +658,7 @@ function toPropertyKeyString(
     rawType === "boolean" ||
     rawType === "undefined"
   ) {
-    const stringifiedPrimitive = String(
-      rawKey as number | bigint | boolean | undefined,
-    );
-    return buildPropertyKeySentinel(
-      rawKey,
-      serializedKey,
-      stringifiedPrimitive,
-    );
+    return buildPropertyKeySentinel(rawKey, serializedKey);
   }
 
   if (rawType === "object" || rawType === "function") {
