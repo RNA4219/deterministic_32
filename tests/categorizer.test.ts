@@ -456,6 +456,68 @@ test("Cat32 assign retains distinct Map entries for identical property keys", ()
   assert.ok(first.hash !== second.hash);
 });
 
+function createNonEnumerableToStringObject(literal: string): Record<string, never> {
+  const object: Record<string, never> = {};
+  Object.defineProperty(object, "toString", {
+    value() {
+      return literal;
+    },
+    enumerable: false,
+  });
+  return object;
+}
+
+test(
+  "stableStringify differentiates Map entries from sentinel-style literal strings",
+  () => {
+    const baseLiteral = "__string__:foo";
+    const suffix = "__string__:\u0000cat32:map-entry-index:1\u0000";
+
+    const duplicateLike = new Map<unknown, string>([
+      [createNonEnumerableToStringObject(baseLiteral), "a"],
+      [createNonEnumerableToStringObject(baseLiteral), "b"],
+    ]);
+
+    const sentinelLike = new Map<unknown, string>([
+      [createNonEnumerableToStringObject(baseLiteral), "a"],
+      [
+        createNonEnumerableToStringObject(`${baseLiteral}${suffix}`),
+        "b",
+      ],
+    ]);
+
+    assert.ok(stableStringify(duplicateLike) !== stableStringify(sentinelLike));
+  },
+);
+
+test(
+  "Cat32 assign differentiates Map entries from sentinel-style literal strings",
+  () => {
+    const baseLiteral = "__string__:foo";
+    const suffix = "__string__:\u0000cat32:map-entry-index:1\u0000";
+
+    const duplicateLike = new Map<unknown, string>([
+      [createNonEnumerableToStringObject(baseLiteral), "a"],
+      [createNonEnumerableToStringObject(baseLiteral), "b"],
+    ]);
+
+    const sentinelLike = new Map<unknown, string>([
+      [createNonEnumerableToStringObject(baseLiteral), "a"],
+      [
+        createNonEnumerableToStringObject(`${baseLiteral}${suffix}`),
+        "b",
+      ],
+    ]);
+
+    const categorizer = new Cat32();
+    const duplicateAssignment = categorizer.assign(duplicateLike);
+    const sentinelAssignment = categorizer.assign(sentinelLike);
+
+    assert.ok(duplicateAssignment.key !== sentinelAssignment.key);
+    assert.ok(duplicateAssignment.hash !== sentinelAssignment.hash);
+  },
+);
+
 test("Map serialization differentiates duplicate-like object entries", () => {
   const withDuplicates = new Map<unknown, string>([
     [{}, "a"],

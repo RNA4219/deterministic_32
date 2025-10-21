@@ -16,6 +16,7 @@ const STRING_LITERAL_SENTINEL_PREFIX = "__string__:";
 const REGEXP_SENTINEL_TYPE = "regexp";
 const MAP_ENTRY_INDEX_LITERAL_SEGMENT =
   `${STRING_LITERAL_SENTINEL_PREFIX}${SENTINEL_PREFIX}map-entry-index:`;
+const MAP_ENTRY_INDEX_SENTINEL_SEGMENT = `${SENTINEL_PREFIX}map-entry-index:`;
 const HEX_DIGITS = "0123456789abcdef";
 const STRING_LITERAL_ESCAPED_SENTINEL_TYPES = new Set<string>([
   REGEXP_SENTINEL_TYPE,
@@ -196,6 +197,7 @@ function _stringify(v: unknown, stack: Set<unknown>): string {
       serializedKey: string;
       serializedValue: string;
       order: number;
+      propertyKey: string;
     };
     const normalizedEntries: Record<
       string,
@@ -216,6 +218,7 @@ function _stringify(v: unknown, stack: Set<unknown>): string {
           serializedKey,
           serializedValue,
           order: bucket.entries.length,
+          propertyKey,
         });
         bucket.shouldDedupe &&= shouldDedupe;
       } else {
@@ -226,6 +229,7 @@ function _stringify(v: unknown, stack: Set<unknown>): string {
               serializedKey,
               serializedValue,
               order: 0,
+              propertyKey,
             },
           ],
           shouldDedupe,
@@ -253,6 +257,7 @@ function _stringify(v: unknown, stack: Set<unknown>): string {
         if (bodyParts.length) bodyParts.push(",");
         const propertyKey = mapEntryPropertyKey(
           bucket.propertyKey,
+          entry.propertyKey,
           index,
           entries.length,
           bucket.shouldDedupe,
@@ -340,20 +345,18 @@ function compareSerializedEntry(
 }
 
 function mapEntryPropertyKey(
-  baseKey: string,
+  bucketKey: string,
+  entryPropertyKey: string,
   entryIndex: number,
   totalEntries: number,
   shouldDedupe: boolean,
 ): string {
   if (!shouldDedupe || totalEntries <= 1 || entryIndex === 0) {
-    return baseKey;
+    return entryPropertyKey;
   }
 
-  const indexSuffix = `${STRING_LITERAL_SENTINEL_PREFIX}${typeSentinel(
-    "map-entry-index",
-    String(entryIndex),
-  )}`;
-  return `${baseKey}${indexSuffix}`;
+  const payload = JSON.stringify([bucketKey, entryPropertyKey, entryIndex]);
+  return typeSentinel("map-entry-index", payload);
 }
 
 function mapBucketTypeTag(rawKey: unknown): string {
@@ -476,6 +479,10 @@ function needsStringLiteralSentinelEscape(value: string): boolean {
   }
 
   if (value.includes(MAP_ENTRY_INDEX_LITERAL_SEGMENT)) {
+    return true;
+  }
+
+  if (value.includes(MAP_ENTRY_INDEX_SENTINEL_SEGMENT)) {
     return true;
   }
 
