@@ -670,6 +670,32 @@ test(
   },
 );
 
+test("Map null key remains distinct from string 'null' key", () => {
+  const c = new Cat32();
+  const mapWithNullKey = new Map<unknown, string>([[null, "a"]]);
+  const mapWithStringKey = new Map<string, string>([["null", "a"]]);
+
+  const nullAssignment = c.assign(mapWithNullKey);
+  const stringAssignment = c.assign(mapWithStringKey);
+
+  assert.ok(
+    nullAssignment.key !== stringAssignment.key,
+    'Cat32 canonical key should differ for null and "null" Map keys',
+  );
+  assert.ok(
+    nullAssignment.hash !== stringAssignment.hash,
+    'Cat32 hash should differ for null and "null" Map keys',
+  );
+
+  const nullSerialized = stableStringify(mapWithNullKey);
+  const stringSerialized = stableStringify(mapWithStringKey);
+
+  assert.ok(
+    nullSerialized !== stringSerialized,
+    'stableStringify should distinguish null and "null" Map keys',
+  );
+});
+
 test(
   "Cat32 assign differentiates Map object keys from sentinel-style string keys",
   () => {
