@@ -18,6 +18,8 @@ const MAP_ENTRY_INDEX_LITERAL_SEGMENT =
   `${STRING_LITERAL_SENTINEL_PREFIX}${SENTINEL_PREFIX}map-entry-index:`;
 const MAP_ENTRY_INDEX_SENTINEL_SEGMENT = `${SENTINEL_PREFIX}map-entry-index:`;
 const HEX_DIGITS = "0123456789abcdef";
+const PROPERTY_KEY_SENTINEL_TYPE = "propertykey";
+
 const STRING_LITERAL_ESCAPED_SENTINEL_TYPES = new Set<string>([
   REGEXP_SENTINEL_TYPE,
   "typedarray",
@@ -26,6 +28,7 @@ const STRING_LITERAL_ESCAPED_SENTINEL_TYPES = new Set<string>([
   "number",
   "bigint",
   "hole",
+  PROPERTY_KEY_SENTINEL_TYPE,
 ]);
 const ARRAY_BUFFER_LIKE_SENTINEL_PREFIXES = [
   `${SENTINEL_PREFIX}typedarray:`,
@@ -376,6 +379,19 @@ function mapBucketTypeTag(rawKey: unknown): string {
   return typeof rawKey;
 }
 
+function buildPropertyKeySentinel(
+  rawKey: unknown,
+  serializedKey: string,
+  stringified?: string,
+): string {
+  const bucketTag = mapBucketTypeTag(rawKey);
+  const payloadParts = [bucketTag, serializedKey];
+  if (stringified !== undefined) {
+    payloadParts.push(stringified);
+  }
+  return typeSentinel(PROPERTY_KEY_SENTINEL_TYPE, JSON.stringify(payloadParts));
+}
+
 function toMapPropertyKey(
   rawKey: unknown,
   serializedKey: string,
@@ -669,18 +685,22 @@ function toPropertyKeyString(
       stringified = undefined;
     }
 
-    if (stringified !== undefined) {
-      const normalizedString = normalizePlainObjectKey(stringified);
-      if (typeof revivedKey === "string") {
-        const normalizedRevived = normalizePlainObjectKey(
-          escapeSentinelString(revivedKey),
-        );
-        if (normalizedRevived !== normalizedString) {
-          return normalizedRevived;
-        }
+    const propertyKeySentinel = buildPropertyKeySentinel(
+      rawKey,
+      serializedKey,
+      stringified,
+    );
+
+    if (typeof revivedKey === "string") {
+      const normalizedRevived = normalizePlainObjectKey(
+        escapeSentinelString(revivedKey),
+      );
+      if (normalizedRevived !== propertyKeySentinel) {
+        return normalizedRevived;
       }
-      return normalizedString;
     }
+
+    return propertyKeySentinel;
   }
 
   if (typeof revivedKey === "string") {
