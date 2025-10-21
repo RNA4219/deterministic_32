@@ -65,3 +65,28 @@ test("sentinel canonical encodings are preserved", () => {
   assert.equal(holeAssignment.key, stableStringify(hole));
   assert.ok(holeAssignment.key.includes("__hole__"));
 });
+
+test("numeric and bigint sentinel literals are escaped", () => {
+  const cat = new Cat32();
+
+  const cases: Array<{ value: number | bigint }> = [
+    { value: Number.NaN },
+    { value: Number.POSITIVE_INFINITY },
+    { value: 1n },
+  ];
+
+  for (const { value } of cases) {
+    const sentinelLiteral = JSON.parse(stableStringify(value));
+    const literalAssignment = cat.assign(sentinelLiteral);
+    const actualAssignment = cat.assign(value);
+
+    assert.ok(literalAssignment.key !== actualAssignment.key);
+    assert.ok(literalAssignment.hash !== actualAssignment.hash);
+
+    assert.equal(
+      literalAssignment.key,
+      JSON.stringify(`__string__:${sentinelLiteral}`),
+    );
+    assert.equal(actualAssignment.key, JSON.stringify(sentinelLiteral));
+  }
+});
