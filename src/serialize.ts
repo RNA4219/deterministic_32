@@ -209,23 +209,32 @@ function _stringify(v: unknown, stack: Set<unknown>): string {
       {
         propertyKey: string;
         entries: SerializedEntry[];
-        shouldDedupe: boolean;
+        shouldDedupeByType: boolean;
+        hasDuplicatePropertyKey: boolean;
       }
     > = Object.create(null);
     for (const [rawKey, rawValue] of v.entries()) {
       const serializedKey = _stringify(rawKey, stack);
       const { bucketKey, propertyKey } = toMapPropertyKey(rawKey, serializedKey);
       const serializedValue = _stringify(rawValue, stack);
-      const shouldDedupe = typeof rawKey !== "symbol";
+      const shouldDedupeByType = typeof rawKey !== "symbol";
       const bucket = normalizedEntries[bucketKey];
       if (bucket) {
+        const hasDuplicatePropertyKey = bucket.entries.some(
+          (entry) => entry.propertyKey === propertyKey,
+        );
         bucket.entries.push({
           serializedKey,
           serializedValue,
           order: bucket.entries.length,
           propertyKey,
         });
-        bucket.shouldDedupe &&= shouldDedupe;
+        if (hasDuplicatePropertyKey) {
+          bucket.hasDuplicatePropertyKey = true;
+        }
+        if (!shouldDedupeByType) {
+          bucket.shouldDedupeByType = false;
+        }
       } else {
         normalizedEntries[bucketKey] = {
           propertyKey,
@@ -237,7 +246,8 @@ function _stringify(v: unknown, stack: Set<unknown>): string {
               propertyKey,
             },
           ],
-          shouldDedupe,
+          shouldDedupeByType,
+          hasDuplicatePropertyKey: false,
         };
       }
     }
@@ -265,7 +275,9 @@ function _stringify(v: unknown, stack: Set<unknown>): string {
           entry.propertyKey,
           index,
           entries.length,
-          bucket.shouldDedupe,
+          entry.order,
+          bucket.shouldDedupeByType,
+          bucket.hasDuplicatePropertyKey,
         );
         bodyParts.push(JSON.stringify(propertyKey), ":", entry.serializedValue);
       }
@@ -354,13 +366,20 @@ function mapEntryPropertyKey(
   entryPropertyKey: string,
   entryIndex: number,
   totalEntries: number,
-  shouldDedupe: boolean,
+  entryOrder: number,
+  shouldDedupeByType: boolean,
+  hasDuplicatePropertyKey: boolean,
 ): string {
-  if (!shouldDedupe || totalEntries <= 1 || entryIndex === 0) {
+  if (
+    (!shouldDedupeByType && !hasDuplicatePropertyKey) ||
+    totalEntries <= 1 ||
+    (!hasDuplicatePropertyKey && entryIndex === 0)
+  ) {
     return entryPropertyKey;
   }
 
-  const payload = JSON.stringify([bucketKey, entryPropertyKey, entryIndex]);
+  const uniqueIndex = hasDuplicatePropertyKey ? entryOrder : entryIndex;
+  const payload = JSON.stringify([bucketKey, entryPropertyKey, uniqueIndex]);
   return typeSentinel("map-entry-index", payload);
 }
 
