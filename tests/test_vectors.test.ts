@@ -187,7 +187,19 @@ function deriveSaltedKey(
   options?: Pick<CategorizerOptions, "salt" | "namespace">,
 ): string {
   const baseSalt = options?.salt ?? "";
-  const namespaceSuffix = options?.namespace ? `|ns:${options.namespace}` : "";
-  const combined = `${baseSalt}${namespaceSuffix}`;
-  return combined ? `${key}|salt:${combined}` : key;
+  const namespaceValue =
+    options?.namespace !== undefined && options.namespace !== ""
+      ? options.namespace
+      : undefined;
+
+  if (!baseSalt && namespaceValue === undefined) {
+    return key;
+  }
+
+  if (namespaceValue === undefined) {
+    return `${key}|salt:${baseSalt}`;
+  }
+
+  const encoded = JSON.stringify([baseSalt, namespaceValue]);
+  return `${key}|saltns:${encoded}`;
 }

@@ -26,6 +26,7 @@ const DEFAULT_LABELS = [
 export class Cat32 {
   private labels: string[];
   private salt: string;
+  private namespaceValue?: string;
   private normalize: NormalizeMode;
   private overrides: Map<string, number>;
 
@@ -34,9 +35,11 @@ export class Cat32 {
     if (opts.labels && opts.labels.length !== 32) {
       throw new RangeError("labels length must be 32");
     }
-    const baseSalt = opts.salt ?? "";
-    const ns = opts.namespace ? `|ns:${opts.namespace}` : "";
-    this.salt = `${baseSalt}${ns}`;
+    this.salt = opts.salt ?? "";
+    this.namespaceValue =
+      opts.namespace !== undefined && opts.namespace !== ""
+        ? opts.namespace
+        : undefined;
 
     const normalize = opts.normalize ?? "nfkc";
     if (normalize !== "none" && normalize !== "nfc" && normalize !== "nfkc" && normalize !== "nfkd") {
@@ -81,7 +84,16 @@ export class Cat32 {
   }
 
   private salted(s: string): string {
-    return this.salt ? `${s}|salt:${this.salt}` : s;
+    if (!this.salt && this.namespaceValue === undefined) {
+      return s;
+    }
+
+    if (this.namespaceValue === undefined) {
+      return `${s}|salt:${this.salt}`;
+    }
+
+    const encoded = JSON.stringify([this.salt, this.namespaceValue]);
+    return `${s}|saltns:${encoded}`;
   }
 
   private canonicalKey(input: unknown): string {
