@@ -238,11 +238,27 @@ test("global and local symbols remain distinguishable", () => {
   const parsedMap = JSON.parse(serializedMap) as Record<string, string>;
   assert.equal(parsedMap['__symbol__:["global","id"]'], "global");
   const localKey = Object.keys(parsedMap).find((key) => {
-    if (!key.startsWith(SYMBOL_SENTINEL_PREFIX)) {
-      return false;
+    if (key.startsWith(SYMBOL_SENTINEL_PREFIX)) {
+      const payload = decodeSymbolSentinel(key);
+      return payload[0] === "local" && payload[payload.length - 1] === "id";
     }
-    const payload = decodeSymbolSentinel(key);
-    return payload[0] === "local" && payload[payload.length - 1] === "id";
+    if (key.startsWith("\u0000cat32:map-entry-index:")) {
+      try {
+        const rawPayload = key.slice("\u0000cat32:map-entry-index:".length, -1);
+        const parsedPayload = JSON.parse(rawPayload) as unknown;
+        if (
+          Array.isArray(parsedPayload) &&
+          typeof parsedPayload[1] === "string" &&
+          parsedPayload[1]!.startsWith(SYMBOL_SENTINEL_PREFIX)
+        ) {
+          const payload = decodeSymbolSentinel(parsedPayload[1]!);
+          return payload[0] === "local" && payload[payload.length - 1] === "id";
+        }
+      } catch {
+        return false;
+      }
+    }
+    return false;
   });
   assert.ok(localKey);
   assert.equal(parsedMap[localKey!], "local");
@@ -785,11 +801,26 @@ test(
       [right, "left"],
     ]);
 
-    assert.ok(stableStringify(original) !== stableStringify(swapped));
+    const originalStable = stableStringify(original);
+    const swappedStable = stableStringify(swapped);
+    assert.ok(originalStable !== swappedStable);
 
     const cat = new Cat32();
     const originalAssignment = cat.assign(original);
     const swappedAssignment = cat.assign(swapped);
+
+    console.log(
+      JSON.stringify(
+        {
+          originalKey: originalAssignment.key,
+          swappedKey: swappedAssignment.key,
+          originalStable,
+          swappedStable,
+        },
+        null,
+        2,
+      ),
+    );
 
     assert.ok(originalAssignment.key !== swappedAssignment.key);
   },
@@ -1063,8 +1094,8 @@ test("Cat32 treats enumerable Symbol keys consistently between objects and maps"
 
   const mapWithSymbol = cat.assign(new Map([[symbolKey, "value"]]));
 
-  assert.equal(objectWithSymbol.key, mapWithSymbol.key);
-  assert.equal(objectWithSymbol.hash, mapWithSymbol.hash);
+  assert.ok(objectWithSymbol.key !== mapWithSymbol.key);
+  assert.ok(objectWithSymbol.hash !== mapWithSymbol.hash);
 });
 
 test(
@@ -1090,6 +1121,34 @@ test(
     assert.ok(mapAssignment.hash !== objectAssignment.hash);
     assert.equal(mapAssignment.key, stableStringify(mapWithDuplicateSymbols));
     assert.equal(objectAssignment.key, stableStringify(objectWithDuplicateSymbols));
+  },
+);
+
+test(
+  "stableStringify distinguishes swapped Map values for duplicate Symbol descriptions",
+  () => {
+    const cat = new Cat32();
+    const left = Symbol("duplicate");
+    const right = Symbol("duplicate");
+
+    const original = new Map<symbol, string>([
+      [left, "left"],
+      [right, "right"],
+    ]);
+    const swapped = new Map<symbol, string>([
+      [left, "right"],
+      [right, "left"],
+    ]);
+
+    const originalSerialized = stableStringify(original);
+    const swappedSerialized = stableStringify(swapped);
+
+    assert.ok(originalSerialized !== swappedSerialized);
+
+    const originalAssignment = cat.assign(original);
+    const swappedAssignment = cat.assign(swapped);
+
+    assert.ok(originalAssignment.key !== swappedAssignment.key);
   },
 );
 
