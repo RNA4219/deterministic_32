@@ -205,6 +205,16 @@ test("retryQueueEntry resolves with attempt result and removes entry on success"
       recordDuringAttempt.lastAttemptedAt instanceof Date,
       "recordAttempt should set lastAttemptedAt before attempt resolves",
     );
+    assert.equal(
+      recordDuringAttempt.lastError,
+      undefined,
+      "recordFailure metadata should not be set during successful attempt",
+    );
+    assert.equal(
+      recordDuringAttempt.failedAt,
+      undefined,
+      "recordFailure timestamp should remain unset during successful attempt",
+    );
     return attemptResult;
   });
 
