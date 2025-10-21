@@ -25,8 +25,12 @@ tests/
 ## 4. 直列化の詳細（serialize.ts）
 - **循環検出**は `Set<object>` スタックで実施。
 - **Map/Set**:
-  - Map: `[...map.entries()].map(k→String(k)).sort()` でキー整列 → `{"k":v}` 形式
-  - Set: `Array.from(set).map(stableStringify).sort()` で**文字列昇順**に並べる（順序安定化）
+  - Map: 直列化キーは `typeSentinel("propertykey", ...)` や `typeSentinel("map-entry-index", ...)` を含む**正規化キー**へ変換する。処理の流れは以下の通り。
+    1. 各エントリのキーを `stableStringify` し、`toMapPropertyKey` で `(bucketKey, propertyKey)` に分解する。`bucketKey` には型タグ（`symbol`、`arraybuffer` など）とセンチネル化したキー情報を含める。
+    2. 同一 `bucketKey` ごとにエントリを集約し、`serializedKey`/`serializedValue`/挿入順でソートする。
+    3. バケット内で `propertyKey` が重複する場合や複数型を含む場合は `typeSentinel("map-entry-index", JSON.stringify([bucketKey, propertyKey, uniqueIndex]))` を生成してインデックスを埋め込み、衝突を解消する。
+    4. 正規化済みの `[propertyKey, serializedValue]` 配列を `JSON.stringify` し、最後に `typeSentinel("map", payload)` で包む。
+  - Set: 各要素を `stableStringify` した結果と `buildSetSortKey` が返すセンチネル対応ソートキーで比較し、`sortKey` → `serializedValue` → 挿入順の優先度で整列する。重複要素も同じキー順序で保持されるが、ソートにより決定的な並びが得られる。
 - **Date**: `__date__:<ISO8601>`
 - `undefined` は `"__undefined__"` の**文字列**にエンコード。
 

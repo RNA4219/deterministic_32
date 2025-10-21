@@ -28,16 +28,18 @@ input (unknown)
 - 仕様（抜粋）:
   - `null` → `"null"`、`undefined` → `"__undefined__"`
   - `boolean` → `"true"|"false"`、`number`/`bigint` → `JSON.stringify` に準拠
-  - `string` → `JSON.stringify` に準拠（`"` で囲む）
+  - `string` → `JSON.stringify` に準拠（`"` で囲む）。センチネル文字列（`__undefined__` や `\u0000cat32:...\u0000` など）と衝突する場合は `__string__:` プレフィックスを 1 回以上付与してエスケープする。
   - **Array**: `[...]`（順序維持）
   - **Object**: 自身の**列挙可能プロパティ**を**キー昇順**で `{k:v}` 並べる
   - **Date**: `"__date__:<ISO8601>"`
-  - **Map**: `{"k":"v"...}`（キーを**文字列化**→昇順）
+  - **Map**: `{"k":"v"...}`（キーをセンチネル含む**正規化キー**に変換後、昇順に整列）
   - **Set**: `[...]`（要素を正規化直列化して配列化／順序の安定化は実装依存、推奨: 直列化後の文字列昇順）
-  - `function`/`symbol`: `String(v)`
+  - `function`: `String(v)`
+  - `symbol`: `"__symbol__:[...]"` 形式のセンチネル文字列（`global`/`local` 情報を JSON で保持）
   - **循環参照**を検出したら **`TypeError("Cyclic object")`** を投げる。
 - 実装ノート:
   - JSON表現は**ASCIIエスケープ不要**（UTF‑8運用を前提）。
+  - **typeSentinel**: `typeSentinel(type, payload)` は `"\u0000cat32:<type>:<payload>\u0000"` 文字列を生成し、直列化時の型識別と追加情報を保持する。TypedArray/ArrayBuffer/SharedArrayBuffer/Map のエントリや数値特異値などはこのセンチネルを介してエンコードする。
   - **TypedArray**: `"\u0000cat32:typedarray:kind=<ViewName>;byteOffset=<n>;byteLength=<n>;length=<len?>;hex=<bytes>\u0000"`
     - `length` パラメータは `view.length` が存在する場合のみ付与。
     - バイト列は **16進小文字** (`00`-`ff`) で連結し、センチネル末尾 `\u0000` を付ける。

@@ -72,4 +72,9 @@ stableStringify(new ArrayBuffer(2))
 // SharedArrayBuffer はランタイムがサポートしている場合に限り利用可能。
 stableStringify(new SharedArrayBuffer(2))
 → "\"\\u0000cat32:sharedarraybuffer:byteLength=2;hex=0000\\u0000\""
+
+// センチネル文字列そのものを渡した場合は __string__: プレフィックスでエスケープされる。
+const sentinel = "\u0000cat32:number:NaN\u0000";
+stableStringify(sentinel)
+→ "\"__string__:\\u0000cat32:number:NaN\\u0000\""
 ```
