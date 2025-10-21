@@ -174,6 +174,60 @@ test("recordFailure keeps entry with failure metadata", () => {
   assert.equal(record.attempts, 1, "attempt count should be preserved");
 });
 
+test("recordAttempt updates attempt metadata", async () => {
+  const store = createRefreshQueueStore();
+  const request = createRequest("https://example.test/api", { method: "POST" });
+
+  const { id } = store.enqueue(request);
+
+  store.recordAttempt(id);
+
+  const record = store.get(id);
+  assert.ok(record, "record should exist after first attempt");
+  if (!record) {
+    throw new Error("record must exist to assert attempts");
+  }
+
+  assert.equal(record.attempts, 1, "attempts should increment after first recordAttempt");
+
+  const firstAttemptedAt = record.lastAttemptedAt;
+  assert.ok(firstAttemptedAt instanceof Date, "lastAttemptedAt should be a Date instance");
+  if (!(firstAttemptedAt instanceof Date)) {
+    throw new Error("lastAttemptedAt should exist after first recordAttempt");
+  }
+
+  await new Promise((resolve) => {
+    setTimeout(resolve, 5);
+  });
+
+  store.recordAttempt(id);
+
+  const updatedRecord = store.get(id);
+  assert.ok(updatedRecord, "record should exist after second attempt");
+  if (!updatedRecord) {
+    throw new Error("record must exist after second attempt");
+  }
+
+  assert.equal(
+    updatedRecord.attempts,
+    2,
+    "attempts should reflect the number of times recordAttempt is called",
+  );
+
+  const secondAttemptedAt = updatedRecord.lastAttemptedAt;
+  assert.ok(
+    secondAttemptedAt instanceof Date,
+    "lastAttemptedAt should remain a Date instance after subsequent attempts",
+  );
+  if (!(secondAttemptedAt instanceof Date)) {
+    throw new Error("lastAttemptedAt should exist after second recordAttempt");
+  }
+  assert.ok(
+    secondAttemptedAt.getTime() > firstAttemptedAt.getTime(),
+    "lastAttemptedAt should update to a more recent timestamp",
+  );
+});
+
 test("enqueue stores cloned request with matching data", async () => {
   const store = createRefreshQueueStore();
   const request = createRequest("https://example.test/api?query=1", {
