@@ -24,19 +24,19 @@
 
 | input | normalized | salted_key | hash_hex | index |
 |---|---|---|---|---|
-| `` | `""` | `""|salt:projX|ns:v1` | `713b5146` | 6 |
-| `A` | `"A"` | `"A"|salt:projX|ns:v1` | `69cb9a27` | 7 |
-| `Ａ` | `"A"` | `"A"|salt:projX|ns:v1` | `69cb9a27` | 7 |
-| `Á` | `"Á"` | `"Á"|salt:projX|ns:v1` | `f18c95f2` | 18 |
-| `Á` | `"Á"` | `"Á"|salt:projX|ns:v1` | `f18c95f2` | 18 |
-| `日本語` | `"日本語"` | `"日本語"|salt:projX|ns:v1` | `b8941818` | 24 |
-| `hello` | `"hello"` | `"hello"|salt:projX|ns:v1` | `31f95254` | 20 |
-| `hello world` | `"hello world"` | `"hello world"|salt:projX|ns:v1` | `fba46898` | 24 |
-| `123` | `"123"` | `"123"|salt:projX|ns:v1` | `3c4ff104` | 4 |
-| `true` | `"true"` | `"true"|salt:projX|ns:v1` | `38d58126` | 6 |
-| `null` | `"null"` | `"null"|salt:projX|ns:v1` | `232b692f` | 15 |
-| `user:123` | `"user:123"` | `"user:123"|salt:projX|ns:v1` | `0cfe3e2b` | 11 |
-| `task:register` | `"task:register"` | `"task:register"|salt:projX|ns:v1` | `85c59d04` | 4 |
+| `` | `""` | `""|saltns:["projX","v1"]` | `bc802308` | 8 |
+| `A` | `"A"` | `"A"|saltns:["projX","v1"]` | `f4b2bd6f` | 15 |
+| `Ａ` | `"A"` | `"A"|saltns:["projX","v1"]` | `f4b2bd6f` | 15 |
+| `Á` | `"Á"` | `"Á"|saltns:["projX","v1"]` | `e2325e24` | 4 |
+| `Á` | `"Á"` | `"Á"|saltns:["projX","v1"]` | `e2325e24` | 4 |
+| `日本語` | `"日本語"` | `"日本語"|saltns:["projX","v1"]` | `319ef956` | 22 |
+| `hello` | `"hello"` | `"hello"|saltns:["projX","v1"]` | `6d983fb2` | 18 |
+| `hello world` | `"hello world"` | `"hello world"|saltns:["projX","v1"]` | `50dfcad6` | 22 |
+| `123` | `"123"` | `"123"|saltns:["projX","v1"]` | `0ac6e002` | 2 |
+| `true` | `"true"` | `"true"|saltns:["projX","v1"]` | `a4680368` | 8 |
+| `null` | `"null"` | `"null"|saltns:["projX","v1"]` | `b0347117` | 23 |
+| `user:123` | `"user:123"` | `"user:123"|saltns:["projX","v1"]` | `11d00f43` | 3 |
+| `task:register` | `"task:register"` | `"task:register"|saltns:["projX","v1"]` | `d61ce402` | 2 |
 
 ### Canonicalization example (objects)
 
@@ -54,7 +54,7 @@ Canonical key (sorted keys, then NFKC):
 {"id":123,"tags":["a","b"]}
 ```
 
-FNV-1a32 over UTF-8 for salted key `{"id":123,"tags":["a","b"]}|salt:projX|ns:v1`:
+FNV-1a32 over UTF-8 for salted key `{"id":123,"tags":["a","b"]}|saltns:["projX","v1"]`:
 - hash = `dd3673d7`
 - index = `23`
 

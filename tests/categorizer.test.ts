@@ -1376,6 +1376,13 @@ test("deterministic mapping for object key order", () => {
   assert.equal(a1.hash, a2.hash);
 });
 
+test("Cat32 salt namespace options avoid literal collision", () => {
+  const literal = new Cat32({ salt: "foo|ns:bar" }).assign("value");
+  const namespaced = new Cat32({ salt: "foo", namespace: "bar" }).assign("value");
+
+  assert.ok(literal.hash !== namespaced.hash);
+});
+
 test("canonical key encodes undefined sentinel", () => {
   const c = new Cat32();
   const assignment = c.assign({ value: undefined });
