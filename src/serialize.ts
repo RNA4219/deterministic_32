@@ -23,6 +23,27 @@ const PROPERTY_KEY_SENTINEL_TYPE = "propertykey";
 const LOCAL_SYMBOL_SENTINEL_REGISTRY = new Map<symbol, string>();
 let nextLocalSymbolSentinelId = 0;
 
+function getLocalSymbolSentinelIdentifier(symbol: symbol): string | undefined {
+  return LOCAL_SYMBOL_SENTINEL_REGISTRY.get(symbol);
+}
+
+function setLocalSymbolSentinelIdentifier(
+  symbol: symbol,
+  identifier: string,
+): void {
+  LOCAL_SYMBOL_SENTINEL_REGISTRY.set(symbol, identifier);
+}
+
+function getSymbolBucketKey(symbol: symbol): string {
+  const globalKey =
+    typeof Symbol.keyFor === "function" ? Symbol.keyFor(symbol) : undefined;
+  if (globalKey !== undefined) {
+    return `global:${globalKey}`;
+  }
+  const description = symbol.description ?? "";
+  return `local:${description}`;
+}
+
 const STRING_LITERAL_ESCAPED_SENTINEL_TYPES = new Set<string>([
   REGEXP_SENTINEL_TYPE,
   "typedarray",
@@ -220,8 +241,9 @@ function _stringify(v: unknown, stack: Set<unknown>): string {
       const serializedKey = _stringify(rawKey, stack);
       const { bucketKey, propertyKey } = toMapPropertyKey(rawKey, serializedKey);
       const serializedValue = _stringify(rawValue, stack);
-      const shouldDedupeByType = typeof rawKey !== "symbol";
       const bucket = normalizedEntries[bucketKey];
+      const rawKeyIsSymbol = typeof rawKey === "symbol";
+      const shouldDedupeByType = rawKeyIsSymbol ? bucket !== undefined : true;
       if (bucket) {
         const hasDuplicatePropertyKey = bucket.entries.some(
           (entry) => entry.propertyKey === propertyKey,
@@ -235,7 +257,9 @@ function _stringify(v: unknown, stack: Set<unknown>): string {
         if (hasDuplicatePropertyKey) {
           bucket.hasDuplicatePropertyKey = true;
         }
-        if (!shouldDedupeByType) {
+        if (shouldDedupeByType) {
+          bucket.shouldDedupeByType = true;
+        } else {
           bucket.shouldDedupeByType = false;
         }
       } else {
@@ -438,7 +462,13 @@ function toMapPropertyKey(
     };
   }
   const propertyKey = toPropertyKeyString(rawKey, revivedKey, serializedKey);
-  if (typeof rawKey === "symbol" || rawKey instanceof RegExp) {
+  if (typeof rawKey === "symbol") {
+    return {
+      bucketKey: `${bucketTag}|${getSymbolBucketKey(rawKey as symbol)}`,
+      propertyKey,
+    };
+  }
+  if (rawKey instanceof RegExp) {
     return {
       bucketKey: `${bucketTag}|${propertyKey}`,
       propertyKey,
@@ -639,11 +669,11 @@ function toSymbolSentinel(symbol: symbol): string {
     const payload = JSON.stringify(["global", globalKey]);
     return `${SYMBOL_SENTINEL_PREFIX}${payload}`;
   }
-  let identifier = LOCAL_SYMBOL_SENTINEL_REGISTRY.get(symbol);
+  let identifier = getLocalSymbolSentinelIdentifier(symbol);
   if (identifier === undefined) {
     identifier = nextLocalSymbolSentinelId.toString(36);
     nextLocalSymbolSentinelId += 1;
-    LOCAL_SYMBOL_SENTINEL_REGISTRY.set(symbol, identifier);
+    setLocalSymbolSentinelIdentifier(symbol, identifier);
   }
   const description = symbol.description ?? "";
   const payload = JSON.stringify(["local", identifier, description]);

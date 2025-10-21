@@ -109,3 +109,46 @@ test("local symbols with identical descriptions remain distinct", () => {
 
   assert.ok(stableStringify(setWithFirst) !== stableStringify(setWithSecond));
 });
+
+test("sets with duplicate-description symbols remain distinguishable", () => {
+  const cat = new Cat32();
+  const description = "duplicate";
+
+  const firstPair = new Set([Symbol(description), Symbol(description)]);
+  const secondPair = new Set([Symbol(description), Symbol(description)]);
+
+  const firstAssignment = cat.assign(firstPair);
+  const secondAssignment = cat.assign(secondPair);
+
+  assert.ok(firstAssignment.key !== secondAssignment.key);
+  assert.ok(firstAssignment.hash !== secondAssignment.hash);
+
+  assert.ok(stableStringify(firstPair) !== stableStringify(secondPair));
+});
+
+test("maps with duplicate-description symbol keys use map-entry sentinel", () => {
+  const cat = new Cat32();
+  const description = "duplicate";
+
+  const firstMap = new Map([
+    [Symbol(description), 1],
+    [Symbol(description), 2],
+  ]);
+  const secondMap = new Map([
+    [Symbol(description), 1],
+    [Symbol(description), 2],
+  ]);
+
+  const firstAssignment = cat.assign(firstMap);
+  const secondAssignment = cat.assign(secondMap);
+
+  assert.ok(firstAssignment.key !== secondAssignment.key);
+  assert.ok(firstAssignment.hash !== secondAssignment.hash);
+
+  const firstString = stableStringify(firstMap);
+  const secondString = stableStringify(secondMap);
+
+  assert.ok(firstString.includes("map-entry-index"));
+  assert.ok(secondString.includes("map-entry-index"));
+  assert.ok(firstString !== secondString);
+});
