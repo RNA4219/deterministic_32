@@ -90,3 +90,22 @@ test("numeric and bigint sentinel literals are escaped", () => {
     assert.equal(actualAssignment.key, JSON.stringify(sentinelLiteral));
   }
 });
+
+test("local symbols with identical descriptions remain distinct", () => {
+  const cat = new Cat32();
+  const description = "duplicate";
+
+  const first = Symbol(description);
+  const second = Symbol(description);
+
+  const setWithFirst = new Set([first]);
+  const setWithSecond = new Set([second]);
+
+  const firstAssignment = cat.assign(setWithFirst);
+  const secondAssignment = cat.assign(setWithSecond);
+
+  assert.ok(firstAssignment.key !== secondAssignment.key);
+  assert.ok(firstAssignment.hash !== secondAssignment.hash);
+
+  assert.ok(stableStringify(setWithFirst) !== stableStringify(setWithSecond));
+});
