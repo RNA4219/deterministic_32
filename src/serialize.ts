@@ -2,7 +2,8 @@
 // Notes:
 // - Distinguishes [], {}, "" etc.
 // - Treats Date as ISO string.
-// - Maps/Sets are serialized as arrays in insertion order (keys sorted for Map via key string).
+// - Maps are serialized via sentinel-encoded entry lists (keys sorted by canonical property key).
+// - Sets are serialized as arrays in insertion order (keys sorted via canonical key string).
 
 const SENTINEL_PREFIX = "\u0000cat32:";
 const SENTINEL_SUFFIX = "\u0000";
@@ -19,6 +20,7 @@ const MAP_ENTRY_INDEX_LITERAL_SEGMENT =
 const MAP_ENTRY_INDEX_SENTINEL_SEGMENT = `${SENTINEL_PREFIX}map-entry-index:`;
 const HEX_DIGITS = "0123456789abcdef";
 const PROPERTY_KEY_SENTINEL_TYPE = "propertykey";
+const MAP_SENTINEL_TYPE = "map";
 
 type LocalSymbolHolder = { symbol: symbol };
 
@@ -35,6 +37,7 @@ const STRING_LITERAL_ESCAPED_SENTINEL_TYPES = new Set<string>([
   "bigint",
   "hole",
   PROPERTY_KEY_SENTINEL_TYPE,
+  "map",
 ]);
 const ARRAY_BUFFER_LIKE_SENTINEL_PREFIXES = [
   `${SENTINEL_PREFIX}typedarray:`,
@@ -257,7 +260,7 @@ function _stringify(v: unknown, stack: Set<unknown>): string {
         };
       }
     }
-    const bodyParts: string[] = [];
+    const serializedEntries: Array<[string, string]> = [];
     const sortedKeys = Object.keys(normalizedEntries).sort((leftKey, rightKey) => {
       const left = normalizedEntries[leftKey]!;
       const right = normalizedEntries[rightKey]!;
@@ -275,7 +278,6 @@ function _stringify(v: unknown, stack: Set<unknown>): string {
       entries.sort(compareSerializedEntry);
       for (let index = 0; index < entries.length; index += 1) {
         const entry = entries[index]!;
-        if (bodyParts.length) bodyParts.push(",");
         const propertyKey = mapEntryPropertyKey(
           bucket.propertyKey,
           entry.propertyKey,
@@ -285,11 +287,12 @@ function _stringify(v: unknown, stack: Set<unknown>): string {
           bucket.shouldDedupeByType,
           bucket.hasDuplicatePropertyKey,
         );
-        bodyParts.push(JSON.stringify(propertyKey), ":", entry.serializedValue);
+        serializedEntries.push([propertyKey, entry.serializedValue]);
       }
     }
     stack.delete(v);
-    return "{" + bodyParts.join("") + "}";
+    const payload = JSON.stringify(serializedEntries);
+    return stringifySentinelLiteral(typeSentinel(MAP_SENTINEL_TYPE, payload));
   }
 
   // Set
