@@ -62,6 +62,19 @@ FNV-1a32 over UTF-8 for salted key `{"id":123,"tags":["a","b"]}|saltns:["projX",
 
 **Note:** Different key order → same canonical string → same hash/index.
 
+### Sparse array sentinel examples
+
+```js
+const sparse = [1, , 3];
+const explicitUndefined = [1, undefined, 3];
+
+stableStringify(sparse);
+// → "[1,\"\\u0000cat32:hole:__hole__\\u0000\",3]"
+
+stableStringify(explicitUndefined);
+// → "[1,\"__undefined__\",3]"
+```
+
 ### Sentinel examples (TypedArray / ArrayBuffer)
 
 ```
@@ -110,6 +123,20 @@ stableStringify(new Date("invalid"))
 
 stableStringify(new Date("2024-01-01T00:00:00.000Z"))
 → "\"__date__:2024-01-01T00:00:00.000Z\""
+```
+
+### RegExp sentinel examples
+
+```
+stableStringify(/foo/)
+→ "\"\\u0000cat32:regexp:[\\"foo\\",\\"\\"]\\u0000\""
+
+stableStringify(/foo/i)
+→ "\"\\u0000cat32:regexp:[\\"foo\\",\\"i\\"]\\u0000\""
+
+const sentinelLiteral = "\u0000cat32:regexp:[\"foo\",\"\"]\u0000";
+stableStringify(sentinelLiteral)
+→ "\"__string__:\\u0000cat32:regexp:[\\"foo\\",\\"\\"]\\u0000\""
 ```
 
 ### Sentinel examples (Map / Set)
