@@ -4,6 +4,8 @@ import assert from "node:assert/strict";
 import { stableStringify } from "../../src/serialize.js";
 
 const SYMBOL_SENTINEL_PREFIX = "__symbol__:";
+const SET_SENTINEL_PREFIX = "\u0000cat32:set:";
+const SENTINEL_SUFFIX = "\u0000";
 
 type LocalSymbolPayload = ["local", string, string];
 
@@ -53,4 +55,30 @@ test("stableStringify reuses local symbol sentinel identifiers", () => {
   assert.ok(Number.isFinite(nextIdentifierValue));
 
   assert.equal(nextIdentifierValue, firstIdentifierValue + 1);
+});
+
+test("stableStringify serializes symbols nested in sets", () => {
+  const description = "within set";
+  const serialized = stableStringify(new Set([Symbol(description)]));
+
+  const sentinel = JSON.parse(serialized) as unknown;
+  assert.equal(typeof sentinel, "string");
+
+  const sentinelString = sentinel as string;
+  assert.ok(sentinelString.startsWith(SET_SENTINEL_PREFIX));
+  assert.ok(sentinelString.endsWith(SENTINEL_SUFFIX));
+
+  const payloadJson = sentinelString.slice(
+    SET_SENTINEL_PREFIX.length,
+    -SENTINEL_SUFFIX.length,
+  );
+  const entries = JSON.parse(payloadJson) as unknown;
+  assert.ok(Array.isArray(entries));
+  const [entry] = entries as [unknown];
+  assert.equal(typeof entry, "string");
+
+  const { description: parsedDescription } = parseLocalSymbolSentinel(
+    entry as string,
+  );
+  assert.equal(parsedDescription, description);
 });

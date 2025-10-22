@@ -63,6 +63,39 @@ function peekLocalSymbolSentinelRecord(
   return LOCAL_SYMBOL_SENTINEL_REGISTRY.get(symbolObject);
 }
 
+function registerLocalSymbolSentinelRecord(
+  symbolObject: SymbolObject,
+  record: LocalSymbolSentinelRecord,
+): void {
+  if (
+    LOCAL_SYMBOL_IDENTIFIER_INDEX !== undefined &&
+    LOCAL_SYMBOL_FINALIZER !== undefined
+  ) {
+    const ref = new WeakRef(symbolObject);
+    const holder: LocalSymbolFinalizerHolder = { ref };
+    LOCAL_SYMBOL_IDENTIFIER_INDEX.set(record.identifier, ref);
+    LOCAL_SYMBOL_FINALIZER.register(holder, record.identifier);
+    record.finalizerHolder = holder;
+  }
+
+  LOCAL_SYMBOL_SENTINEL_REGISTRY.set(symbolObject, record);
+}
+
+function createLocalSymbolSentinelRecord(
+  symbol: symbol,
+  symbolObject: SymbolObject,
+): LocalSymbolSentinelRecord {
+  const identifier = nextLocalSymbolSentinelId.toString(36);
+  nextLocalSymbolSentinelId += 1;
+
+  const description = symbol.description ?? "";
+  const sentinel = buildLocalSymbolSentinel(identifier, description);
+  const record: LocalSymbolSentinelRecord = { identifier, sentinel };
+
+  registerLocalSymbolSentinelRecord(symbolObject, record);
+  return record;
+}
+
 function getLocalSymbolSentinelRecord(
   symbol: symbol,
 ): LocalSymbolSentinelRecord {
@@ -72,26 +105,7 @@ function getLocalSymbolSentinelRecord(
     return existing;
   }
 
-  const identifier = nextLocalSymbolSentinelId.toString(36);
-  nextLocalSymbolSentinelId += 1;
-
-  const description = symbol.description ?? "";
-  const sentinel = buildLocalSymbolSentinel(identifier, description);
-  const record: LocalSymbolSentinelRecord = { identifier, sentinel };
-
-  if (
-    LOCAL_SYMBOL_IDENTIFIER_INDEX !== undefined &&
-    LOCAL_SYMBOL_FINALIZER !== undefined
-  ) {
-    const ref = new WeakRef(symbolObject);
-    const holder: LocalSymbolFinalizerHolder = { ref };
-    LOCAL_SYMBOL_IDENTIFIER_INDEX.set(identifier, ref);
-    LOCAL_SYMBOL_FINALIZER.register(holder, identifier);
-    record.finalizerHolder = holder;
-  }
-
-  LOCAL_SYMBOL_SENTINEL_REGISTRY.set(symbolObject, record);
-  return record;
+  return createLocalSymbolSentinelRecord(symbol, symbolObject);
 }
 
 function getLocalSymbolSentinelIdentifier(symbol: symbol): string {
