@@ -10,6 +10,20 @@ test("stableStringify distinguishes boxed primitive numbers", () => {
   assert.ok(stableStringify(boxedOne) !== stableStringify(boxedTwo));
 });
 
+test("stableStringify treats boxed bigint like primitive bigint", () => {
+  const primitiveOne = 1n;
+  const primitiveNegative = -1n;
+
+  assert.ok(
+    stableStringify(Object(primitiveOne)) ===
+      stableStringify(primitiveOne),
+  );
+  assert.ok(
+    stableStringify(Object(primitiveNegative)) ===
+      stableStringify(primitiveNegative),
+  );
+});
+
 test("Cat32 assign key reflects boxed boolean value", () => {
   const cat = new Cat32();
 

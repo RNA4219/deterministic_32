@@ -22,6 +22,16 @@ const HEX_DIGITS = "0123456789abcdef";
 const PROPERTY_KEY_SENTINEL_TYPE = "propertykey";
 const MAP_SENTINEL_TYPE = "map";
 
+const OBJECT_TO_STRING = Object.prototype.toString;
+
+function isBigIntObject(value: unknown): value is { valueOf(): bigint } {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    OBJECT_TO_STRING.call(value) === "[object BigInt]"
+  );
+}
+
 type SymbolObject = symbol & object;
 
 type LocalSymbolFinalizerHolder = {
@@ -255,8 +265,11 @@ function _stringify(v: unknown, stack: Set<unknown>): string {
   }
   if (t === "function") return String(v);
 
-  if (v instanceof Number || v instanceof Boolean || v instanceof BigInt) {
-    return _stringify(v.valueOf(), stack);
+  if (v instanceof Number || v instanceof Boolean || isBigIntObject(v)) {
+    return _stringify(
+      (v as Number | Boolean | { valueOf(): unknown }).valueOf(),
+      stack,
+    );
   }
 
   if (Array.isArray(v)) {
@@ -513,8 +526,14 @@ function mapEntryPropertyKey(
 }
 
 function mapBucketTypeTag(rawKey: unknown): string {
-  if (rawKey instanceof Number || rawKey instanceof Boolean || rawKey instanceof BigInt) {
-    return mapBucketTypeTag(rawKey.valueOf());
+  if (
+    rawKey instanceof Number ||
+    rawKey instanceof Boolean ||
+    isBigIntObject(rawKey)
+  ) {
+    return mapBucketTypeTag(
+      (rawKey as Number | Boolean | { valueOf(): unknown }).valueOf(),
+    );
   }
   if (typeof rawKey === "symbol") return "symbol";
   if (rawKey === null) return "null";
@@ -804,8 +823,16 @@ function toPropertyKeyString(
   revivedKey: unknown,
   serializedKey: string,
 ): string {
-  if (rawKey instanceof Number || rawKey instanceof Boolean || rawKey instanceof BigInt) {
-    return toPropertyKeyString(rawKey.valueOf(), revivedKey, serializedKey);
+  if (
+    rawKey instanceof Number ||
+    rawKey instanceof Boolean ||
+    isBigIntObject(rawKey)
+  ) {
+    return toPropertyKeyString(
+      (rawKey as Number | Boolean | { valueOf(): unknown }).valueOf(),
+      revivedKey,
+      serializedKey,
+    );
   }
   if (typeof rawKey === "symbol") {
     return toSymbolSentinel(rawKey as symbol);
