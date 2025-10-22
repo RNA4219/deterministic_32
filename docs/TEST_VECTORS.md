@@ -90,6 +90,18 @@ stableStringify(Object(false))
 → "false" // ボックス化 Boolean はアンボックス後に処理
 ```
 
+### Sentinel examples (RegExp)
+
+```
+const regex = /foo/i;
+stableStringify(regex)
+→ "\"\\u0000cat32:regexp:[\\"foo\\",\\"i\\"]\\u0000\""
+
+const sentinelLiteral = "\u0000cat32:regexp:[\"foo\",\"i\"]\u0000";
+stableStringify(sentinelLiteral)
+→ "\"__string__:\\u0000cat32:regexp:[\\"foo\\",\\"i\\"]\\u0000\""
+```
+
 ### Date sentinel examples
 
 ```
