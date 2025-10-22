@@ -124,6 +124,28 @@ test(
   },
 );
 
+test(
+  "WeakRef と FinalizationRegistry が存在する環境でも stableStringify(Symbol('bar')) が例外を送出しない",
+  () => {
+    if (
+      typeof globalThis.WeakRef !== "function" ||
+      typeof globalThis.FinalizationRegistry !== "function"
+    ) {
+      return;
+    }
+
+    const symbol = Symbol("bar");
+
+    try {
+      stableStringify(symbol);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : String(error);
+      assert.ok(false, message);
+    }
+  },
+);
+
 test("ローカルシンボルのセンチネルレコードがキャッシュされる", () => {
   const local = Symbol("local sentinel");
 
