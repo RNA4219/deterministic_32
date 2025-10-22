@@ -66,7 +66,18 @@ const LOCAL_SYMBOL_FINALIZER_TARGET_INDEX =
 const LOCAL_SYMBOL_FINALIZER =
   HAS_WEAK_REFS && HAS_FINALIZATION_REGISTRY
     ? new FinalizationRegistry<string>((identifier) => {
-      LOCAL_SYMBOL_IDENTIFIER_INDEX?.delete(identifier);
+        const holderRef = LOCAL_SYMBOL_IDENTIFIER_INDEX?.get(identifier);
+        if (holderRef === undefined) {
+          return;
+        }
+        const holder = holderRef.deref();
+        if (holder === undefined) {
+          LOCAL_SYMBOL_IDENTIFIER_INDEX?.delete(identifier);
+          return;
+        }
+        if (holder.ref.deref() === undefined) {
+          LOCAL_SYMBOL_IDENTIFIER_INDEX?.delete(identifier);
+        }
       })
     : undefined;
 
@@ -118,8 +129,16 @@ function registerLocalSymbolSentinelRecord(
     const ref = new WeakRef(target);
     const holder: LocalSymbolFinalizerHolder = { target, ref };
     const holderRef = new WeakRef(holder);
+    const existingHolderRef = LOCAL_SYMBOL_IDENTIFIER_INDEX.get(record.identifier);
+    if (existingHolderRef !== undefined) {
+      const existingHolder = existingHolderRef.deref();
+      if (existingHolder !== undefined) {
+        LOCAL_SYMBOL_FINALIZER.unregister(existingHolder);
+      }
+      LOCAL_SYMBOL_IDENTIFIER_INDEX.delete(record.identifier);
+    }
     LOCAL_SYMBOL_IDENTIFIER_INDEX.set(record.identifier, holderRef);
-    LOCAL_SYMBOL_FINALIZER.register(holderTarget, record.identifier);
+    LOCAL_SYMBOL_FINALIZER.register(target, record.identifier, holder);
     record.finalizerHolder = holder;
   }
 
