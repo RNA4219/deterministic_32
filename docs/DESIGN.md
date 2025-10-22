@@ -31,9 +31,11 @@ tests/
     2. `bucketKey` 単位でエントリを集約し、`serializedKey` → `serializedValue` → 挿入順の優先度でソートする。
     3. 同一 `bucketKey` に `propertyKey` が重複する場合や型衝突がある場合は `typeSentinel("map-entry-index", JSON.stringify([bucketKey, propertyKey, uniqueIndex]))` を付与してキーの一意性を保証する。
     4. 正規化済みの `[propertyKey, serializedValue]` 配列を `JSON.stringify` し、最後に `typeSentinel("map", payload)` で包む。
-  - Set: 要素の `stableStringify` 結果と `buildSetSortKey` が返すセンチネル対応ソートキーで比較し、`sortKey` → `serializedValue` → 挿入順の優先度で整列した配列を `payload` (`"[... ]"`) として `typeSentinel("set", payload)` に埋め込む。重複要素も同じ順序規則で保持される。
+- Set: 要素の `stableStringify` 結果と `buildSetSortKey` が返すセンチネル対応ソートキーで比較し、`sortKey` → `serializedValue` → 挿入順の優先度で整列した配列を `payload` (`"[... ]"`) として `typeSentinel("set", payload)` に埋め込む。重複要素も同じ順序規則で保持される。
 - **Date**: `__date__:<ISO8601>`
+- **RegExp**: `typeSentinel("regexp", JSON.stringify([value.source, value.flags]))` を構築し、`"\u0000cat32:regexp:<payload>\u0000"` 文字列として返す。`value.flags` は JavaScript の既定どおり ASCII 昇順で整列済み（例: `gi` → `"gi"`）。
 - `undefined` は `"__undefined__"` の**文字列**にエンコード。
+- 文字列は `__string__:` プレフィックスでセンチネル衝突を避ける。対象は RegExp センチネルを含む `\u0000cat32:*` 系や `__undefined__` 等で、既存プレフィックスを解除しても安全でない場合は多重に付与する。
 
 ## 5. 文字コードとランタイム
 - UTF‑8 バイト化は `TextEncoder`（ブラウザ/Node18+）で統一。

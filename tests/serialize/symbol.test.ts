@@ -57,6 +57,21 @@ test("stableStringify reuses local symbol sentinel identifiers", () => {
   assert.equal(nextIdentifierValue, firstIdentifierValue + 1);
 });
 
+const HAS_WEAKREF = "WeakRef" in globalThis;
+const HAS_FINALIZATION_REGISTRY = "FinalizationRegistry" in globalThis;
+
+test(
+  "stableStringify serializes identical local symbol twice with weak refs",
+  () => {
+    if (!HAS_WEAKREF || !HAS_FINALIZATION_REGISTRY) return;
+
+    const serializable = Symbol("weak-local");
+
+    stableStringify(serializable);
+    stableStringify(serializable);
+  },
+);
+
 test("stableStringify serializes symbols nested in sets", () => {
   const description = "within set";
   const serialized = stableStringify(new Set([Symbol(description)]));
