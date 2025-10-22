@@ -36,11 +36,8 @@ type ValueOfCapable = { valueOf(): unknown };
 
 type SymbolObject = symbol & object;
 
-type LocalSymbolWeakTarget = Record<string, never>;
-
 type LocalSymbolFinalizerHolder = {
-  target: LocalSymbolWeakTarget;
-  ref: WeakRef<LocalSymbolWeakTarget>;
+  ref: WeakRef<SymbolObject>;
 };
 
 type LocalSymbolSentinelRecord = {
@@ -102,8 +99,7 @@ function registerLocalSymbolSentinelRecord(
 ): void {
   if (
     LOCAL_SYMBOL_IDENTIFIER_INDEX !== undefined &&
-    LOCAL_SYMBOL_FINALIZER !== undefined &&
-    LOCAL_SYMBOL_FINALIZER_TARGET_INDEX !== undefined
+    LOCAL_SYMBOL_FINALIZER !== undefined
   ) {
     const holder: LocalSymbolFinalizerHolder = {
       ref: new WeakRef(symbolObject),
