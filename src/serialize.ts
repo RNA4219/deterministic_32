@@ -36,8 +36,11 @@ type ValueOfCapable = { valueOf(): unknown };
 
 type SymbolObject = symbol & object;
 
+type LocalSymbolWeakTarget = Record<string, never>;
+
 type LocalSymbolFinalizerHolder = {
-  ref: WeakRef<SymbolObject>;
+  target: LocalSymbolWeakTarget;
+  ref: WeakRef<LocalSymbolWeakTarget>;
 };
 
 type LocalSymbolSentinelRecord = {
@@ -51,9 +54,14 @@ const HAS_FINALIZATION_REGISTRY = typeof FinalizationRegistry === "function";
 
 const LOCAL_SYMBOL_SENTINEL_REGISTRY =
   new WeakMap<SymbolObject, LocalSymbolSentinelRecord>();
+const LOCAL_SYMBOL_OBJECT_REGISTRY = new Map<symbol, SymbolObject>();
 const LOCAL_SYMBOL_IDENTIFIER_INDEX =
   HAS_WEAK_REFS && HAS_FINALIZATION_REGISTRY
-    ? new Map<string, WeakRef<SymbolObject>>()
+    ? new Map<string, WeakRef<LocalSymbolWeakTarget>>()
+    : undefined;
+const LOCAL_SYMBOL_FINALIZER_TARGET_INDEX =
+  HAS_WEAK_REFS && HAS_FINALIZATION_REGISTRY
+    ? new WeakMap<SymbolObject, LocalSymbolWeakTarget>()
     : undefined;
 const LOCAL_SYMBOL_FINALIZER =
   HAS_WEAK_REFS && HAS_FINALIZATION_REGISTRY
@@ -64,8 +72,15 @@ const LOCAL_SYMBOL_FINALIZER =
 
 let nextLocalSymbolSentinelId = 0;
 
-function toSymbolObject(symbol: symbol): SymbolObject {
-  return symbol as SymbolObject;
+function getOrCreateSymbolObject(symbol: symbol): SymbolObject {
+  const existing = LOCAL_SYMBOL_OBJECT_REGISTRY.get(symbol);
+  if (existing !== undefined) {
+    return existing;
+  }
+
+  const symbolObject = Object(symbol) as SymbolObject;
+  LOCAL_SYMBOL_OBJECT_REGISTRY.set(symbol, symbolObject);
+  return symbolObject;
 }
 
 function peekLocalSymbolSentinelRecordFromObject(
@@ -77,7 +92,11 @@ function peekLocalSymbolSentinelRecordFromObject(
 function peekLocalSymbolSentinelRecord(
   symbol: symbol,
 ): LocalSymbolSentinelRecord | undefined {
-  const symbolObject = toSymbolObject(symbol);
+  const symbolObject = LOCAL_SYMBOL_OBJECT_REGISTRY.get(symbol);
+  if (symbolObject === undefined) {
+    return undefined;
+  }
+
   return peekLocalSymbolSentinelRecordFromObject(symbolObject);
 }
 
@@ -87,12 +106,19 @@ function registerLocalSymbolSentinelRecord(
 ): void {
   if (
     LOCAL_SYMBOL_IDENTIFIER_INDEX !== undefined &&
-    LOCAL_SYMBOL_FINALIZER !== undefined
+    LOCAL_SYMBOL_FINALIZER !== undefined &&
+    LOCAL_SYMBOL_FINALIZER_TARGET_INDEX !== undefined
   ) {
-    const ref = new WeakRef(symbolObject);
-    const holder: LocalSymbolFinalizerHolder = { ref };
+    let target = LOCAL_SYMBOL_FINALIZER_TARGET_INDEX.get(symbolObject);
+    if (target === undefined) {
+      target = {};
+      LOCAL_SYMBOL_FINALIZER_TARGET_INDEX.set(symbolObject, target);
+    }
+
+    const ref: WeakRef<LocalSymbolWeakTarget> = new WeakRef(target);
+    const holder: LocalSymbolFinalizerHolder = { target, ref };
     LOCAL_SYMBOL_IDENTIFIER_INDEX.set(record.identifier, ref);
-    LOCAL_SYMBOL_FINALIZER.register(holder, record.identifier);
+    LOCAL_SYMBOL_FINALIZER.register(target, record.identifier);
     record.finalizerHolder = holder;
   }
 
@@ -117,7 +143,7 @@ function createLocalSymbolSentinelRecord(
 function getLocalSymbolSentinelRecord(
   symbol: symbol,
 ): LocalSymbolSentinelRecord {
-  const symbolObject = toSymbolObject(symbol);
+  const symbolObject = getOrCreateSymbolObject(symbol);
   const existing = peekLocalSymbolSentinelRecordFromObject(symbolObject);
   if (existing !== undefined) {
     return existing;

@@ -35,7 +35,7 @@ input (unknown)
   - `bigint` → 常に `typeSentinel("bigint", value.toString())` を生成し、センチネル文字列として直列化する。
   - `string` → `JSON.stringify` に準拠（`"` で囲む）。センチネル文字列（`__undefined__` や `\u0000cat32:...\u0000` など）と衝突する場合は `__string__:` プレフィックスを 1 回以上付与してエスケープする。
   - `new Number(...)` / `new Boolean(...)` / `Object(1n)` などのボックス化プリミティブは `.valueOf()` でアンボックスした値に対して上記ルール（含センチネル処理）を適用する。
-  - **Array**: `[...]`（順序維持）
+  - **Array**: `[...]`（順序維持）。**疎配列**の欠番は `typeSentinel("hole", "__hole__")` をセンチネル文字列として挿入し、値として `undefined` を明示的に格納した要素（`"__undefined__"` センチネル）とは区別する。
   - **Object**: 自身の**列挙可能プロパティ**を**キー昇順**で `{k:v}` 並べる
   - **Date**: `"__date__:<ISO8601>"`（`getTime()` が **有限値** の場合）。`getTime()` が `NaN` や `±Infinity` などの **非有限値** を返したときは `"__date__:invalid"` をセンチネルとして返し、例外は投げない。
   - **RegExp**: `typeSentinel("regexp", JSON.stringify([pattern, flags]))` を生成し、`"\u0000cat32:regexp:<payload>\u0000"` として JSON 文字列化する（`pattern = value.source`, `flags = value.flags`）。このセンチネルと同一の**文字列リテラル**が入力された場合は `__string__:` プレフィックスを段階的に重ねて衝突を回避する。
