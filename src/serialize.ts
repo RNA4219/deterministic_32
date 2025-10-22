@@ -37,7 +37,8 @@ type LocalSymbolSentinelRecord = {
 const HAS_WEAK_REFS = typeof WeakRef === "function";
 const HAS_FINALIZATION_REGISTRY = typeof FinalizationRegistry === "function";
 
-const LOCAL_SYMBOL_SENTINELS = new WeakMap<SymbolObject, LocalSymbolSentinelRecord>();
+const LOCAL_SYMBOL_SENTINEL_REGISTRY =
+  new WeakMap<SymbolObject, LocalSymbolSentinelRecord>();
 const LOCAL_SYMBOL_IDENTIFIER_INDEX =
   HAS_WEAK_REFS && HAS_FINALIZATION_REGISTRY
     ? new Map<string, WeakRef<SymbolObject>>()
@@ -59,7 +60,7 @@ function getLocalSymbolSentinelRecord(
   symbol: symbol,
 ): LocalSymbolSentinelRecord {
   const symbolObject = toSymbolObject(symbol);
-  const existing = LOCAL_SYMBOL_SENTINELS.get(symbolObject);
+  const existing = LOCAL_SYMBOL_SENTINEL_REGISTRY.get(symbolObject);
   if (existing !== undefined) {
     return existing;
   }
@@ -84,7 +85,7 @@ function getLocalSymbolSentinelRecord(
     record.finalizerHolder = holder;
   }
 
-  LOCAL_SYMBOL_SENTINELS.set(symbolObject, record);
+  LOCAL_SYMBOL_SENTINEL_REGISTRY.set(symbolObject, record);
   return record;
 }
 
@@ -750,7 +751,8 @@ function toSymbolSentinel(symbol: symbol): string {
     const payload = JSON.stringify(["global", globalKey]);
     return `${SYMBOL_SENTINEL_PREFIX}${payload}`;
   }
-  return getLocalSymbolSentinelRecord(symbol).sentinel;
+  const record = getLocalSymbolSentinelRecord(symbol);
+  return record.sentinel;
 }
 
 function getSymbolSortKey(symbol: symbol): string {
