@@ -18,10 +18,13 @@
 input (unknown)
    └─▶ stableStringify(input)              // 順序非依存の決定的シリアライズ（§4）
         └─▶ unicodeNormalize(str, mode)    // "nfkc" | "nfkd" | "nfd" | "nfc" | "none"（既定: "nfkc"）
-             └─▶ salted(str, salt, ns)     // {str} + (ns?"|saltns:"+JSON.stringify([salt,ns]):"|salt:"+salt?)
+             └─▶ salted(str, salt, ns)     // {str} + (ns?"|saltns:"+JSON.stringify([salt, ns]):salt?"|salt:"+salt:"")
                   └─▶ FNV-1a32(utf8)       // §5
                        └─▶ index = hash & 31
 ```
+
+- `namespace` 未指定時は `|salt:` + `salt`
+- `namespace` 指定時は `|saltns:` + `JSON.stringify([salt, namespace])`
 
 ## 4. stableStringify（決定的直列化）
 - 目的: **同値**で**キー順が違う**オブジェクトが**同一の文字列**になること。
