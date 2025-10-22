@@ -48,11 +48,11 @@ const createFallbackHeaders = (headers?: HeadersInput): Headers => {
   }
 
   class MinimalHeaders implements Iterable<readonly [string, string]> {
-    readonly #map = new Map<string, string>();
+    readonly #map = new Map<string, string[]>();
 
     constructor(init?: HeadersInput) {
       for (const [name, value] of toHeaderTuples(init)) {
-        this.set(name, value);
+        this.append(name, value);
       }
     }
 
@@ -61,7 +61,14 @@ const createFallbackHeaders = (headers?: HeadersInput): Headers => {
     }
 
     append(name: string, value: string): void {
-      this.set(name, value);
+      const normalized = this.#normalize(name);
+      const existing = this.#map.get(normalized);
+      const normalizedValue = String(value);
+      if (existing) {
+        existing.push(normalizedValue);
+        return;
+      }
+      this.#map.set(normalized, [normalizedValue]);
     }
 
     delete(name: string): void {
@@ -69,7 +76,11 @@ const createFallbackHeaders = (headers?: HeadersInput): Headers => {
     }
 
     get(name: string): string | null {
-      return this.#map.get(this.#normalize(name)) ?? null;
+      const values = this.#map.get(this.#normalize(name));
+      if (!values) {
+        return null;
+      }
+      return values.join(", ");
     }
 
     has(name: string): boolean {
@@ -77,21 +88,21 @@ const createFallbackHeaders = (headers?: HeadersInput): Headers => {
     }
 
     set(name: string, value: string): void {
-      this.#map.set(this.#normalize(name), String(value));
+      this.#map.set(this.#normalize(name), [String(value)]);
     }
 
     forEach(
       callback: (value: string, name: string, parent: Headers) => void,
       thisArg?: unknown,
     ): void {
-      for (const [name, value] of this.#map.entries()) {
-        callback.call(thisArg, value, name, this as unknown as Headers);
+      for (const [name, values] of this.#map.entries()) {
+        callback.call(thisArg, values.join(", "), name, this as unknown as Headers);
       }
     }
 
     *entries(): IterableIterator<readonly [string, string]> {
-      for (const [name, value] of this.#map.entries()) {
-        yield [name, value];
+      for (const [name, values] of this.#map.entries()) {
+        yield [name, values.join(", ")];
       }
     }
 
@@ -100,7 +111,9 @@ const createFallbackHeaders = (headers?: HeadersInput): Headers => {
     }
 
     *values(): IterableIterator<string> {
-      yield* this.#map.values();
+      for (const values of this.#map.values()) {
+        yield values.join(", ");
+      }
     }
 
     [Symbol.iterator](): IterableIterator<readonly [string, string]> {

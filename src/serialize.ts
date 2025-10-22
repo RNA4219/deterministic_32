@@ -38,6 +38,7 @@ const HAS_FINALIZATION_REGISTRY = typeof FinalizationRegistry === "function";
 
 const LOCAL_SYMBOL_SENTINEL_REGISTRY =
   new WeakMap<SymbolObject, LocalSymbolSentinelRecord>();
+const LOCAL_SYMBOL_SENTINELS = LOCAL_SYMBOL_SENTINEL_REGISTRY;
 const LOCAL_SYMBOL_IDENTIFIER_INDEX =
   HAS_WEAK_REFS && HAS_FINALIZATION_REGISTRY
     ? new Map<string, WeakRef<SymbolObject>>()
@@ -59,7 +60,7 @@ function getLocalSymbolSentinelIdentifier(
   symbol: symbol,
 ): LocalSymbolSentinelRecord | undefined {
   const symbolObject = toSymbolObject(symbol);
-  return LOCAL_SYMBOL_SENTINELS.get(symbolObject);
+  return LOCAL_SYMBOL_SENTINEL_REGISTRY.get(symbolObject);
 }
 
 function setLocalSymbolSentinelIdentifier(
@@ -67,7 +68,7 @@ function setLocalSymbolSentinelIdentifier(
   record: LocalSymbolSentinelRecord,
 ): void {
   const symbolObject = toSymbolObject(symbol);
-  LOCAL_SYMBOL_SENTINELS.set(symbolObject, record);
+  LOCAL_SYMBOL_SENTINEL_REGISTRY.set(symbolObject, record);
 }
 
 function getLocalSymbolSentinelRecord(
@@ -79,7 +80,6 @@ function getLocalSymbolSentinelRecord(
     return existing;
   }
 
-  const symbolObject = toSymbolObject(symbol);
   const identifier = nextLocalSymbolSentinelId.toString(36);
   nextLocalSymbolSentinelId += 1;
 
@@ -135,6 +135,7 @@ const STRING_LITERAL_ESCAPED_SENTINEL_TYPES = new Set<string>([
   "hole",
   PROPERTY_KEY_SENTINEL_TYPE,
   "map",
+  "set",
 ]);
 const ARRAY_BUFFER_LIKE_SENTINEL_PREFIXES = [
   `${SENTINEL_PREFIX}typedarray:`,

@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 const { performance } = globalThis;
 
 import { Cat32, stableStringify } from "../src/index.js";
+import { typeSentinel } from "../src/serialize.js";
 
 test("string literals matching sentinel encodings are escaped", () => {
   const cat = new Cat32();
@@ -91,6 +92,31 @@ test("numeric and bigint sentinel literals are escaped", () => {
     );
     assert.equal(actualAssignment.key, JSON.stringify(sentinelLiteral));
   }
+});
+
+test("set sentinel string literals remain distinct from actual sets", () => {
+  const cat = new Cat32();
+  const set = new Set([1, 2]);
+
+  const setAssignment = cat.assign(set);
+  const sentinel = JSON.parse(setAssignment.key) as string;
+
+  const sentinelPrefix = "\u0000cat32:set:";
+  const sentinelSuffix = "\u0000";
+  assert.ok(sentinel.startsWith(sentinelPrefix));
+  assert.ok(sentinel.endsWith(sentinelSuffix));
+
+  const payload = sentinel.slice(sentinelPrefix.length, -sentinelSuffix.length);
+  const literalValue = typeSentinel("set", payload);
+
+  const literalAssignment = cat.assign(literalValue);
+
+  assert.ok(literalAssignment.key !== setAssignment.key);
+  assert.ok(literalAssignment.hash !== setAssignment.hash);
+
+  const expectedLiteralKey = JSON.stringify(`__string__:${literalValue}`);
+  assert.equal(literalAssignment.key, expectedLiteralKey);
+  assert.equal(stableStringify(literalValue), expectedLiteralKey);
 });
 
 test("local symbols with identical descriptions remain distinct", () => {
