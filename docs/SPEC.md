@@ -32,14 +32,33 @@ input (unknown)
   - **Array**: `[...]`（順序維持）
   - **Object**: 自身の**列挙可能プロパティ**を**キー昇順**で `{k:v}` 並べる
   - **Date**: `"__date__:<ISO8601>"`
-  - **Map**: `{"k":"v"...}`（キーをセンチネル含む**正規化キー**に変換後、昇順に整列）
-  - **Set**: `[...]`（要素を正規化直列化して配列化／順序の安定化は実装依存、推奨: 直列化後の文字列昇順）
+  - **Map**: `typeSentinel("map", JSON.stringify([[keySentinel, valueJson], ...]))`
+    - 各エントリのキーを `stableStringify` し、センチネル化した `keySentinel`（`typeSentinel("propertykey", ...)` 等）としつつ、**挿入順または安定ソート順**を保ったまま配列へ格納する。
+    - 同一キーでもセンチネル化したキー情報で衝突を解決し、`JSON.stringify` 済みの値を `valueJson` として格納する。
+    - Map 全体は **JSON 文字列**をペイロードに持つセンチネル経由で返されるため、キー情報と順序が復元可能。
+  - **Set**: `typeSentinel("set", JSON.stringify([valueJson, ...]))`
+    - 各要素を `stableStringify` 済み文字列として `valueJson` に格納し、センチネル内の配列で並び順を安定化する（推奨: 直列化後の文字列昇順＋挿入順タイブレーク）。
+    - Set も **センチネル文字列**を介して返され、要素順序が再構成できる。
   - `function`: `String(v)`
   - `symbol`: `"__symbol__:[...]"` 形式のセンチネル文字列（`global`/`local` 情報を JSON で保持）
   - **循環参照**を検出したら **`TypeError("Cyclic object")`** を投げる。
 - 実装ノート:
   - JSON表現は**ASCIIエスケープ不要**（UTF‑8運用を前提）。
   - **typeSentinel**: `typeSentinel(type, payload)` は `"\u0000cat32:<type>:<payload>\u0000"` 文字列を生成し、直列化時の型識別と追加情報を保持する。TypedArray/ArrayBuffer/SharedArrayBuffer/Map のエントリや数値特異値などはこのセンチネルを介してエンコードする。
+  - **Map/Set のセンチネル構造例**:
+    ```
+    // Map: 重複キーは map-entry-index で解消し、ソートキーの安定化を保持
+    typeSentinel(
+      "map",
+      "[[\"\\u0000cat32:propertykey:string:\\"id\\"\\u0000\",\"123\"],[\"\\u0000cat32:propertykey:string:\\"tags\\"\\u0000\",\"[\\\"a\\\",\\\"b\\\"]\"]]"
+    )
+
+    // Set: ソート済み配列を JSON 文字列で保持
+    typeSentinel(
+      "set",
+      "[\"123\",\"\\u0000cat32:number:NaN\\u0000\"]"
+    )
+    ```
   - **TypedArray**: `"\u0000cat32:typedarray:kind=<ViewName>;byteOffset=<n>;byteLength=<n>;length=<len?>;hex=<bytes>\u0000"`
     - `length` パラメータは `view.length` が存在する場合のみ付与。
     - バイト列は **16進小文字** (`00`-`ff`) で連結し、センチネル末尾 `\u0000` を付ける。

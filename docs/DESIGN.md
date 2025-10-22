@@ -29,8 +29,8 @@ tests/
     1. 各エントリのキーを `stableStringify` し、`toMapPropertyKey` で `(bucketKey, propertyKey)` に分解する。`bucketKey` には型タグ（`symbol`、`arraybuffer` など）とセンチネル化したキー情報を含める。
     2. 同一 `bucketKey` ごとにエントリを集約し、`serializedKey`/`serializedValue`/挿入順でソートする。
     3. バケット内で `propertyKey` が重複する場合や複数型を含む場合は `typeSentinel("map-entry-index", JSON.stringify([bucketKey, propertyKey, uniqueIndex]))` を生成してインデックスを埋め込み、衝突を解消する。
-    4. 正規化済みの `[propertyKey, serializedValue]` 配列を `JSON.stringify` し、最後に `typeSentinel("map", payload)` で包む。
-  - Set: 各要素を `stableStringify` した結果と `buildSetSortKey` が返すセンチネル対応ソートキーで比較し、`sortKey` → `serializedValue` → 挿入順の優先度で整列する。重複要素も同じキー順序で保持されるが、ソートにより決定的な並びが得られる。
+    4. 正規化済みの `[propertyKey, serializedValue]` 配列を `JSON.stringify` し、最後に `typeSentinel("map", payloadJson)`（`payloadJson` は JSON 文字列）で包む。センチネル経由でキー情報と順序を保持する。
+  - Set: 各要素を `stableStringify` した結果と `buildSetSortKey` が返すセンチネル対応ソートキーで比較し、`sortKey` → `serializedValue` → 挿入順の優先度で整列する。生成した配列を `JSON.stringify` し、`typeSentinel("set", payloadJson)` の形で返す。
 - **Date**: `__date__:<ISO8601>`
 - `undefined` は `"__undefined__"` の**文字列**にエンコード。
 
