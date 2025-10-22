@@ -90,6 +90,16 @@ stableStringify(Object(false))
 → "false" // ボックス化 Boolean はアンボックス後に処理
 ```
 
+### Sparse array hole sentinel
+
+```
+stableStringify([1,,3])
+→ "[1,\"\\u0000cat32:hole:__hole__\\u0000\",3]"
+
+// `[1, undefined, 3]` は欠番ではなく `undefined` を要素に保持するため、
+// "[1,\"__undefined__\",3]" となり、疎配列とは区別される。
+```
+
 ### Date sentinel examples
 
 ```
