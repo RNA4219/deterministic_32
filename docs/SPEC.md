@@ -18,7 +18,7 @@
 input (unknown)
    └─▶ stableStringify(input)              // 順序非依存の決定的シリアライズ（§4）
         └─▶ unicodeNormalize(str, mode)    // "nfkc" | "nfkd" | "nfd" | "nfc" | "none"（既定: "nfkc"）
-             └─▶ salted(str, salt, ns)     // {str} + "|salt:" + salt + ("|ns:"+ns?)
+             └─▶ salted(str, salt, ns)     // {str} + (ns?"|saltns:"+JSON.stringify([salt,ns]):"|salt:"+salt?)
                   └─▶ FNV-1a32(utf8)       // §5
                        └─▶ index = hash & 31
 ```
@@ -67,12 +67,13 @@ input (unknown)
 - `label = labels[index]`。
 
 ## 7. salt / namespace
-- `saltedKey = canonical + (ns ? "|saltns:" + JSON.stringify([salt, ns]) : salt ? "|salt:" + salt : "")`
-- `namespace` 指定時は **必ず** `|saltns:` に `[salt, namespace]` を **JSON 文字列**化したものを連結する。
+- `Cat32`（§3 図中 `salted`）は `saltedKey = canonical + (ns ? "|saltns:" + JSON.stringify([salt, ns]) : salt ? "|salt:" + salt : "")` を生成する。
+- `namespace` 指定時は **必ず** `|saltns:` に `[salt, namespace]` を **JSON 文字列**化したもの（例: `|saltns:["projX","v1"]`）を連結する。空白や追加区切りは入れない。
 - `namespace` を省略した場合のみ、`|salt:` で `salt` 単体を連結する。
 - 目的:
   - **salt**: システム間でバケット配置の**平行移動**（衝突回避／A/B切替）
   - **namespace**: **互換性が変わる**仕様変更を**明示的に切替**
+- 互換性ノート: 初期ドラフトでは `|salt:` と `|ns:` を別々に連結していたが、現行仕様は `|saltns:` のみを使用する。既存データの移行時は接頭辞を確認して判別すること。
 
 ## 8. overrides（ピン留め）
 - 型: `Record<string, number | string>`（キーは**正規化前**の文字列→内部で**正規化キー**に変換）
