@@ -40,6 +40,7 @@ input (unknown)
     - 例: `stableStringify([1, undefined, 3])` → `"[1,\"__undefined__\",3]"`
   - **Object**: 自身の**列挙可能プロパティ**を**キー昇順**で `{k:v}` 並べる
   - **Date**: `"__date__:<ISO8601>"`（`getTime()` が **有限値** の場合）。`getTime()` が `NaN` や `±Infinity` などの **非有限値** を返したときは `"__date__:invalid"` をセンチネルとして返し、例外は投げない。
+  - **RegExp**: `typeSentinel("regexp", JSON.stringify([source, flags]))` を `stringifySentinelLiteral` でラップしたセンチネル文字列。`flags` は `RegExp.prototype.flags` を使用し、`source`/`flags` の組み合わせが異なればセンチネルも異なる。
   - **Map**: `typeSentinel("map", payload)` 形式のセンチネル文字列（`"\u0000cat32:map:<payload>\u0000"`）。`payload` は `JSON.stringify` された
     `[propertyKey, serializedValue]` 配列。生成手順は以下の通り。
     1. 各エントリのキーと値をそれぞれ `stableStringify` する。キーは `toMapPropertyKey` を通じて `(bucketKey, propertyKey)` に正規化し、
