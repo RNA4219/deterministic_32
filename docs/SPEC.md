@@ -34,7 +34,7 @@ input (unknown)
   - `new Number(...)` / `new Boolean(...)` / `Object(1n)` などのボックス化プリミティブは `.valueOf()` でアンボックスした値に対して上記ルール（含センチネル処理）を適用する。
   - **Array**: `[...]`（順序維持）
   - **Object**: 自身の**列挙可能プロパティ**を**キー昇順**で `{k:v}` 並べる
-  - **Date**: `"__date__:<ISO8601>"`
+  - **Date**: `"__date__:<ISO8601>"`（`getTime()` が **有限値** の場合）。`getTime()` が `NaN` や `±Infinity` などの **非有限値** を返したときは `"__date__:invalid"` をセンチネルとして返し、例外は投げない。
   - **Map**: `typeSentinel("map", payload)` 形式のセンチネル文字列（`"\u0000cat32:map:<payload>\u0000"`）。`payload` は `JSON.stringify` された
     `[propertyKey, serializedValue]` 配列。生成手順は以下の通り。
     1. 各エントリのキーと値をそれぞれ `stableStringify` する。キーは `toMapPropertyKey` を通じて `(bucketKey, propertyKey)` に正規化し、

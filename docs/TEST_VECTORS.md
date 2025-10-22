@@ -90,6 +90,16 @@ stableStringify(Object(false))
 → "false" // ボックス化 Boolean はアンボックス後に処理
 ```
 
+### Date sentinel examples
+
+```
+stableStringify(new Date("invalid"))
+→ "\"__date__:invalid\""
+
+stableStringify(new Date("2024-01-01T00:00:00.000Z"))
+→ "\"__date__:2024-01-01T00:00:00.000Z\""
+```
+
 ### Sentinel examples (Map / Set)
 
 ```
