@@ -32,6 +32,8 @@ function isBigIntObject(value: unknown): value is { valueOf(): bigint } {
   );
 }
 
+type ValueOfCapable = { valueOf(): unknown };
+
 type SymbolObject = symbol & object;
 
 type LocalSymbolFinalizerHolder = {
@@ -281,7 +283,7 @@ function _stringify(v: unknown, stack: Set<unknown>): string {
 
   if (v instanceof Number || v instanceof Boolean || isBigIntObject(v)) {
     return _stringify(
-      (v as Number | Boolean | { valueOf(): unknown }).valueOf(),
+      (v as ValueOfCapable).valueOf(),
       stack,
     );
   }
@@ -546,7 +548,7 @@ function mapBucketTypeTag(rawKey: unknown): string {
     isBigIntObject(rawKey)
   ) {
     return mapBucketTypeTag(
-      (rawKey as Number | Boolean | { valueOf(): unknown }).valueOf(),
+      (rawKey as ValueOfCapable).valueOf(),
     );
   }
   if (typeof rawKey === "symbol") return "symbol";
@@ -849,7 +851,7 @@ function toPropertyKeyString(
     isBigIntObject(rawKey)
   ) {
     return toPropertyKeyString(
-      (rawKey as Number | Boolean | { valueOf(): unknown }).valueOf(),
+      (rawKey as ValueOfCapable).valueOf(),
       revivedKey,
       serializedKey,
     );
