@@ -100,14 +100,15 @@ function registerLocalSymbolSentinelRecord(
 ): void {
   if (
     LOCAL_SYMBOL_IDENTIFIER_INDEX !== undefined &&
-    LOCAL_SYMBOL_FINALIZER !== undefined
+    LOCAL_SYMBOL_FINALIZER !== undefined &&
+    LOCAL_SYMBOL_FINALIZER_TARGET_INDEX !== undefined
   ) {
     const target = symbolObject;
     const ref = new WeakRef(target);
     const holder: LocalSymbolFinalizerHolder = { target, ref };
     const holderRef = new WeakRef(holder);
     LOCAL_SYMBOL_IDENTIFIER_INDEX.set(record.identifier, holderRef);
-    LOCAL_SYMBOL_FINALIZER.register(target, record.identifier);
+    LOCAL_SYMBOL_FINALIZER.register(holderTarget, record.identifier);
     record.finalizerHolder = holder;
   }
 
