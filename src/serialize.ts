@@ -78,18 +78,18 @@ function getOrCreateSymbolObject(symbol: symbol): LocalSymbolWeakTarget {
 function peekLocalSymbolSentinelRecordFromObject(
   symbolObject: LocalSymbolWeakTarget,
 ): LocalSymbolSentinelRecord | undefined {
-  return LOCAL_SYMBOL_SENTINEL_REGISTRY.get(holder.target);
+  return LOCAL_SYMBOL_SENTINEL_REGISTRY.get(symbolObject);
 }
 
 function peekLocalSymbolSentinelRecord(
   symbol: symbol,
 ): LocalSymbolSentinelRecord | undefined {
-  const holder = LOCAL_SYMBOL_HOLDER_REGISTRY.get(symbol);
-  if (holder === undefined) {
+  const symbolObject = LOCAL_SYMBOL_OBJECT_REGISTRY.get(symbol);
+  if (symbolObject === undefined) {
     return undefined;
   }
 
-  return peekLocalSymbolSentinelRecordFromHolder(holder);
+  return peekLocalSymbolSentinelRecordFromObject(symbolObject);
 }
 
 function registerLocalSymbolSentinelRecord(
@@ -114,7 +114,7 @@ function registerLocalSymbolSentinelRecord(
     record.finalizerHolder = holder;
   }
 
-  LOCAL_SYMBOL_SENTINEL_REGISTRY.set(holder.target, record);
+  LOCAL_SYMBOL_SENTINEL_REGISTRY.set(symbolObject, record);
 }
 
 function createLocalSymbolSentinelRecord(
@@ -128,21 +128,20 @@ function createLocalSymbolSentinelRecord(
   const sentinel = buildLocalSymbolSentinel(identifier, description);
   const record: LocalSymbolSentinelRecord = { identifier, sentinel };
 
-  registerLocalSymbolSentinelRecord(holder, record);
+  registerLocalSymbolSentinelRecord(symbolObject, record);
   return record;
 }
 
 function getLocalSymbolSentinelRecord(
   symbol: symbol,
 ): LocalSymbolSentinelRecord {
-  const holder = getLocalSymbolHolder(symbol);
-  const existing = peekLocalSymbolSentinelRecordFromHolder(holder);
+  const symbolObject = getOrCreateSymbolObject(symbol);
+  const existing = peekLocalSymbolSentinelRecordFromObject(symbolObject);
   if (existing !== undefined) {
     return existing;
   }
 
-  toSymbolObject(symbol);
-  return createLocalSymbolSentinelRecord(symbol, holder);
+  return createLocalSymbolSentinelRecord(symbol, symbolObject);
 }
 
 function buildLocalSymbolSentinel(
