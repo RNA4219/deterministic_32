@@ -39,7 +39,6 @@ const HAS_FINALIZATION_REGISTRY = typeof FinalizationRegistry === "function";
 
 const LOCAL_SYMBOL_SENTINEL_REGISTRY =
   new WeakMap<SymbolObject, LocalSymbolSentinelRecord>();
-const LOCAL_SYMBOL_SENTINELS = LOCAL_SYMBOL_SENTINEL_REGISTRY;
 const LOCAL_SYMBOL_IDENTIFIER_INDEX =
   HAS_WEAK_REFS && HAS_FINALIZATION_REGISTRY
     ? new Map<string, WeakRef<SymbolObject>>()
@@ -64,19 +63,11 @@ function peekLocalSymbolSentinelRecord(
   return LOCAL_SYMBOL_SENTINEL_REGISTRY.get(symbolObject);
 }
 
-function setLocalSymbolSentinelIdentifier(
-  symbol: symbol,
-  record: LocalSymbolSentinelRecord,
-): void {
-  const symbolObject = toSymbolObject(symbol);
-  LOCAL_SYMBOL_SENTINEL_REGISTRY.set(symbolObject, record);
-}
-
 function getLocalSymbolSentinelRecord(
   symbol: symbol,
 ): LocalSymbolSentinelRecord {
   const symbolObject = toSymbolObject(symbol);
-  const existing = LOCAL_SYMBOL_SENTINEL_REGISTRY.get(symbolObject);
+  const existing = peekLocalSymbolSentinelRecord(symbol);
   if (existing !== undefined) {
     return existing;
   }
@@ -86,7 +77,6 @@ function getLocalSymbolSentinelRecord(
 
   const description = symbol.description ?? "";
   const sentinel = buildLocalSymbolSentinel(identifier, description);
-
   const record: LocalSymbolSentinelRecord = { identifier, sentinel };
 
   if (
