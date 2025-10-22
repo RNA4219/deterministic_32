@@ -1,0 +1,148 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { Cat32, stableStringify, } from "../../src/index.js";
+import { __getLocalSymbolSentinelRecordForTest, __peekLocalSymbolSentinelRecordForTest, } from "../../src/serialize.js";
+let weakRefReloadSequence = 0;
+test("stableStringify(Symbol('x')) が決定的キーを返す", () => {
+    const symbol = Symbol("x");
+    const first = stableStringify(symbol);
+    const second = stableStringify(symbol);
+    assert.equal(first, second);
+    assert.equal(typeof first, "string");
+});
+test("Cat32.assign(Symbol('x')) が決定的キーを返す", () => {
+    const symbol = Symbol("x");
+    const cat = new Cat32();
+    const first = cat.assign(symbol);
+    const second = cat.assign(symbol);
+    assert.equal(first.key, second.key);
+    assert.equal(typeof first.key, "string");
+});
+test("WeakRef 定義環境でローカルシンボルの stringify が 2 回とも成功する", async () => {
+    if (typeof globalThis.WeakRef !== "function" ||
+        typeof globalThis.FinalizationRegistry !== "function") {
+        return;
+    }
+    const originalWeakRef = globalThis.WeakRef;
+    const originalFinalizationRegistry = globalThis.FinalizationRegistry;
+    class StrictWeakRef {
+        #inner;
+        constructor(target) {
+            if ((typeof target !== "object" || target === null) &&
+                typeof target !== "function") {
+                throw new TypeError("WeakRef target must be an object");
+            }
+            this.#inner = new originalWeakRef(target);
+        }
+        deref() {
+            return this.#inner.deref();
+        }
+    }
+    class StrictFinalizationRegistry {
+        #registry;
+        constructor(cleanup) {
+            this.#registry = new originalFinalizationRegistry(cleanup);
+        }
+        register(target, heldValue, unregisterToken) {
+            if ((typeof target !== "object" || target === null) &&
+                typeof target !== "function") {
+                throw new TypeError("FinalizationRegistry target must be an object");
+            }
+            this.#registry.register(target, heldValue, unregisterToken);
+        }
+        unregister(unregisterToken) {
+            return this.#registry.unregister(unregisterToken);
+        }
+    }
+    Object.defineProperty(globalThis, "WeakRef", {
+        value: StrictWeakRef,
+        configurable: true,
+        writable: true,
+    });
+    Object.defineProperty(globalThis, "FinalizationRegistry", {
+        value: StrictFinalizationRegistry,
+        configurable: true,
+        writable: true,
+    });
+    try {
+        const moduleSpecifier = `../../src/index.js?strict-weakref=${weakRefReloadSequence}`;
+        weakRefReloadSequence += 1;
+        const { stableStringify: strictStableStringify } = await import(moduleSpecifier);
+        const symbol = Symbol("weakref");
+        strictStableStringify(symbol);
+        strictStableStringify(symbol);
+    }
+    finally {
+        weakRefReloadSequence += 1;
+        Object.defineProperty(globalThis, "WeakRef", {
+            value: originalWeakRef,
+            configurable: true,
+            writable: true,
+        });
+        Object.defineProperty(globalThis, "FinalizationRegistry", {
+            value: originalFinalizationRegistry,
+            configurable: true,
+            writable: true,
+        });
+    }
+});
+test("WeakRef と FinalizationRegistry が存在する環境でも stableStringify(Symbol('bar')) が例外を送出しない", () => {
+    if (typeof globalThis.WeakRef !== "function" ||
+        typeof globalThis.FinalizationRegistry !== "function") {
+        return;
+    }
+    const symbol = Symbol("bar");
+    try {
+        stableStringify(symbol);
+    }
+    catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        assert.ok(false, message);
+    }
+});
+test("ローカルシンボルのセンチネルレコードがキャッシュされる", () => {
+    const local = Symbol("local sentinel");
+    assert.equal(__peekLocalSymbolSentinelRecordForTest(local), undefined, "登録前はレコードが存在しない");
+    const firstRecord = __getLocalSymbolSentinelRecordForTest(local);
+    assert.equal(typeof firstRecord.identifier, "string");
+    assert.ok(firstRecord.identifier.length > 0);
+    assert.equal(typeof firstRecord.sentinel, "string");
+    const peekedRecord = __peekLocalSymbolSentinelRecordForTest(local);
+    assert.equal(peekedRecord, firstRecord);
+    const secondRecord = __getLocalSymbolSentinelRecordForTest(local);
+    assert.equal(secondRecord, firstRecord);
+    const sentinelFromRecord = firstRecord.sentinel;
+    const sentinelFromStringify = JSON.parse(stableStringify(local));
+    assert.equal(sentinelFromStringify, sentinelFromRecord);
+    const sentinelFromStringifyAgain = JSON.parse(stableStringify(local));
+    assert.equal(sentinelFromStringifyAgain, sentinelFromRecord);
+});
+test("ローカルシンボルのピークはレコードを生成しない", () => {
+    const another = Symbol("local peek");
+    assert.equal(__peekLocalSymbolSentinelRecordForTest(another), undefined, "ピークのみではレコードが生成されない");
+    assert.equal(__peekLocalSymbolSentinelRecordForTest(another), undefined, "複数回のピークでも生成されない");
+    const record = __getLocalSymbolSentinelRecordForTest(another);
+    assert.equal(__peekLocalSymbolSentinelRecordForTest(another), record, "センチネル作成後は同一レコードを返す");
+});
+test("ローカルシンボルのシリアライズと assign が例外を送出しない", () => {
+    const crash = Symbol("crash");
+    const sentinelFromStringify = JSON.parse(stableStringify(crash));
+    const cat = new Cat32();
+    const assignment = cat.assign(crash);
+    const sentinelFromAssign = JSON.parse(assignment.key);
+    assert.equal(sentinelFromAssign, sentinelFromStringify);
+    const sentinelFromStringifyAgain = JSON.parse(stableStringify(crash));
+    assert.equal(sentinelFromStringifyAgain, sentinelFromStringify);
+});
+test("同一 Symbol で Cat32.assign が安定したキーを返す", () => {
+    const symbol = Symbol("x");
+    stableStringify(symbol);
+    const cat = new Cat32();
+    cat.assign(symbol);
+    const first = cat.assign(symbol);
+    const second = cat.assign(symbol);
+    const serialized = stableStringify(symbol);
+    assert.equal(first.key, serialized);
+    assert.equal(second.key, serialized);
+    assert.equal(first.key, second.key);
+});

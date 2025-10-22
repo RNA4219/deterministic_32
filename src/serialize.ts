@@ -45,6 +45,21 @@ const LOCAL_SYMBOL_SENTINEL_REGISTRY =
   new WeakMap<SymbolObject, LocalSymbolSentinelRecord>();
 const LOCAL_SYMBOL_OBJECT_REGISTRY = new Map<symbol, SymbolObject>();
 
+const HAS_LOCAL_SYMBOL_FINALIZATION_SUPPORT =
+  typeof globalThis.WeakRef === "function" &&
+  typeof globalThis.FinalizationRegistry === "function";
+
+const LOCAL_SYMBOL_IDENTIFIER_INDEX: Set<string> | undefined =
+  HAS_LOCAL_SYMBOL_FINALIZATION_SUPPORT ? new Set<string>() : undefined;
+
+const LOCAL_SYMBOL_IDENTIFIER_FINALIZATION_REGISTRY:
+  | FinalizationRegistry<string>
+  | undefined = HAS_LOCAL_SYMBOL_FINALIZATION_SUPPORT
+  ? new FinalizationRegistry<string>((identifier) => {
+      LOCAL_SYMBOL_IDENTIFIER_INDEX?.delete(identifier);
+    })
+  : undefined;
+
 let nextLocalSymbolSentinelId = 0;
 
 function getOrCreateSymbolObject(symbol: symbol): SymbolObject {
@@ -80,6 +95,17 @@ function registerLocalSymbolSentinelRecord(
   record: LocalSymbolSentinelRecord,
 ): void {
   LOCAL_SYMBOL_SENTINEL_REGISTRY.set(symbolObject, record);
+
+  if (
+    LOCAL_SYMBOL_IDENTIFIER_INDEX !== undefined &&
+    LOCAL_SYMBOL_IDENTIFIER_FINALIZATION_REGISTRY !== undefined
+  ) {
+    LOCAL_SYMBOL_IDENTIFIER_INDEX.add(record.identifier);
+    LOCAL_SYMBOL_IDENTIFIER_FINALIZATION_REGISTRY.register(
+      symbolObject,
+      record.identifier,
+    );
+  }
 }
 
 function createLocalSymbolSentinelRecord(
