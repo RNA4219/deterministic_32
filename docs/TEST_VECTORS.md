@@ -38,6 +38,8 @@
 | `user:123` | `"user:123"` | `"user:123"|saltns:["projX","v1"]` | `11d00f43` | 3 |
 | `task:register` | `"task:register"` | `"task:register"|saltns:["projX","v1"]` | `d61ce402` | 2 |
 
+> `salted_key` 列は `|saltns:` + `JSON.stringify([salt, namespace])` の現行仕様を反映している（余分な空白は入らない）。旧テーブルにあった `|salt:` + `|ns:` 形式とは互換ではないため注意。
+
 ### Canonicalization example (objects)
 
 Input objects:

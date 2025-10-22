@@ -17,6 +17,7 @@ tests/
   - `constructor(opts)` で `labels(32)`, `salt`, `namespace`, `normalize`, `overrides` を受け取る。
   - `assign(input)` → `{ index, label, hash, key }`
   - `index(input)`, `labelOf(input)`：利便性ラッパー。
+  - `salt`/`namespace` の連結は `canonical + (ns ? "|saltns:" + JSON.stringify([salt, ns]) : salt ? "|salt:" + salt : "")` を厳守する（§7）。旧プロトタイプの `|salt:` + `|ns:` 形式はサポートしない。
 
 ## 3. 正規化戦略
 - 既定は **NFKC**。半角/全角、互換文字等の揺れを低減。
