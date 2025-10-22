@@ -43,11 +43,7 @@ type LocalSymbolFinalizerHolder = {
 type LocalSymbolSentinelRecord = {
   identifier: string;
   sentinel: string;
-  finalizerHolder?: LocalSymbolFinalizerHolder;
 };
-
-const HAS_WEAK_REFS = typeof WeakRef === "function";
-const HAS_FINALIZATION_REGISTRY = typeof FinalizationRegistry === "function";
 
 const LOCAL_SYMBOL_SENTINEL_REGISTRY =
   new WeakMap<SymbolObject, LocalSymbolSentinelRecord>();
