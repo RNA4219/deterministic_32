@@ -124,6 +124,29 @@ test(
   },
 );
 
+test(
+  "WeakRef 利用環境で finalizerHolder に型安全にアクセスできる",
+  () => {
+    if (
+      typeof globalThis.WeakRef !== "function" ||
+      typeof globalThis.FinalizationRegistry !== "function"
+    ) {
+      return;
+    }
+
+    const symbol = Symbol("local finalizer holder");
+    const record = __getLocalSymbolSentinelRecordForTest(symbol);
+
+    const holder = record.finalizerHolder;
+    if (holder === undefined) {
+      throw new TypeError("finalizerHolder が設定されていない");
+    }
+
+    assert.equal(typeof holder.target, "object");
+    assert.equal(holder.ref.deref(), holder.target);
+  },
+);
+
 test("ローカルシンボルのセンチネルレコードがキャッシュされる", () => {
   const local = Symbol("local sentinel");
 
