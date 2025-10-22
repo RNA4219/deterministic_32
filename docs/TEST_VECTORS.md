@@ -77,4 +77,13 @@ stableStringify(new SharedArrayBuffer(2))
 const sentinel = "\u0000cat32:number:NaN\u0000";
 stableStringify(sentinel)
 → "\"__string__:\\u0000cat32:number:NaN\\u0000\""
+
+stableStringify(Number.POSITIVE_INFINITY)
+→ "\"\\u0000cat32:number:Infinity\\u0000\""
+
+stableStringify(1n)
+→ "\"\\u0000cat32:bigint:1\\u0000\""
+
+stableStringify(Object(false))
+→ "false" // ボックス化 Boolean はアンボックス後に処理
 ```
