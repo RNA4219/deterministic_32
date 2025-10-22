@@ -35,7 +35,9 @@ input (unknown)
   - `bigint` → 常に `typeSentinel("bigint", value.toString())` を生成し、センチネル文字列として直列化する。
   - `string` → `JSON.stringify` に準拠（`"` で囲む）。センチネル文字列（`__undefined__` や `\u0000cat32:...\u0000` など）と衝突する場合は `__string__:` プレフィックスを 1 回以上付与してエスケープする。
   - `new Number(...)` / `new Boolean(...)` / `Object(1n)` などのボックス化プリミティブは `.valueOf()` でアンボックスした値に対して上記ルール（含センチネル処理）を適用する。
-  - **Array**: `[...]`（順序維持）
+  - **Array**: `[...]`（順序維持）。**疎配列**では、欠番インデックスごとに `typeSentinel("hole","__hole__")` を挿入したうえで JSON 配列に変換する。これは実際の `undefined` 要素とは区別され、後者は `"__undefined__"` として直列化される。
+    - 例: `stableStringify([1,,3])` → `"[1,\"\\u0000cat32:hole:__hole__\\u0000\",3]"`
+    - 例: `stableStringify([1, undefined, 3])` → `"[1,\"__undefined__\",3]"`
   - **Object**: 自身の**列挙可能プロパティ**を**キー昇順**で `{k:v}` 並べる
   - **Date**: `"__date__:<ISO8601>"`（`getTime()` が **有限値** の場合）。`getTime()` が `NaN` や `±Infinity` などの **非有限値** を返したときは `"__date__:invalid"` をセンチネルとして返し、例外は投げない。
   - **Map**: `typeSentinel("map", payload)` 形式のセンチネル文字列（`"\u0000cat32:map:<payload>\u0000"`）。`payload` は `JSON.stringify` された

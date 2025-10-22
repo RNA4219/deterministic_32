@@ -34,6 +34,7 @@ tests/
   - Set: 要素の `stableStringify` 結果と `buildSetSortKey` が返すセンチネル対応ソートキーで比較し、`sortKey` → `serializedValue` → 挿入順の優先度で整列した配列を `payload` (`"[... ]"`) として `typeSentinel("set", payload)` に埋め込む。重複要素も同じ順序規則で保持される。
 - **Date**: `__date__:<ISO8601>`
 - `undefined` は `"__undefined__"` の**文字列**にエンコード。
+- **Array**: 疎配列で欠番がある場合は、`typeSentinel("hole", "__hole__")` を JSON 文字列として挿入し、`undefined` を要素値として持つケース（`"__undefined__"` センチネル）と区別する。
 
 ## 5. 文字コードとランタイム
 - UTF‑8 バイト化は `TextEncoder`（ブラウザ/Node18+）で統一。
