@@ -36,11 +36,9 @@ type ValueOfCapable = { valueOf(): unknown };
 
 type LocalSymbolWeakTarget = symbol & object;
 
-type LocalSymbolFinalizerHolderTarget = { target: LocalSymbolWeakTarget };
-
 type LocalSymbolFinalizerHolder = {
-  target: LocalSymbolFinalizerHolderTarget;
-  ref: WeakRef<LocalSymbolFinalizerHolderTarget>;
+  target: LocalSymbolWeakTarget;
+  ref: WeakRef<LocalSymbolWeakTarget>;
 };
 
 type LocalSymbolSentinelRecord = {
@@ -58,10 +56,6 @@ const LOCAL_SYMBOL_OBJECT_REGISTRY = new Map<symbol, LocalSymbolWeakTarget>();
 const LOCAL_SYMBOL_IDENTIFIER_INDEX =
   HAS_WEAK_REFS && HAS_FINALIZATION_REGISTRY
     ? new Map<string, WeakRef<LocalSymbolFinalizerHolder>>()
-    : undefined;
-const LOCAL_SYMBOL_FINALIZER_TARGET_INDEX =
-  HAS_WEAK_REFS && HAS_FINALIZATION_REGISTRY
-    ? new WeakMap<LocalSymbolWeakTarget, LocalSymbolFinalizerHolderTarget>()
     : undefined;
 const LOCAL_SYMBOL_FINALIZER =
   HAS_WEAK_REFS && HAS_FINALIZATION_REGISTRY
@@ -109,14 +103,9 @@ function registerLocalSymbolSentinelRecord(
     LOCAL_SYMBOL_FINALIZER !== undefined &&
     LOCAL_SYMBOL_FINALIZER_TARGET_INDEX !== undefined
   ) {
-    let holderTarget = LOCAL_SYMBOL_FINALIZER_TARGET_INDEX.get(symbolObject);
-    if (holderTarget === undefined) {
-      holderTarget = { target: symbolObject };
-      LOCAL_SYMBOL_FINALIZER_TARGET_INDEX.set(symbolObject, holderTarget);
-    }
-
-    const ref = new WeakRef(holderTarget);
-    const holder: LocalSymbolFinalizerHolder = { target: holderTarget, ref };
+    const target = symbolObject;
+    const ref = new WeakRef(target);
+    const holder: LocalSymbolFinalizerHolder = { target, ref };
     const holderRef = new WeakRef(holder);
     LOCAL_SYMBOL_IDENTIFIER_INDEX.set(record.identifier, holderRef);
     LOCAL_SYMBOL_FINALIZER.register(holderTarget, record.identifier);
