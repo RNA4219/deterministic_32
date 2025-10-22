@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { rejects } from "node:assert/promises";
 import test from "node:test";
 
 import { createRefreshQueueStore } from "../../src/sw/refreshQueueStore.js";
@@ -8,6 +7,14 @@ import { retryQueueEntry } from "../../src/sw.js";
 
 type RequestConstructor = new (input: string | URL, init?: RequestInit) => Request;
 type HeadersInput = RequestInit["headers"] | Iterable<readonly [string, string]>;
+
+const assertRejects = (assert as unknown as {
+  rejects: (
+    block: () => Promise<unknown> | unknown,
+    error?: unknown,
+    message?: string,
+  ) => Promise<void>;
+}).rejects;
 
 const normalizeBody = (body: unknown): string => {
   if (typeof body === "string") {
@@ -198,7 +205,7 @@ test("retryQueueEntry throws when record is missing", async () => {
     },
   };
 
-  await rejects(async () => {
+  await assertRejects(async () => {
     await retryQueueEntry(store, recordId, async () => {
       attemptInvocations += 1;
       return undefined;

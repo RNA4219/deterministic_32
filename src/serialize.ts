@@ -67,7 +67,7 @@ function getLocalSymbolSentinelRecord(
   symbol: symbol,
 ): LocalSymbolSentinelRecord {
   const symbolObject = toSymbolObject(symbol);
-  const existing = peekLocalSymbolSentinelRecord(symbol);
+  const existing = LOCAL_SYMBOL_SENTINEL_REGISTRY.get(symbolObject);
   if (existing !== undefined) {
     return existing;
   }
