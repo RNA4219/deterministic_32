@@ -21,10 +21,10 @@ $ npx deterministic-32 <key?> [--salt=... --namespace=... --normalize=nfkc|nfkd|
 
 ```sh
 $ cat32 foo
-{"index":7,"label":"H","hash":"1a2b3c4d","key":"foo"}
+{"index":7,"label":"H","hash":"1a2b3c4d","key":"\"foo\""}
 
 $ cat32 --json foo
-{"index":7,"label":"H","hash":"1a2b3c4d","key":"foo"}
+{"index":7,"label":"H","hash":"1a2b3c4d","key":"\"foo\""}
 
 $ cat32 --json=pretty foo
 ※ 以下の整形モード例は 1 件のレコードが複数行に展開される。
@@ -33,7 +33,7 @@ $ cat32 --json=pretty foo
   "index": 7,
   "label": "H",
   "hash": "1a2b3c4d",
-  "key": "foo"
+  "key": "\"foo\""
 }
 
 $ cat32 --pretty foo
@@ -41,7 +41,7 @@ $ cat32 --pretty foo
   "index": 7,
   "label": "H",
   "hash": "1a2b3c4d",
-  "key": "foo"
+  "key": "\"foo\""
 }
 
 $ cat32 --json --pretty foo
@@ -49,6 +49,6 @@ $ cat32 --json --pretty foo
   "index": 7,
   "label": "H",
   "hash": "1a2b3c4d",
-  "key": "foo"
+  "key": "\"foo\""
 }
 ```
