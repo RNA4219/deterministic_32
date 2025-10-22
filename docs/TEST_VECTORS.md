@@ -147,7 +147,9 @@ const map = new Map([
   ["tags", ["a", "b"]],
 ]);
 stableStringify(map)
-→ "\"\\u0000cat32:map:[[\"\\u0000cat32:propertykey:string:\\\"id\\\"\\u0000\",\"123\"],[\"\\u0000cat32:propertykey:string:\\\"tags\\\"\\u0000\",\"[\\\\\"a\\\\\",\\\\\"b\\\\\"]\"]]\\u0000\""
+→ "\"\\u0000cat32:map:[[\"id\",\"123\"],[\"tags\",\"[\\"a\\",\\"b\\"]\"]]\\u0000\""
+
+// 文字列キーは propertykey センチネルを経由せず、そのまま JSON 互換の配列要素として表現される。
 
 const set = new Set([123, NaN]);
 stableStringify(set)
