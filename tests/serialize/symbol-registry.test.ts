@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  Cat32,
   stableStringify,
 } from "../../src/index.js";
 import {
@@ -151,4 +152,13 @@ test("ローカルシンボルのピークはレコードを生成しない", ()
     record,
     "センチネル作成後は同一レコードを返す",
   );
+});
+
+test("ローカルシンボルのシリアライズと assign が例外を送出しない", () => {
+  const crash = Symbol("crash");
+
+  stableStringify(crash);
+
+  const cat = new Cat32();
+  cat.assign(crash);
 });
