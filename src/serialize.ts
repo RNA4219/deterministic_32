@@ -55,15 +55,30 @@ function toSymbolObject(symbol: symbol): SymbolObject {
   return symbol as SymbolObject;
 }
 
+function getLocalSymbolSentinelIdentifier(
+  symbol: symbol,
+): LocalSymbolSentinelRecord | undefined {
+  const symbolObject = toSymbolObject(symbol);
+  return LOCAL_SYMBOL_SENTINELS.get(symbolObject);
+}
+
+function setLocalSymbolSentinelIdentifier(
+  symbol: symbol,
+  record: LocalSymbolSentinelRecord,
+): void {
+  const symbolObject = toSymbolObject(symbol);
+  LOCAL_SYMBOL_SENTINELS.set(symbolObject, record);
+}
+
 function getLocalSymbolSentinelRecord(
   symbol: symbol,
 ): LocalSymbolSentinelRecord {
-  const symbolObject = toSymbolObject(symbol);
-  const existing = LOCAL_SYMBOL_SENTINELS.get(symbolObject);
+  const existing = getLocalSymbolSentinelIdentifier(symbol);
   if (existing !== undefined) {
     return existing;
   }
 
+  const symbolObject = toSymbolObject(symbol);
   const identifier = nextLocalSymbolSentinelId.toString(36);
   nextLocalSymbolSentinelId += 1;
   const description = symbol.description ?? "";
@@ -84,12 +99,8 @@ function getLocalSymbolSentinelRecord(
     record.finalizerHolder = holder;
   }
 
-  LOCAL_SYMBOL_SENTINELS.set(symbolObject, record);
+  setLocalSymbolSentinelIdentifier(symbol, record);
   return record;
-}
-
-function getLocalSymbolSentinelIdentifier(symbol: symbol): string {
-  return getLocalSymbolSentinelRecord(symbol).identifier;
 }
 
 function getSymbolBucketKey(symbol: symbol): string {
@@ -98,7 +109,10 @@ function getSymbolBucketKey(symbol: symbol): string {
   if (globalKey !== undefined) {
     return `global:${globalKey}`;
   }
-  return `local:${getLocalSymbolSentinelIdentifier(symbol)}`;
+  const record =
+    getLocalSymbolSentinelIdentifier(symbol) ??
+    getLocalSymbolSentinelRecord(symbol);
+  return `local:${record.identifier}`;
 }
 
 const STRING_LITERAL_ESCAPED_SENTINEL_TYPES = new Set<string>([
@@ -759,9 +773,16 @@ function getSymbolSortKey(symbol: symbol): string {
   if (globalKey !== undefined) {
     return `global:${globalKey}`;
   }
-  const identifier = getLocalSymbolSentinelIdentifier(symbol);
-  return `local:${identifier}`;
+  const record =
+    getLocalSymbolSentinelIdentifier(symbol) ??
+    getLocalSymbolSentinelRecord(symbol);
+  return `local:${record.identifier}`;
 }
+
+export {
+  getLocalSymbolSentinelRecord as __getLocalSymbolSentinelRecordForTest,
+  getLocalSymbolSentinelIdentifier as __peekLocalSymbolSentinelRecordForTest,
+};
 
 function buildSetSortKey(value: unknown, serializedValue: string): string {
   if (typeof value === "symbol") {
