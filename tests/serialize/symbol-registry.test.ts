@@ -12,6 +12,28 @@ import {
 
 let weakRefReloadSequence = 0;
 
+test("stableStringify(Symbol('x')) が決定的キーを返す", () => {
+  const symbol = Symbol("x");
+
+  const first = stableStringify(symbol);
+  const second = stableStringify(symbol);
+
+  assert.equal(first, second);
+  assert.equal(typeof first, "string");
+});
+
+test("Cat32.assign(Symbol('x')) が決定的キーを返す", () => {
+  const symbol = Symbol("x");
+
+  const cat = new Cat32();
+
+  const first = cat.assign(symbol);
+  const second = cat.assign(symbol);
+
+  assert.equal(first.key, second.key);
+  assert.equal(typeof first.key, "string");
+});
+
 test(
   "WeakRef 定義環境でローカルシンボルの stringify が 2 回とも成功する",
   async () => {
