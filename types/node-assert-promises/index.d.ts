@@ -1,7 +1,10 @@
 declare module "node:assert/promises" {
   export function rejects(
-    block: (() => unknown) | Promise<unknown>,
-    error?: unknown,
-    message?: string,
+    value: unknown,
+    message?: string | Error | ((error: unknown) => boolean),
+  ): Promise<void>;
+  export function doesNotReject(
+    value: unknown,
+    message?: string | Error | ((error: unknown) => boolean),
   ): Promise<void>;
 }
