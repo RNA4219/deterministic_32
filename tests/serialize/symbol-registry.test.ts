@@ -12,6 +12,28 @@ import {
 
 let weakRefReloadSequence = 0;
 
+test("stableStringify(Symbol('x')) が決定的キーを返す", () => {
+  const symbol = Symbol("x");
+
+  const first = stableStringify(symbol);
+  const second = stableStringify(symbol);
+
+  assert.equal(first, second);
+  assert.equal(typeof first, "string");
+});
+
+test("Cat32.assign(Symbol('x')) が決定的キーを返す", () => {
+  const symbol = Symbol("x");
+
+  const cat = new Cat32();
+
+  const first = cat.assign(symbol);
+  const second = cat.assign(symbol);
+
+  assert.equal(first.key, second.key);
+  assert.equal(typeof first.key, "string");
+});
+
 test(
   "WeakRef 定義環境でローカルシンボルの stringify が 2 回とも成功する",
   async () => {
@@ -157,8 +179,30 @@ test("ローカルシンボルのピークはレコードを生成しない", ()
 test("ローカルシンボルのシリアライズと assign が例外を送出しない", () => {
   const crash = Symbol("crash");
 
-  stableStringify(crash);
+  const sentinelFromStringify = JSON.parse(stableStringify(crash));
 
   const cat = new Cat32();
-  cat.assign(crash);
+  const assignment = cat.assign(crash);
+
+  const sentinelFromAssign = JSON.parse(assignment.key);
+  assert.equal(sentinelFromAssign, sentinelFromStringify);
+
+  const sentinelFromStringifyAgain = JSON.parse(stableStringify(crash));
+  assert.equal(sentinelFromStringifyAgain, sentinelFromStringify);
+});
+
+test("同一 Symbol で Cat32.assign が安定したキーを返す", () => {
+  const symbol = Symbol("x");
+
+  stableStringify(symbol);
+  const cat = new Cat32();
+
+  cat.assign(symbol);
+  const first = cat.assign(symbol);
+  const second = cat.assign(symbol);
+  const serialized = stableStringify(symbol);
+
+  assert.equal(first.key, serialized);
+  assert.equal(second.key, serialized);
+  assert.equal(first.key, second.key);
 });
