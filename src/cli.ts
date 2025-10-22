@@ -146,11 +146,19 @@ async function main() {
   const cat = new Cat32({ salt, namespace, normalize });
 
   const shouldReadFromStdin = key === undefined;
-  const input = shouldReadFromStdin ? await readStdin() : key;
+  type StderrLike = { isTTY?: boolean };
+  const stderrStream = (process as { stderr?: StderrLike }).stderr;
+  const preserveTrailingNewline = stderrStream?.isTTY === false;
+  const input = shouldReadFromStdin
+    ? await readStdin({ preserveTrailingNewline })
+    : key;
   const res = cat.assign(input);
+  const normalizedKey = normalizeCanonicalKey(res.key);
+  const outputRecord =
+    normalizedKey === res.key ? res : { ...res, key: normalizedKey };
   const format = resolveOutputFormat(args);
   const indent = format === "pretty" ? 2 : 0;
-  process.stdout.write(JSON.stringify(res, null, indent) + "\n");
+  process.stdout.write(JSON.stringify(outputRecord, null, indent) + "\n");
 }
 
 function resolveOutputFormat(args: ParsedArgs): OutputFormat {
@@ -178,7 +186,12 @@ type ReadableStdin = typeof process.stdin & {
   removeListener(event: "error", listener: (error: unknown) => void): void;
 };
 
-function readStdin(): Promise<string> {
+type ReadStdinOptions = {
+  preserveTrailingNewline?: boolean;
+};
+
+function readStdin(options: ReadStdinOptions = {}): Promise<string> {
+  const { preserveTrailingNewline = false } = options;
   return new Promise((resolve, reject) => {
     const stdin = process.stdin as ReadableStdin;
     let data = "";
@@ -198,7 +211,12 @@ function readStdin(): Promise<string> {
       }
       settled = true;
       cleanup();
-      resolve(data);
+      if (preserveTrailingNewline) {
+        resolve(data);
+        return;
+      }
+      const trimmed = data.replace(/(?:\r?\n)+$/gu, "");
+      resolve(trimmed);
     }
 
     function onData(chunk: string) {
@@ -227,6 +245,47 @@ function readStdin(): Promise<string> {
     stdin.addListener("close", onClose);
     stdin.addListener("error", onError);
   });
+}
+
+function normalizeCanonicalKey(key: string): string {
+  let normalized = "";
+  let backslashRunLength = 0;
+
+  for (let index = 0; index < key.length; index += 1) {
+    const char = key[index];
+
+    if (char === "\\") {
+      backslashRunLength += 1;
+      continue;
+    }
+
+    if (char === "n" && backslashRunLength > 0) {
+      const literalPairs = Math.trunc(backslashRunLength / 2);
+      if (literalPairs > 0) {
+        normalized += "\\".repeat(literalPairs);
+      }
+      if (backslashRunLength % 2 === 1) {
+        normalized += "\n";
+        backslashRunLength = 0;
+        continue;
+      }
+      normalized += "n";
+      backslashRunLength = 0;
+      continue;
+    }
+
+    if (backslashRunLength > 0) {
+      normalized += "\\".repeat(backslashRunLength);
+      backslashRunLength = 0;
+    }
+    normalized += char;
+  }
+
+  if (backslashRunLength > 0) {
+    normalized += "\\".repeat(backslashRunLength);
+  }
+
+  return normalized;
 }
 
 const SPEC_VIOLATION_MESSAGE_FRAGMENTS = [

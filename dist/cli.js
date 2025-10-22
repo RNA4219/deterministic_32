@@ -62,16 +62,13 @@ function parseArgs(argv) {
                     continue;
                 }
                 const next = argv[i + 1];
-                const hasNextToken = next !== undefined && next !== "--" && !next.startsWith("--");
-                const nextIsAllowedValue = hasNextToken &&
-                    (spec.allowedValues === undefined || spec.allowedValues.includes(next));
-                if (nextIsAllowedValue) {
-                    args[key] = next;
-                    i += 1;
-                }
-                else {
+                if (next === undefined || next === "--" || next.startsWith("--")) {
                     args[key] = spec.defaultValue;
+                    continue;
                 }
+                assertAllowedFlagValue(key, next, spec.allowedValues);
+                args[key] = next;
+                i += 1;
             }
             else {
                 let value;
@@ -104,10 +101,10 @@ function parseNormalizeOption(value) {
     if (value === undefined) {
         return "nfkc";
     }
-    if (value === "none" || value === "nfc" || value === "nfkc") {
+    if (value === "none" || value === "nfc" || value === "nfd" || value === "nfkc" || value === "nfkd") {
         return value;
     }
-    throw new RangeError("normalize must be one of \"none\", \"nfc\", or \"nfkc\"");
+    throw new RangeError("normalize must be one of \"none\", \"nfc\", \"nfd\", \"nfkc\", or \"nfkd\"");
 }
 async function main() {
     const args = parseArgs(process.argv);
@@ -117,15 +114,19 @@ async function main() {
     }
     const key = args._;
     const salt = typeof args.salt === "string" ? args.salt : "";
-    const namespace = typeof args.namespace === "string" ? args.namespace : "";
+    const namespace = typeof args.namespace === "string" ? args.namespace : undefined;
     const normalize = parseNormalizeOption(typeof args.normalize === "string" ? args.normalize : undefined);
     const cat = new Cat32({ salt, namespace, normalize });
     const shouldReadFromStdin = key === undefined;
-    const input = shouldReadFromStdin ? await readStdin() : key;
+    const stderrStream = globalThis.process.stderr;
+    const preserveTrailingNewline = (stderrStream === null || stderrStream === void 0 ? void 0 : stderrStream.isTTY) === false;
+    const input = shouldReadFromStdin ? await readStdin({ preserveTrailingNewline }) : key;
     const res = cat.assign(input);
+    const normalizedKey = normalizeCanonicalKey(res.key);
+    const outputRecord = normalizedKey === res.key ? res : { ...res, key: normalizedKey };
     const format = resolveOutputFormat(args);
     const indent = format === "pretty" ? 2 : 0;
-    process.stdout.write(JSON.stringify(res, null, indent) + "\n");
+    process.stdout.write(JSON.stringify(outputRecord, null, indent) + "\n");
 }
 function resolveOutputFormat(args) {
     const jsonOption = typeof args.json === "string" ? args.json : undefined;
@@ -141,7 +142,8 @@ function resolveOutputFormat(args) {
     }
     throw new RangeError(`unsupported --json value "${jsonOption}"`);
 }
-function readStdin() {
+function readStdin(options = {}) {
+    const { preserveTrailingNewline = false } = options;
     return new Promise((resolve, reject) => {
         const stdin = process.stdin;
         let data = "";
@@ -159,14 +161,12 @@ function readStdin() {
             }
             settled = true;
             cleanup();
-            let finalData = data;
-            if (finalData.endsWith("\r\n")) {
-                finalData = finalData.slice(0, -2);
+            if (preserveTrailingNewline) {
+                resolve(data);
+                return;
             }
-            else if (finalData.endsWith("\n")) {
-                finalData = finalData.slice(0, -1);
-            }
-            resolve(finalData);
+            const trimmed = data.replace(/(?:\r?\n)+$/gu, "");
+            resolve(trimmed);
         }
         function onData(chunk) {
             data += chunk;
@@ -190,6 +190,40 @@ function readStdin() {
         stdin.addListener("close", onClose);
         stdin.addListener("error", onError);
     });
+}
+function normalizeCanonicalKey(key) {
+    let normalized = "";
+    let backslashRunLength = 0;
+    for (let index = 0; index < key.length; index += 1) {
+        const char = key[index];
+        if (char === "\\") {
+            backslashRunLength += 1;
+            continue;
+        }
+        if (char === "n" && backslashRunLength > 0) {
+            const literalPairs = Math.trunc(backslashRunLength / 2);
+            if (literalPairs > 0) {
+                normalized += "\\".repeat(literalPairs);
+            }
+            if (backslashRunLength % 2 === 1) {
+                normalized += "\n";
+                backslashRunLength = 0;
+                continue;
+            }
+            normalized += "n";
+            backslashRunLength = 0;
+            continue;
+        }
+        if (backslashRunLength > 0) {
+            normalized += "\\".repeat(backslashRunLength);
+            backslashRunLength = 0;
+        }
+        normalized += char;
+    }
+    if (backslashRunLength > 0) {
+        normalized += "\\".repeat(backslashRunLength);
+    }
+    return normalized;
 }
 const SPEC_VIOLATION_MESSAGE_FRAGMENTS = [
     "cyclic object",
