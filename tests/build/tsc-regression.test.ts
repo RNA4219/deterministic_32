@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 import test from "node:test";
 
 const dynamicImport = new Function(
@@ -21,7 +22,9 @@ const { env: baseEnv = {}, platform = "linux" } = (process as unknown as Process
 
 const getNpmExecutable = (): string => (platform === "win32" ? "npm.cmd" : "npm");
 
-const runTsc = async (command: "npm run build"): Promise<void> => {
+const runTsc = async (
+  command: "npm run build",
+): Promise<{ stdout: string; stderr: string }> => {
   const { execFile } = (await dynamicImport("node:child_process")) as { execFile: ExecFile };
   const { fileURLToPath } = (await dynamicImport("node:url")) as {
     fileURLToPath: (input: URL) => string;
@@ -38,7 +41,7 @@ const runTsc = async (command: "npm run build"): Promise<void> => {
     }
   })();
 
-  await new Promise<void>((resolve, reject) => {
+  return new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
     execFile(
       file,
       args,
@@ -48,7 +51,7 @@ const runTsc = async (command: "npm run build"): Promise<void> => {
           reject(Object.assign(error ?? {}, { stdout, stderr }));
           return;
         }
-        resolve();
+        resolve({ stdout, stderr });
       },
     );
   });
@@ -57,3 +60,37 @@ const runTsc = async (command: "npm run build"): Promise<void> => {
 test("npm run build succeeds without TypeScript errors", async () => {
   await runTsc("npm run build");
 });
+
+const assertNoLocalSymbolRegistryErrors = (stderr: string): void => {
+  for (const identifier of [
+    "LOCAL_SYMBOL_OBJECT_REGISTRY",
+    "LOCAL_SYMBOL_HOLDER_REGISTRY",
+    "getOrCreateSymbolObject",
+    "peekLocalSymbolSentinelRecordFromObject",
+  ] as const) {
+    assert.ok(
+      !stderr.includes(`TS2304: Cannot find name '${identifier}'`),
+      `${identifier} が未定義として報告されている`,
+    );
+  }
+};
+
+test(
+  "npm run build が Local Symbol Registry 関連の TS2304 エラーを報告しない",
+  async () => {
+    try {
+      const { stderr } = await runTsc("npm run build");
+      assertNoLocalSymbolRegistryErrors(stderr);
+    } catch (error) {
+      assertNoLocalSymbolRegistryErrors(
+        typeof error === "object" &&
+          error !== null &&
+          "stderr" in error &&
+          typeof (error as { stderr?: unknown }).stderr === "string"
+          ? (error as { stderr: string }).stderr
+          : "",
+      );
+      throw error;
+    }
+  },
+);
