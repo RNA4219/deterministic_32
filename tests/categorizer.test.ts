@@ -1886,6 +1886,14 @@ test("normalization NFKC merges fullwidth", () => {
   assert.equal(x.index, y.index);
 });
 
+test("normalization NFD merges canonical equivalents", () => {
+  const c = new Cat32({ normalize: "nfd" });
+  const composed = c.assign("é");
+  const decomposed = c.assign("e\u0301");
+  assert.equal(composed.index, decomposed.index);
+  assert.equal(composed.key, decomposed.key);
+});
+
 test("normalization NFKD merges compatibility characters", () => {
   const c = new Cat32({ normalize: "nfkd" });
   const x = c.assign("Ａ"); // fullwidth A
@@ -3025,6 +3033,51 @@ test("CLI accepts NFKD normalization flag", async () => {
   assert.equal(exitCode, 0);
 
   const expected = new Cat32({ normalize: "nfkd" }).assign("A");
+  assert.equal(stdout, JSON.stringify(expected) + "\n");
+});
+
+test("CLI accepts NFD normalization flag", async () => {
+  const { spawn } = (await dynamicImport("node:child_process")) as { spawn: SpawnFunction };
+  const child = spawn(process.argv[0], [CLI_PATH, "--normalize=nfd", "é"], {
+    stdio: ["ignore", "pipe", "inherit"],
+  });
+
+  let stdout = "";
+  child.stdout.setEncoding("utf8");
+  child.stdout.on("data", (chunk: string) => {
+    stdout += chunk;
+  });
+
+  const exitCode: number | null = await new Promise((resolve) => {
+    child.on("close", (code: number | null) => resolve(code));
+  });
+  assert.equal(exitCode, 0);
+
+  const expected = new Cat32({ normalize: "nfd" }).assign("e\u0301");
+  assert.equal(stdout, JSON.stringify(expected) + "\n");
+});
+
+test("CLI accepts NFD normalization flag from stdin", async () => {
+  const { spawn } = (await dynamicImport("node:child_process")) as { spawn: SpawnFunction };
+  const child = spawn(process.argv[0], [CLI_PATH, "--normalize=nfd"], {
+    stdio: ["pipe", "pipe", "inherit"],
+  });
+
+  child.stdin.write("é\n");
+  child.stdin.end();
+
+  let stdout = "";
+  child.stdout.setEncoding("utf8");
+  child.stdout.on("data", (chunk: string) => {
+    stdout += chunk;
+  });
+
+  const exitCode: number | null = await new Promise((resolve) => {
+    child.on("close", (code: number | null) => resolve(code));
+  });
+  assert.equal(exitCode, 0);
+
+  const expected = new Cat32({ normalize: "nfd" }).assign("é\n");
   assert.equal(stdout, JSON.stringify(expected) + "\n");
 });
 

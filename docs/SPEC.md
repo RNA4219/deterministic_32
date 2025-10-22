@@ -17,7 +17,7 @@
 ```
 input (unknown)
    └─▶ stableStringify(input)              // 順序非依存の決定的シリアライズ（§4）
-        └─▶ unicodeNormalize(str, mode)    // "nfkc" | "nfc" | "none"（既定: "nfkc"）
+        └─▶ unicodeNormalize(str, mode)    // "nfkc" | "nfkd" | "nfd" | "nfc" | "none"（既定: "nfkc"）
              └─▶ salted(str, salt, ns)     // {str} + "|salt:" + salt + ("|ns:"+ns?)
                   └─▶ FNV-1a32(utf8)       // §5
                        └─▶ index = hash & 31
