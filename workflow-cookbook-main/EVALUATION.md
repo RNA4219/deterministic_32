@@ -13,6 +13,7 @@ next_review_due: 2025-11-14
 - 必須要件（フォーマット・件数・整合性など）
 - PR本文に Priority Score（値と根拠）が記録されていること。
 - governance/policy.yaml の forbidden_paths を変更しないこと。
+- 環境設定の差分に対して設定差分チェックを実施し、影響範囲とリスクがレビューで確認されていること。
 - インシデント発生時は docs/IN-YYYYMMDD-XXX.md を作成し、該当PRおよびRUNBOOKから相互リンクする
 
 ## KPIs
