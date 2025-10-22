@@ -87,12 +87,9 @@ function parseArgs(argv: string[]): ParsedArgs {
         }
 
         const next = argv[i + 1];
-        const hasNextToken = next !== undefined && next !== "--" && !next.startsWith("--");
-        const nextIsAllowedValue =
-          hasNextToken &&
-          (spec.allowedValues === undefined || spec.allowedValues.includes(next));
 
-        if (nextIsAllowedValue) {
+        if (next !== undefined && next !== "--" && !next.startsWith("--")) {
+          assertAllowedFlagValue(key, next, spec.allowedValues);
           args[key] = next;
           i += 1;
         } else {
