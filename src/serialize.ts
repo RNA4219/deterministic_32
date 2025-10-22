@@ -55,13 +55,13 @@ function toSymbolObject(symbol: symbol): SymbolObject {
   return symbol as SymbolObject;
 }
 
-function getLocalSymbolSentinelRecord(
+function ensureLocalSymbolSentinelRecord(
   symbol: symbol,
 ): LocalSymbolSentinelRecord {
   const symbolObject = toSymbolObject(symbol);
-  const existing = LOCAL_SYMBOL_SENTINELS.get(symbolObject);
-  if (existing !== undefined) {
-    return existing;
+  const existingRecord = LOCAL_SYMBOL_SENTINELS.get(symbolObject);
+  if (existingRecord !== undefined) {
+    return existingRecord;
   }
 
   const identifier = nextLocalSymbolSentinelId.toString(36);
@@ -88,17 +88,14 @@ function getLocalSymbolSentinelRecord(
   return record;
 }
 
-function getLocalSymbolSentinelIdentifier(symbol: symbol): string {
-  return getLocalSymbolSentinelRecord(symbol).identifier;
-}
-
 function getSymbolBucketKey(symbol: symbol): string {
   const globalKey =
     typeof Symbol.keyFor === "function" ? Symbol.keyFor(symbol) : undefined;
   if (globalKey !== undefined) {
     return `global:${globalKey}`;
   }
-  return `local:${getLocalSymbolSentinelIdentifier(symbol)}`;
+  const { identifier } = ensureLocalSymbolSentinelRecord(symbol);
+  return `local:${identifier}`;
 }
 
 const STRING_LITERAL_ESCAPED_SENTINEL_TYPES = new Set<string>([
@@ -750,7 +747,7 @@ function toSymbolSentinel(symbol: symbol): string {
     const payload = JSON.stringify(["global", globalKey]);
     return `${SYMBOL_SENTINEL_PREFIX}${payload}`;
   }
-  return getLocalSymbolSentinelRecord(symbol).sentinel;
+  return ensureLocalSymbolSentinelRecord(symbol).sentinel;
 }
 
 function getSymbolSortKey(symbol: symbol): string {
@@ -759,7 +756,7 @@ function getSymbolSortKey(symbol: symbol): string {
   if (globalKey !== undefined) {
     return `global:${globalKey}`;
   }
-  const identifier = getLocalSymbolSentinelIdentifier(symbol);
+  const { identifier } = ensureLocalSymbolSentinelRecord(symbol);
   return `local:${identifier}`;
 }
 

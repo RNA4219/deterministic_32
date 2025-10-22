@@ -111,6 +111,84 @@ runTest("build copies nested source files", { timeout: 60_000 }, async () => {
   }
 });
 
+runTest(
+  "build fails when TypeScript sources contain type errors",
+  { timeout: 60_000 },
+  async () => {
+    const { writeFile, rm } = (await dynamicImport("node:fs/promises")) as {
+      writeFile: WriteFile;
+      rm: Rm;
+    };
+    const { execFile } = (await dynamicImport("node:child_process")) as {
+      execFile: ExecFile;
+    };
+    const { fileURLToPath } = (await dynamicImport("node:url")) as {
+      fileURLToPath: (input: URL) => string;
+    };
+
+    const repoRootUrl = new URL("../..", import.meta.url);
+    const repoRootPath = fileURLToPath(repoRootUrl);
+    const uniqueSuffix = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+    const tempSourceFileUrl = new URL(
+      `src/tmp-build-type-error-${uniqueSuffix}.ts`,
+      repoRootUrl,
+    );
+    const tempDistFileUrl = new URL(
+      `dist/tmp-build-type-error-${uniqueSuffix}.js`,
+      repoRootUrl,
+    );
+    const tempDistDeclarationUrl = new URL(
+      `dist/tmp-build-type-error-${uniqueSuffix}.d.ts`,
+      repoRootUrl,
+    );
+    const tempDistSourceFileUrl = new URL(
+      `dist/src/tmp-build-type-error-${uniqueSuffix}.js`,
+      repoRootUrl,
+    );
+    const tempDistSourceDeclarationUrl = new URL(
+      `dist/src/tmp-build-type-error-${uniqueSuffix}.d.ts`,
+      repoRootUrl,
+    );
+
+    await writeFile(tempSourceFileUrl, "const value: number = \"oops\";\n");
+
+    const env = { ...baseEnv, CI: "1" };
+
+    let failure: unknown;
+    try {
+      await runBuild(execFile, repoRootPath, env);
+    } catch (error) {
+      failure = error;
+    } finally {
+      await rm(tempSourceFileUrl, { recursive: true, force: true });
+      await rm(tempDistFileUrl, { recursive: true, force: true });
+      await rm(tempDistDeclarationUrl, { recursive: true, force: true });
+      await rm(tempDistSourceFileUrl, { recursive: true, force: true });
+      await rm(tempDistSourceDeclarationUrl, { recursive: true, force: true });
+    }
+
+    assert.ok(failure, "expected build to fail when type errors are introduced");
+    assert.ok(
+      failure && typeof failure === "object",
+      "expected build failure to expose output",
+    );
+
+    const { stderr, stdout } = failure as {
+      stderr?: unknown;
+      stdout?: unknown;
+    };
+
+    const output =
+      (typeof stderr === "string" ? `${stderr}\n` : "") +
+      (typeof stdout === "string" ? stdout : "");
+
+    assert.ok(
+      output.includes("error TS2322"),
+      "expected failure output to include TypeScript diagnostic",
+    );
+  },
+);
+
 runTest("build forwards additional CLI arguments to TypeScript", {}, async () => {
   const { execFile } = (await dynamicImport("node:child_process")) as {
     execFile: ExecFile;
