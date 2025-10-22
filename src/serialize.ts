@@ -36,11 +36,11 @@ type ValueOfCapable = { valueOf(): unknown };
 
 type LocalSymbolWeakTarget = symbol & object;
 
-type LocalSymbolFinalizerTarget = Record<string, never>;
+type LocalSymbolFinalizerHolderTarget = { target: LocalSymbolWeakTarget };
 
 type LocalSymbolFinalizerHolder = {
-  target: LocalSymbolFinalizerTarget;
-  ref: WeakRef<LocalSymbolFinalizerTarget>;
+  target: LocalSymbolFinalizerHolderTarget;
+  ref: WeakRef<LocalSymbolFinalizerHolderTarget>;
 };
 
 type LocalSymbolSentinelRecord = {
@@ -61,7 +61,7 @@ const LOCAL_SYMBOL_IDENTIFIER_INDEX =
     : undefined;
 const LOCAL_SYMBOL_FINALIZER_TARGET_INDEX =
   HAS_WEAK_REFS && HAS_FINALIZATION_REGISTRY
-    ? new WeakMap<LocalSymbolWeakTarget, LocalSymbolFinalizerTarget>()
+    ? new WeakMap<LocalSymbolWeakTarget, LocalSymbolFinalizerHolderTarget>()
     : undefined;
 const LOCAL_SYMBOL_FINALIZER =
   HAS_WEAK_REFS && HAS_FINALIZATION_REGISTRY
@@ -109,17 +109,17 @@ function registerLocalSymbolSentinelRecord(
     LOCAL_SYMBOL_FINALIZER !== undefined &&
     LOCAL_SYMBOL_FINALIZER_TARGET_INDEX !== undefined
   ) {
-    let target = LOCAL_SYMBOL_FINALIZER_TARGET_INDEX.get(symbolObject);
-    if (target === undefined) {
-      target = {} as LocalSymbolFinalizerTarget;
-      LOCAL_SYMBOL_FINALIZER_TARGET_INDEX.set(symbolObject, target);
+    let holderTarget = LOCAL_SYMBOL_FINALIZER_TARGET_INDEX.get(symbolObject);
+    if (holderTarget === undefined) {
+      holderTarget = { target: symbolObject };
+      LOCAL_SYMBOL_FINALIZER_TARGET_INDEX.set(symbolObject, holderTarget);
     }
 
-    const ref = new WeakRef(target);
-    const holder: LocalSymbolFinalizerHolder = { target, ref };
+    const ref = new WeakRef(holderTarget);
+    const holder: LocalSymbolFinalizerHolder = { target: holderTarget, ref };
     const holderRef = new WeakRef(holder);
     LOCAL_SYMBOL_IDENTIFIER_INDEX.set(record.identifier, holderRef);
-    LOCAL_SYMBOL_FINALIZER.register(target, record.identifier);
+    LOCAL_SYMBOL_FINALIZER.register(holderTarget, record.identifier);
     record.finalizerHolder = holder;
   }
 
