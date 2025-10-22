@@ -213,3 +213,19 @@ test("ローカルシンボルのシリアライズと assign が例外を送出
   const sentinelFromStringifyAgain = JSON.parse(stableStringify(crash));
   assert.equal(sentinelFromStringifyAgain, sentinelFromStringify);
 });
+
+test("同一 Symbol で Cat32.assign が安定したキーを返す", () => {
+  const symbol = Symbol("x");
+
+  stableStringify(symbol);
+  const cat = new Cat32();
+
+  cat.assign(symbol);
+  const first = cat.assign(symbol);
+  const second = cat.assign(symbol);
+  const serialized = stableStringify(symbol);
+
+  assert.equal(first.key, serialized);
+  assert.equal(second.key, serialized);
+  assert.equal(first.key, second.key);
+});
