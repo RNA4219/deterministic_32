@@ -62,6 +62,19 @@ FNV-1a32 over UTF-8 for salted key `{"id":123,"tags":["a","b"]}|saltns:["projX",
 
 **Note:** Different key order → same canonical string → same hash/index.
 
+### Sparse array sentinel examples
+
+```js
+const sparse = [1, , 3];
+const explicitUndefined = [1, undefined, 3];
+
+stableStringify(sparse);
+// → "[1,\"\\u0000cat32:hole:__hole__\\u0000\",3]"
+
+stableStringify(explicitUndefined);
+// → "[1,\"__undefined__\",3]"
+```
+
 ### Sentinel examples (TypedArray / ArrayBuffer)
 
 ```
