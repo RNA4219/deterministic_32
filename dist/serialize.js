@@ -10,11 +10,68 @@ const HOLE_SENTINEL_RAW = typeSentinel("hole", HOLE_SENTINEL_PAYLOAD);
 const HOLE_SENTINEL = JSON.stringify(HOLE_SENTINEL_RAW);
 const UNDEFINED_SENTINEL = "__undefined__";
 const DATE_SENTINEL_PREFIX = "__date__:";
+const SYMBOL_SENTINEL_PREFIX = "__symbol__:";
 const STRING_LITERAL_SENTINEL_PREFIX = "__string__:";
 const sharedArrayBufferGlobal = globalThis;
 const sharedArrayBufferCtor = typeof sharedArrayBufferGlobal.SharedArrayBuffer === "function"
     ? sharedArrayBufferGlobal.SharedArrayBuffer
     : undefined;
+const LOCAL_SYMBOL_SENTINEL_REGISTRY = new WeakMap();
+const LOCAL_SYMBOL_OBJECT_REGISTRY = new Map();
+let nextLocalSymbolSentinelId = 0;
+function getOrCreateSymbolObject(symbol) {
+    const existing = LOCAL_SYMBOL_OBJECT_REGISTRY.get(symbol);
+    if (existing !== undefined) {
+        return existing;
+    }
+    const symbolObject = Object(symbol);
+    LOCAL_SYMBOL_OBJECT_REGISTRY.set(symbol, symbolObject);
+    return symbolObject;
+}
+function peekLocalSymbolSentinelRecordFromObject(symbolObject) {
+    return LOCAL_SYMBOL_SENTINEL_REGISTRY.get(symbolObject);
+}
+function peekLocalSymbolSentinelRecord(symbol) {
+    const symbolObject = LOCAL_SYMBOL_OBJECT_REGISTRY.get(symbol);
+    if (symbolObject === undefined) {
+        return undefined;
+    }
+    return peekLocalSymbolSentinelRecordFromObject(symbolObject);
+}
+function registerLocalSymbolSentinelRecord(symbolObject, record) {
+    LOCAL_SYMBOL_SENTINEL_REGISTRY.set(symbolObject, record);
+}
+function createLocalSymbolSentinelRecord(symbol, symbolObject) {
+    const identifier = nextLocalSymbolSentinelId.toString(36);
+    nextLocalSymbolSentinelId += 1;
+    const description = symbol.description ?? "";
+    const sentinel = buildLocalSymbolSentinel(identifier, description);
+    const record = { identifier, sentinel };
+    registerLocalSymbolSentinelRecord(symbolObject, record);
+    return record;
+}
+function getLocalSymbolSentinelRecord(symbol) {
+    const symbolObject = getOrCreateSymbolObject(symbol);
+    const existing = peekLocalSymbolSentinelRecordFromObject(symbolObject);
+    if (existing !== undefined) {
+        return existing;
+    }
+    return createLocalSymbolSentinelRecord(symbol, symbolObject);
+}
+function buildLocalSymbolSentinel(identifier, description) {
+    const descriptionJson = JSON.stringify(description);
+    const payload = `["local","${identifier}",${descriptionJson}]`;
+    return `${SYMBOL_SENTINEL_PREFIX}${payload}`;
+}
+function toSymbolSentinel(symbol) {
+    const globalKey = typeof Symbol.keyFor === "function" ? Symbol.keyFor(symbol) : undefined;
+    if (globalKey !== undefined) {
+        const payload = JSON.stringify(["global", globalKey]);
+        return `${SYMBOL_SENTINEL_PREFIX}${payload}`;
+    }
+    const record = getLocalSymbolSentinelRecord(symbol);
+    return record.sentinel;
+}
 export function typeSentinel(type, payload = "") {
     return `${SENTINEL_PREFIX}${type}:${payload}${SENTINEL_SUFFIX}`;
 }
@@ -46,8 +103,11 @@ function _stringify(v, stack) {
         return stringifySentinelLiteral(typeSentinel("bigint", v.toString()));
     if (t === "undefined")
         return stringifySentinelLiteral(UNDEFINED_SENTINEL);
-    if (t === "function" || t === "symbol") {
+    if (t === "function") {
         return String(v);
+    }
+    if (t === "symbol") {
+        return stringifySentinelLiteral(toSymbolSentinel(v));
     }
     if (Array.isArray(v)) {
         if (stack.has(v))
@@ -260,7 +320,7 @@ function reviveSentinelValue(value) {
 }
 function toPropertyKeyString(rawKey, revivedKey, serializedKey) {
     if (typeof rawKey === "symbol") {
-        return rawKey.toString();
+        return toSymbolSentinel(rawKey);
     }
     if (rawKey === null) {
         return "null";
@@ -324,3 +384,4 @@ function reviveNumericSentinel(value) {
 function normalizePlainObjectKey(key) {
     return normalizeStringLiteral(key);
 }
+export { getLocalSymbolSentinelRecord as __getLocalSymbolSentinelRecordForTest, peekLocalSymbolSentinelRecord as __peekLocalSymbolSentinelRecordForTest, };
