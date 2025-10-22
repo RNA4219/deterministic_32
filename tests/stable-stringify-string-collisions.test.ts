@@ -39,6 +39,50 @@ test("string literals matching sentinel encodings are escaped", () => {
   );
 });
 
+test("string literal sentinels remain distinct from actual sentinel values", () => {
+  const cat = new Cat32();
+  const stringPrefix = "__string__:";
+
+  const undefinedLiteral = `${stringPrefix}__undefined__`;
+  const undefinedLiteralAssignment = cat.assign(undefinedLiteral);
+  const undefinedAssignment = cat.assign(undefined);
+
+  assert.ok(undefinedLiteralAssignment.key !== undefinedAssignment.key);
+  assert.ok(undefinedLiteralAssignment.hash !== undefinedAssignment.hash);
+  assert.equal(
+    undefinedLiteralAssignment.key,
+    JSON.stringify(`${stringPrefix}${undefinedLiteral}`),
+  );
+
+  const globalSymbol = Symbol.for("string-literal-collision");
+  const symbolAssignment = cat.assign(globalSymbol);
+  const symbolSentinel = JSON.parse(symbolAssignment.key) as string;
+  const symbolLiteral = `${stringPrefix}${symbolSentinel}`;
+  const symbolLiteralAssignment = cat.assign(symbolLiteral);
+
+  assert.ok(symbolLiteralAssignment.key !== symbolAssignment.key);
+  assert.ok(symbolLiteralAssignment.hash !== symbolAssignment.hash);
+  assert.equal(
+    symbolLiteralAssignment.key,
+    JSON.stringify(`${stringPrefix}${symbolLiteral}`),
+  );
+
+  const mapEntrySentinel = typeSentinel(
+    "map-entry-index",
+    JSON.stringify(["bucket", "property", 0]),
+  );
+  const mapEntryLiteral = `${stringPrefix}${mapEntrySentinel}`;
+  const mapEntryLiteralAssignment = cat.assign(mapEntryLiteral);
+  const mapEntryAssignment = cat.assign(mapEntrySentinel);
+
+  assert.ok(mapEntryLiteralAssignment.key !== mapEntryAssignment.key);
+  assert.ok(mapEntryLiteralAssignment.hash !== mapEntryAssignment.hash);
+  assert.equal(
+    mapEntryLiteralAssignment.key,
+    JSON.stringify(`${stringPrefix}${mapEntryLiteral}`),
+  );
+});
+
 test("sentinel canonical encodings are preserved", () => {
   const cat = new Cat32();
 

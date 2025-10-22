@@ -205,7 +205,7 @@ test(
     const prefixedLiteral = "__string__:" + typeSentinel("number", "NaN");
     assert.equal(
       distStableStringify(prefixedLiteral),
-      JSON.stringify(prefixedLiteral),
+      JSON.stringify(`__string__:${prefixedLiteral}`),
     );
     assert.ok(
       distStableStringify(prefixedLiteral) !== distStableStringify(NaN),
@@ -226,14 +226,17 @@ test(
     const sentinelStringLiteral = `__string__:${typeSentinel("number", "NaN")}`;
     assert.equal(
       stableStringify(sentinelStringLiteral),
-      JSON.stringify(sentinelStringLiteral),
+      JSON.stringify(`__string__:${sentinelStringLiteral}`),
     );
   },
 );
 
 test("stableStringify preserves prefixed sentinel string literal content", () => {
   const value = "__string__:" + typeSentinel("number", "NaN");
-  assert.equal(stableStringify(value), JSON.stringify(value));
+  assert.equal(
+    stableStringify(value),
+    JSON.stringify(`__string__:${value}`),
+  );
 });
 
 test("global and local symbols remain distinguishable", () => {
@@ -352,7 +355,15 @@ test(
     const holeSentinelResult = stableStringify([holeSentinelLiteral]);
     const sparseResult = stableStringify(sparseArray);
 
-    assert.equal(prefixedResult, sentinelResult);
+    assert.equal(
+      prefixedResult,
+      JSON.stringify([`__string__:${prefixedLiteral}`]),
+    );
+    assert.equal(
+      sentinelResult,
+      JSON.stringify([`__string__:${sentinelLiteral}`]),
+    );
+    assert.ok(prefixedResult !== sentinelResult);
     assert.ok(prefixedResult !== sparseResult);
     assert.ok(sentinelResult !== sparseResult);
     assert.ok(holeSentinelResult !== sparseResult);
@@ -386,7 +397,7 @@ test("Cat32 assign key matches JSON.stringify for string literals", () => {
 test("Cat32 assign key preserves prefixed sentinel string literal content", () => {
   const value = "__string__:" + typeSentinel("number", "NaN");
   const assignment = new Cat32().assign(value);
-  assert.equal(assignment.key, JSON.stringify(value));
+  assert.equal(assignment.key, JSON.stringify(`__string__:${value}`));
 });
 
 test("Cat32 assign escapes sentinel-like string literal keys", () => {
@@ -436,8 +447,16 @@ test(
     const holeSentinelAssignment = categorizer.assign([holeSentinelLiteral]);
     const sparseAssignment = categorizer.assign(sparseArray);
 
-    assert.equal(prefixedAssignment.key, sentinelAssignment.key);
-    assert.equal(prefixedAssignment.hash, sentinelAssignment.hash);
+    assert.equal(
+      prefixedAssignment.key,
+      JSON.stringify([`__string__:${prefixedLiteral}`]),
+    );
+    assert.equal(
+      sentinelAssignment.key,
+      JSON.stringify([`__string__:${sentinelLiteral}`]),
+    );
+    assert.ok(prefixedAssignment.key !== sentinelAssignment.key);
+    assert.ok(prefixedAssignment.hash !== sentinelAssignment.hash);
     assert.ok(prefixedAssignment.key !== sparseAssignment.key);
     assert.ok(prefixedAssignment.hash !== sparseAssignment.hash);
     assert.ok(holeSentinelAssignment.key !== sparseAssignment.key);
@@ -457,8 +476,16 @@ test("Cat32 assign treats prefixed literal strings as distinct from NaN", () => 
 
   assert.ok(literalAssignment.key !== nanAssignment.key);
   assert.ok(literalAssignment.hash !== nanAssignment.hash);
-  assert.equal(literalAssignment.key, sentinelAssignment.key);
-  assert.equal(literalAssignment.hash, sentinelAssignment.hash);
+  assert.equal(
+    literalAssignment.key,
+    JSON.stringify(`__string__:__string__:\u0000cat32:number:NaN\u0000`),
+  );
+  assert.equal(
+    sentinelAssignment.key,
+    JSON.stringify(`__string__:\u0000cat32:number:NaN\u0000`),
+  );
+  assert.ok(literalAssignment.key !== sentinelAssignment.key);
+  assert.ok(literalAssignment.hash !== sentinelAssignment.hash);
 });
 
 test("dist stableStringify handles Map bucket ordering", async () => {
@@ -521,7 +548,15 @@ test(
     const holeSentinelKey = distStableStringify([holeSentinelLiteral]);
     const sparseKey = distStableStringify(sparseArray);
 
-    assert.equal(prefixedKey, sentinelKey);
+    assert.equal(
+      prefixedKey,
+      JSON.stringify([`__string__:${prefixedLiteral}`]),
+    );
+    assert.equal(
+      sentinelKey,
+      JSON.stringify([`__string__:${sentinelLiteral}`]),
+    );
+    assert.ok(prefixedKey !== sentinelKey);
     assert.ok(prefixedKey !== sparseKey);
     assert.ok(sentinelKey !== sparseKey);
     assert.ok(holeSentinelKey !== sparseKey);
@@ -533,8 +568,16 @@ test(
     const holeSentinelAssignment = categorizer.assign([holeSentinelLiteral]);
     const sparseAssignment = categorizer.assign(sparseArray);
 
-    assert.equal(prefixedAssignment.key, sentinelAssignment.key);
-    assert.equal(prefixedAssignment.hash, sentinelAssignment.hash);
+    assert.equal(
+      prefixedAssignment.key,
+      JSON.stringify([`__string__:${prefixedLiteral}`]),
+    );
+    assert.equal(
+      sentinelAssignment.key,
+      JSON.stringify([`__string__:${sentinelLiteral}`]),
+    );
+    assert.ok(prefixedAssignment.key !== sentinelAssignment.key);
+    assert.ok(prefixedAssignment.hash !== sentinelAssignment.hash);
     assert.ok(prefixedAssignment.key !== sparseAssignment.key);
     assert.ok(prefixedAssignment.hash !== sparseAssignment.hash);
     assert.ok(holeSentinelAssignment.key !== sparseAssignment.key);

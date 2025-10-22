@@ -631,6 +631,9 @@ function normalizeStringLiteral(value: string): string {
     }
 
     if (needsNestedStringLiteralSentinelEscape(innerValue)) {
+      if (value.startsWith(STRING_LITERAL_SENTINEL_PREFIX.repeat(2))) {
+        return value;
+      }
       return `${STRING_LITERAL_SENTINEL_PREFIX}${value}`;
     }
 
@@ -645,7 +648,10 @@ function normalizeStringLiteral(value: string): string {
 }
 
 function needsNestedStringLiteralSentinelEscape(value: string): boolean {
-  return value.startsWith(DATE_SENTINEL_PREFIX);
+  if (needsStringLiteralSentinelEscape(value)) {
+    return true;
+  }
+  return value.startsWith(STRING_LITERAL_SENTINEL_PREFIX);
 }
 
 function hasArrayBufferLikeSentinelPrefix(value: string): boolean {
