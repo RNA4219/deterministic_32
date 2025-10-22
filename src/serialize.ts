@@ -36,8 +36,8 @@ type ValueOfCapable = { valueOf(): unknown };
 
 type LocalSymbolWeakTarget = symbol & object;
 
-type LocalSymbolHolder = {
-  readonly target: LocalSymbolWeakTarget;
+type LocalSymbolFinalizerHolder = {
+  ref: WeakRef<SymbolObject>;
 };
 
 type LocalSymbolSentinelRecord = {
@@ -108,8 +108,7 @@ function registerLocalSymbolSentinelRecord(
 ): void {
   if (
     LOCAL_SYMBOL_IDENTIFIER_INDEX !== undefined &&
-    LOCAL_SYMBOL_FINALIZER !== undefined &&
-    LOCAL_SYMBOL_FINALIZER_TARGET_INDEX !== undefined
+    LOCAL_SYMBOL_FINALIZER !== undefined
   ) {
     LOCAL_SYMBOL_IDENTIFIER_INDEX.add(record.identifier);
     LOCAL_SYMBOL_FINALIZER.register(holder, record.identifier);
