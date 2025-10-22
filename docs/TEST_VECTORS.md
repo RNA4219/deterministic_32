@@ -77,4 +77,28 @@ stableStringify(new SharedArrayBuffer(2))
 const sentinel = "\u0000cat32:number:NaN\u0000";
 stableStringify(sentinel)
 → "\"__string__:\\u0000cat32:number:NaN\\u0000\""
+
+stableStringify(Number.POSITIVE_INFINITY)
+→ "\"\\u0000cat32:number:Infinity\\u0000\""
+
+stableStringify(1n)
+→ "\"\\u0000cat32:bigint:1\\u0000\""
+
+stableStringify(Object(false))
+→ "false" // ボックス化 Boolean はアンボックス後に処理
+```
+
+### Sentinel examples (Map / Set)
+
+```
+const map = new Map([
+  ["id", 123],
+  ["tags", ["a", "b"]],
+]);
+stableStringify(map)
+→ "\"\\u0000cat32:map:[[\"\\u0000cat32:propertykey:string:\\\"id\\\"\\u0000\",\"123\"],[\"\\u0000cat32:propertykey:string:\\\"tags\\\"\\u0000\",\"[\\\\\"a\\\\\",\\\\\"b\\\\\"]\"]]\\u0000\""
+
+const set = new Set([123, NaN]);
+stableStringify(set)
+→ "\"\\u0000cat32:set:[\"123\",\"\\u0000cat32:number:NaN\\u0000\"]\\u0000\""
 ```

@@ -27,8 +27,11 @@ input (unknown)
 - 目的: **同値**で**キー順が違う**オブジェクトが**同一の文字列**になること。
 - 仕様（抜粋）:
   - `null` → `"null"`、`undefined` → `"__undefined__"`
-  - `boolean` → `"true"|"false"`、`number`/`bigint` → `JSON.stringify` に準拠
+  - `boolean` → `"true"|"false"`
+  - `number` → 有限値は `JSON.stringify` に準拠。`NaN` / `Infinity` / `-Infinity` は `typeSentinel("number", String(value))` を生成し、そのままセンチネル文字列として直列化する。
+  - `bigint` → 常に `typeSentinel("bigint", value.toString())` を生成し、センチネル文字列として直列化する。
   - `string` → `JSON.stringify` に準拠（`"` で囲む）。センチネル文字列（`__undefined__` や `\u0000cat32:...\u0000` など）と衝突する場合は `__string__:` プレフィックスを 1 回以上付与してエスケープする。
+  - `new Number(...)` / `new Boolean(...)` / `Object(1n)` などのボックス化プリミティブは `.valueOf()` でアンボックスした値に対して上記ルール（含センチネル処理）を適用する。
   - **Array**: `[...]`（順序維持）
   - **Object**: 自身の**列挙可能プロパティ**を**キー昇順**で `{k:v}` 並べる
   - **Date**: `"__date__:<ISO8601>"`
@@ -51,6 +54,20 @@ input (unknown)
 - 実装ノート:
   - JSON表現は**ASCIIエスケープ不要**（UTF‑8運用を前提）。
   - **typeSentinel**: `typeSentinel(type, payload)` は `"\u0000cat32:<type>:<payload>\u0000"` 文字列を生成し、直列化時の型識別と追加情報を保持する。TypedArray/ArrayBuffer/SharedArrayBuffer/Map のエントリや数値特異値などはこのセンチネルを介してエンコードする。
+  - **Map/Set のセンチネル構造例**:
+    ```
+    // Map: 重複キーは map-entry-index で解消し、ソートキーの安定化を保持
+    typeSentinel(
+      "map",
+      "[[\"\\u0000cat32:propertykey:string:\\"id\\"\\u0000\",\"123\"],[\"\\u0000cat32:propertykey:string:\\"tags\\"\\u0000\",\"[\\\"a\\\",\\\"b\\\"]\"]]"
+    )
+
+    // Set: ソート済み配列を JSON 文字列で保持
+    typeSentinel(
+      "set",
+      "[\"123\",\"\\u0000cat32:number:NaN\\u0000\"]"
+    )
+    ```
   - **TypedArray**: `"\u0000cat32:typedarray:kind=<ViewName>;byteOffset=<n>;byteLength=<n>;length=<len?>;hex=<bytes>\u0000"`
     - `length` パラメータは `view.length` が存在する場合のみ付与。
     - バイト列は **16進小文字** (`00`-`ff`) で連結し、センチネル末尾 `\u0000` を付ける。
