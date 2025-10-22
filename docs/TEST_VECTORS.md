@@ -100,6 +100,20 @@ stableStringify(new Date("2024-01-01T00:00:00.000Z"))
 → "\"__date__:2024-01-01T00:00:00.000Z\""
 ```
 
+### RegExp sentinel examples
+
+```
+stableStringify(/foo/)
+→ "\"\\u0000cat32:regexp:[\\"foo\\",\\"\\"]\\u0000\""
+
+stableStringify(/foo/i)
+→ "\"\\u0000cat32:regexp:[\\"foo\\",\\"i\\"]\\u0000\""
+
+const sentinelLiteral = "\u0000cat32:regexp:[\"foo\",\"\"]\u0000";
+stableStringify(sentinelLiteral)
+→ "\"__string__:\\u0000cat32:regexp:[\\"foo\\",\\"\\"]\\u0000\""
+```
+
 ### Sentinel examples (Map / Set)
 
 ```
