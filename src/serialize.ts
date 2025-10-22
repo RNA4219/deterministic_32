@@ -39,6 +39,7 @@ const HAS_FINALIZATION_REGISTRY = typeof FinalizationRegistry === "function";
 
 const LOCAL_SYMBOL_SENTINEL_REGISTRY =
   new WeakMap<SymbolObject, LocalSymbolSentinelRecord>();
+const LOCAL_SYMBOL_SENTINELS = LOCAL_SYMBOL_SENTINEL_REGISTRY;
 const LOCAL_SYMBOL_IDENTIFIER_INDEX =
   HAS_WEAK_REFS && HAS_FINALIZATION_REGISTRY
     ? new Map<string, WeakRef<SymbolObject>>()
@@ -80,7 +81,6 @@ function getLocalSymbolSentinelRecord(
     return existing;
   }
 
-  const symbolObject = toSymbolObject(symbol);
   const identifier = nextLocalSymbolSentinelId.toString(36);
   nextLocalSymbolSentinelId += 1;
   const description = symbol.description ?? "";
