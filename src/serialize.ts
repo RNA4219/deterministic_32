@@ -59,6 +59,10 @@ const LOCAL_SYMBOL_IDENTIFIER_INDEX =
   HAS_WEAK_REFS && HAS_FINALIZATION_REGISTRY
     ? new Map<string, WeakRef<LocalSymbolFinalizerHolder>>()
     : undefined;
+const LOCAL_SYMBOL_FINALIZER_TARGET_INDEX =
+  HAS_WEAK_REFS && HAS_FINALIZATION_REGISTRY
+    ? new WeakMap<SymbolObject, LocalSymbolWeakTarget>()
+    : undefined;
 const LOCAL_SYMBOL_FINALIZER =
   HAS_WEAK_REFS && HAS_FINALIZATION_REGISTRY
     ? new FinalizationRegistry<string>((identifier) => {
@@ -105,12 +109,17 @@ function registerLocalSymbolSentinelRecord(
     LOCAL_SYMBOL_FINALIZER !== undefined &&
     LOCAL_SYMBOL_FINALIZER_TARGET_INDEX !== undefined
   ) {
-    const holder: LocalSymbolFinalizerHolder = {
-      ref: new WeakRef(symbolObject),
-    };
+    let target = LOCAL_SYMBOL_FINALIZER_TARGET_INDEX.get(symbolObject);
+    if (target === undefined) {
+      target = {};
+      LOCAL_SYMBOL_FINALIZER_TARGET_INDEX.set(symbolObject, target);
+    }
+
+    const ref = new WeakRef(target);
+    const holder: LocalSymbolFinalizerHolder = { target, ref };
     const holderRef = new WeakRef(holder);
     LOCAL_SYMBOL_IDENTIFIER_INDEX.set(record.identifier, holderRef);
-    LOCAL_SYMBOL_FINALIZER.register(holder, record.identifier);
+    LOCAL_SYMBOL_FINALIZER.register(target, record.identifier);
     record.finalizerHolder = holder;
   }
 
