@@ -94,10 +94,6 @@ function getLocalSymbolSentinelRecord(
   return record;
 }
 
-function getLocalSymbolSentinelIdentifier(symbol: symbol): string {
-  return getLocalSymbolSentinelRecord(symbol).identifier;
-}
-
 function buildLocalSymbolSentinel(
   identifier: string,
   description: string,
