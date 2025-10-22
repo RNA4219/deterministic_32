@@ -2,7 +2,8 @@
 // Notes:
 // - Distinguishes [], {}, "" etc.
 // - Treats Date as ISO string.
-// - Maps/Sets are serialized as arrays in insertion order (keys sorted for Map via key string).
+// - Maps are serialized via sentinel-encoded entry lists (keys sorted by canonical property key).
+// - Sets are serialized as arrays in insertion order (keys sorted via canonical key string).
 const SENTINEL_PREFIX = "\u0000cat32:";
 const SENTINEL_SUFFIX = "\u0000";
 const HOLE_SENTINEL_PAYLOAD = "__hole__";
@@ -10,13 +11,162 @@ const HOLE_SENTINEL_RAW = typeSentinel("hole", HOLE_SENTINEL_PAYLOAD);
 const HOLE_SENTINEL = JSON.stringify(HOLE_SENTINEL_RAW);
 const UNDEFINED_SENTINEL = "__undefined__";
 const DATE_SENTINEL_PREFIX = "__date__:";
+const SYMBOL_SENTINEL_PREFIX = "__symbol__:";
 const STRING_LITERAL_SENTINEL_PREFIX = "__string__:";
+const REGEXP_SENTINEL_TYPE = "regexp";
+const MAP_ENTRY_INDEX_LITERAL_SEGMENT = `${STRING_LITERAL_SENTINEL_PREFIX}${SENTINEL_PREFIX}map-entry-index:`;
+const MAP_ENTRY_INDEX_SENTINEL_SEGMENT = `${SENTINEL_PREFIX}map-entry-index:`;
+const HEX_DIGITS = "0123456789abcdef";
+const PROPERTY_KEY_SENTINEL_TYPE = "propertykey";
+const MAP_SENTINEL_TYPE = "map";
+const OBJECT_TO_STRING = Object.prototype.toString;
+function isBigIntObject(value) {
+    return (typeof value === "object" &&
+        value !== null &&
+        OBJECT_TO_STRING.call(value) === "[object BigInt]");
+}
+const LOCAL_SYMBOL_SENTINEL_REGISTRY = new WeakMap();
+const LOCAL_SYMBOL_OBJECT_REGISTRY = new Map();
+const HAS_LOCAL_SYMBOL_FINALIZATION_SUPPORT = typeof globalThis.WeakRef === "function" &&
+    typeof globalThis.FinalizationRegistry === "function";
+const LOCAL_SYMBOL_IDENTIFIER_INDEX = HAS_LOCAL_SYMBOL_FINALIZATION_SUPPORT ? new Set() : undefined;
+const LOCAL_SYMBOL_IDENTIFIER_FINALIZATION_REGISTRY = HAS_LOCAL_SYMBOL_FINALIZATION_SUPPORT
+    ? new FinalizationRegistry((identifier) => {
+        LOCAL_SYMBOL_IDENTIFIER_INDEX?.delete(identifier);
+    })
+    : undefined;
+let nextLocalSymbolSentinelId = 0;
+function getOrCreateSymbolObject(symbol) {
+    const existing = LOCAL_SYMBOL_OBJECT_REGISTRY.get(symbol);
+    if (existing !== undefined) {
+        return existing;
+    }
+    const symbolObject = Object(symbol);
+    LOCAL_SYMBOL_OBJECT_REGISTRY.set(symbol, symbolObject);
+    return symbolObject;
+}
+function peekLocalSymbolSentinelRecordFromObject(symbolObject) {
+    return LOCAL_SYMBOL_SENTINEL_REGISTRY.get(symbolObject);
+}
+function peekLocalSymbolSentinelRecord(symbol) {
+    const symbolObject = LOCAL_SYMBOL_OBJECT_REGISTRY.get(symbol);
+    if (symbolObject === undefined) {
+        return undefined;
+    }
+    return peekLocalSymbolSentinelRecordFromObject(symbolObject);
+}
+function registerLocalSymbolSentinelRecord(symbolObject, record) {
+    LOCAL_SYMBOL_SENTINEL_REGISTRY.set(symbolObject, record);
+    if (LOCAL_SYMBOL_IDENTIFIER_INDEX !== undefined &&
+        LOCAL_SYMBOL_IDENTIFIER_FINALIZATION_REGISTRY !== undefined) {
+        LOCAL_SYMBOL_IDENTIFIER_INDEX.add(record.identifier);
+        LOCAL_SYMBOL_IDENTIFIER_FINALIZATION_REGISTRY.register(symbolObject, record.identifier);
+    }
+}
+function createLocalSymbolSentinelRecord(symbol, symbolObject) {
+    const identifier = nextLocalSymbolSentinelId.toString(36);
+    nextLocalSymbolSentinelId += 1;
+    const description = symbol.description ?? "";
+    const sentinel = buildLocalSymbolSentinel(identifier, description);
+    const record = { identifier, sentinel };
+    registerLocalSymbolSentinelRecord(symbolObject, record);
+    return record;
+}
+function getLocalSymbolSentinelRecord(symbol) {
+    const symbolObject = getOrCreateSymbolObject(symbol);
+    const existing = peekLocalSymbolSentinelRecordFromObject(symbolObject);
+    if (existing !== undefined) {
+        return existing;
+    }
+    return createLocalSymbolSentinelRecord(symbol, symbolObject);
+}
+function buildLocalSymbolSentinel(identifier, description) {
+    const descriptionJson = JSON.stringify(description);
+    const payload = `["local","${identifier}",${descriptionJson}]`;
+    return `${SYMBOL_SENTINEL_PREFIX}${payload}`;
+}
+function getSymbolBucketKey(symbol) {
+    const globalKey = typeof Symbol.keyFor === "function" ? Symbol.keyFor(symbol) : undefined;
+    if (globalKey !== undefined) {
+        return `global:${globalKey}`;
+    }
+    const record = peekLocalSymbolSentinelRecord(symbol) ??
+        getLocalSymbolSentinelRecord(symbol);
+    return `local:${record.identifier}`;
+}
+const STRING_LITERAL_ESCAPED_SENTINEL_TYPES = new Set([
+    REGEXP_SENTINEL_TYPE,
+    "typedarray",
+    "arraybuffer",
+    "sharedarraybuffer",
+    "number",
+    "bigint",
+    "hole",
+    PROPERTY_KEY_SENTINEL_TYPE,
+    "map",
+    "set",
+]);
+const ARRAY_BUFFER_LIKE_SENTINEL_PREFIXES = [
+    `${SENTINEL_PREFIX}typedarray:`,
+    `${SENTINEL_PREFIX}arraybuffer:`,
+    `${SENTINEL_PREFIX}sharedarraybuffer:`,
+];
+function getDateSentinelParts(date) {
+    const time = date.getTime();
+    if (!Number.isFinite(time)) {
+        const payload = "invalid";
+        return { payload, key: `${DATE_SENTINEL_PREFIX}${payload}` };
+    }
+    const payload = date.toISOString();
+    return { payload, key: `${DATE_SENTINEL_PREFIX}${payload}` };
+}
+function serializeArrayBufferLikeSentinel(type, buffer) {
+    const bytes = new Uint8Array(buffer);
+    const payload = buildArrayBufferPayload(bytes.length, bytes);
+    return stringifySentinelLiteral(typeSentinel(type, payload));
+}
+function buildTypedArrayPayload(view) {
+    const bytes = new Uint8Array(view.buffer, view.byteOffset, view.byteLength);
+    const parts = [
+        `kind=${getArrayBufferViewTag(view)}`,
+        `byteOffset=${view.byteOffset}`,
+        `byteLength=${view.byteLength}`,
+    ];
+    const elementLength = view.length;
+    if (typeof elementLength === "number") {
+        parts.push(`length=${elementLength}`);
+    }
+    parts.push(`hex=${toHex(bytes)}`);
+    return parts.join(";");
+}
+function buildArrayBufferPayload(length, bytes) {
+    return `byteLength=${length};hex=${toHex(bytes)}`;
+}
+function getArrayBufferViewTag(view) {
+    const raw = Object.prototype.toString.call(view);
+    return raw.slice(8, -1);
+}
+function toHex(bytes) {
+    let out = "";
+    for (let i = 0; i < bytes.length; i += 1) {
+        const byte = bytes[i];
+        out += HEX_DIGITS[(byte >> 4) & 0xf];
+        out += HEX_DIGITS[byte & 0xf];
+    }
+    return out;
+}
 const sharedArrayBufferGlobal = globalThis;
 const sharedArrayBufferCtor = typeof sharedArrayBufferGlobal.SharedArrayBuffer === "function"
     ? sharedArrayBufferGlobal.SharedArrayBuffer
     : undefined;
 export function typeSentinel(type, payload = "") {
     return `${SENTINEL_PREFIX}${type}:${payload}${SENTINEL_SUFFIX}`;
+}
+function buildRegExpPayload(value) {
+    return JSON.stringify([value.source, value.flags]);
+}
+function buildRegExpSentinel(value) {
+    return typeSentinel(REGEXP_SENTINEL_TYPE, buildRegExpPayload(value));
 }
 export function escapeSentinelString(value) {
     return normalizeStringLiteral(value);
@@ -46,8 +196,13 @@ function _stringify(v, stack) {
         return stringifySentinelLiteral(typeSentinel("bigint", v.toString()));
     if (t === "undefined")
         return stringifySentinelLiteral(UNDEFINED_SENTINEL);
-    if (t === "function" || t === "symbol") {
+    if (t === "symbol") {
+        return stringifySentinelLiteral(toSymbolSentinel(v));
+    }
+    if (t === "function")
         return String(v);
+    if (v instanceof Number || v instanceof Boolean || isBigIntObject(v)) {
+        return _stringify(v.valueOf(), stack);
     }
     if (Array.isArray(v)) {
         if (stack.has(v))
@@ -69,16 +224,18 @@ function _stringify(v, stack) {
     }
     // Date
     if (v instanceof Date) {
-        return stringifySentinelLiteral(`${DATE_SENTINEL_PREFIX}${v.toISOString()}`);
+        const { key } = getDateSentinelParts(v);
+        return stringifySentinelLiteral(key);
     }
     if (ArrayBuffer.isView(v)) {
-        return stringifyStringLiteral(String(v));
+        const view = v;
+        return stringifySentinelLiteral(typeSentinel("typedarray", buildTypedArrayPayload(view)));
     }
     if (sharedArrayBufferCtor && v instanceof sharedArrayBufferCtor) {
-        return stringifyStringLiteral(String(v));
+        return serializeArrayBufferLikeSentinel("sharedarraybuffer", v);
     }
     if (v instanceof ArrayBuffer) {
-        return stringifyStringLiteral(String(v));
+        return serializeArrayBufferLikeSentinel("arraybuffer", v);
     }
     // Map
     if (v instanceof Map) {
@@ -86,56 +243,108 @@ function _stringify(v, stack) {
             throw new TypeError("Cyclic object");
         stack.add(v);
         const normalizedEntries = Object.create(null);
-        const dedupeByKey = Object.create(null);
         for (const [rawKey, rawValue] of v.entries()) {
             const serializedKey = _stringify(rawKey, stack);
-            const propertyKey = toMapPropertyKey(rawKey, serializedKey);
+            const { bucketKey, propertyKey } = toMapPropertyKey(rawKey, serializedKey);
             const serializedValue = _stringify(rawValue, stack);
-            const candidate = { serializedKey, serializedValue };
-            const shouldDedupe = typeof rawKey !== "symbol";
-            const bucket = normalizedEntries[propertyKey];
+            const bucket = normalizedEntries[bucketKey];
+            const rawKeyIsSymbol = typeof rawKey === "symbol";
+            const shouldDedupeByType = rawKeyIsSymbol ? bucket !== undefined : true;
             if (bucket) {
-                bucket.push(candidate);
-                dedupeByKey[propertyKey] = (dedupeByKey[propertyKey] ?? true) && shouldDedupe;
+                const hasDuplicatePropertyKey = bucket.entries.some((entry) => entry.propertyKey === propertyKey);
+                bucket.entries.push({
+                    serializedKey,
+                    serializedValue,
+                    order: bucket.entries.length,
+                    propertyKey,
+                });
+                if (hasDuplicatePropertyKey) {
+                    bucket.hasDuplicatePropertyKey = true;
+                }
+                if (shouldDedupeByType) {
+                    bucket.shouldDedupeByType = true;
+                }
+                else {
+                    bucket.shouldDedupeByType = false;
+                }
             }
             else {
-                normalizedEntries[propertyKey] = [candidate];
-                dedupeByKey[propertyKey] = shouldDedupe;
+                normalizedEntries[bucketKey] = {
+                    propertyKey,
+                    entries: [
+                        {
+                            serializedKey,
+                            serializedValue,
+                            order: 0,
+                            propertyKey,
+                        },
+                    ],
+                    shouldDedupeByType,
+                    hasDuplicatePropertyKey: false,
+                };
             }
         }
-        const sortedKeys = Object.keys(normalizedEntries).sort();
-        const bodyParts = [];
-        for (let i = 0; i < sortedKeys.length; i += 1) {
-            const key = sortedKeys[i];
-            const bucket = normalizedEntries[key];
-            if (!bucket || bucket.length === 0) {
-                continue;
+        const serializedEntries = [];
+        const sortedKeys = Object.keys(normalizedEntries).sort((leftKey, rightKey) => {
+            const left = normalizedEntries[leftKey];
+            const right = normalizedEntries[rightKey];
+            if (left.propertyKey === right.propertyKey) {
+                if (leftKey < rightKey)
+                    return -1;
+                if (leftKey > rightKey)
+                    return 1;
+                return 0;
             }
-            bucket.sort(compareSerializedEntry);
-            const entriesToEmit = dedupeByKey[key] ? [bucket[0]] : bucket;
-            for (let j = 0; j < entriesToEmit.length; j += 1) {
-                const entry = entriesToEmit[j];
-                if (bodyParts.length > 0) {
-                    bodyParts.push(",");
-                }
-                bodyParts.push(JSON.stringify(key));
-                bodyParts.push(":");
-                bodyParts.push(entry.serializedValue);
+            return left.propertyKey < right.propertyKey ? -1 : 1;
+        });
+        for (const key of sortedKeys) {
+            const bucket = normalizedEntries[key];
+            if (!bucket?.entries.length)
+                continue;
+            const entries = bucket.entries;
+            entries.sort(compareSerializedEntry);
+            for (let index = 0; index < entries.length; index += 1) {
+                const entry = entries[index];
+                const propertyKey = mapEntryPropertyKey(bucket.propertyKey, entry.propertyKey, index, entries.length, entry.order, bucket.shouldDedupeByType, bucket.hasDuplicatePropertyKey);
+                serializedEntries.push([propertyKey, entry.serializedValue]);
             }
         }
         stack.delete(v);
-        return "{" + bodyParts.join("") + "}";
+        const payload = JSON.stringify(serializedEntries);
+        return stringifySentinelLiteral(typeSentinel(MAP_SENTINEL_TYPE, payload));
     }
     // Set
     if (v instanceof Set) {
         if (stack.has(v))
             throw new TypeError("Cyclic object");
         stack.add(v);
-        const serializedValues = Array.from(v.values(), (value) => _stringify(value, stack));
-        serializedValues.sort();
-        const out = "[" + serializedValues.join(",") + "]";
+        const entries = [];
+        for (const value of v.values()) {
+            const serializedValue = _stringify(value, stack);
+            entries.push({
+                sortKey: buildSetSortKey(value, serializedValue),
+                serializedValue,
+            });
+        }
+        entries.sort((left, right) => {
+            if (left.sortKey < right.sortKey)
+                return -1;
+            if (left.sortKey > right.sortKey)
+                return 1;
+            if (left.serializedValue < right.serializedValue)
+                return -1;
+            if (left.serializedValue > right.serializedValue)
+                return 1;
+            return 0;
+        });
+        const body = entries.map((entry) => entry.serializedValue);
+        const payload = "[" + body.join(",") + "]";
+        const out = stringifySentinelLiteral(typeSentinel("set", payload));
         stack.delete(v);
         return out;
+    }
+    if (v instanceof RegExp) {
+        return stringifySentinelLiteral(buildRegExpSentinel(v));
     }
     // Plain object
     const o = v;
@@ -180,24 +389,170 @@ function compareSerializedEntry(left, right) {
         return -1;
     if (left.serializedValue > right.serializedValue)
         return 1;
+    if (left.order < right.order)
+        return -1;
+    if (left.order > right.order)
+        return 1;
     return 0;
 }
-function toMapPropertyKey(rawKey, serializedKey) {
-    if (rawKey instanceof Date) {
-        return normalizePlainObjectKey(String(rawKey));
+function mapEntryPropertyKey(bucketKey, entryPropertyKey, entryIndex, totalEntries, entryOrder, shouldDedupeByType, hasDuplicatePropertyKey) {
+    const isLocalSymbolProperty = entryPropertyKey.startsWith(`${SYMBOL_SENTINEL_PREFIX}["local"`);
+    if (!shouldDedupeByType && isLocalSymbolProperty) {
+        const uniqueIndex = hasDuplicatePropertyKey ? entryOrder : entryIndex;
+        const payload = JSON.stringify([bucketKey, entryPropertyKey, uniqueIndex]);
+        return typeSentinel("map-entry-index", payload);
     }
+    if (totalEntries <= 1 ||
+        (!hasDuplicatePropertyKey && entryIndex === 0)) {
+        return entryPropertyKey;
+    }
+    const uniqueIndex = hasDuplicatePropertyKey ? entryOrder : entryIndex;
+    const payload = JSON.stringify([bucketKey, entryPropertyKey, uniqueIndex]);
+    return typeSentinel("map-entry-index", payload);
+}
+function mapBucketTypeTag(rawKey) {
+    if (rawKey instanceof Number ||
+        rawKey instanceof Boolean ||
+        isBigIntObject(rawKey)) {
+        return mapBucketTypeTag(rawKey.valueOf());
+    }
+    if (typeof rawKey === "symbol")
+        return "symbol";
+    if (rawKey === null)
+        return "null";
+    if (rawKey instanceof Date)
+        return "date";
+    if (rawKey instanceof Map)
+        return "map";
+    if (rawKey instanceof Set)
+        return "set";
+    if (rawKey instanceof RegExp)
+        return REGEXP_SENTINEL_TYPE;
+    if (Array.isArray(rawKey))
+        return "array";
+    if (sharedArrayBufferCtor && rawKey instanceof sharedArrayBufferCtor)
+        return "sharedarraybuffer";
+    if (rawKey instanceof ArrayBuffer || ArrayBuffer.isView(rawKey))
+        return "arraybuffer";
+    return typeof rawKey;
+}
+const NULL_PROPERTY_KEY_SENTINEL_BUCKET_TAG = mapBucketTypeTag(null);
+function buildNullPropertyKeySentinel(serializedKey) {
+    return typeSentinel(PROPERTY_KEY_SENTINEL_TYPE, JSON.stringify([NULL_PROPERTY_KEY_SENTINEL_BUCKET_TAG, serializedKey]));
+}
+function buildPropertyKeySentinel(rawKey, serializedKey, stringified) {
+    const bucketTag = mapBucketTypeTag(rawKey);
+    const payloadParts = [bucketTag, serializedKey];
+    if (stringified !== undefined) {
+        payloadParts.push(stringified);
+    }
+    return typeSentinel(PROPERTY_KEY_SENTINEL_TYPE, JSON.stringify(payloadParts));
+}
+function toMapPropertyKey(rawKey, serializedKey) {
+    const bucketTag = mapBucketTypeTag(rawKey);
     const revivedKey = reviveFromSerialized(serializedKey);
-    return toPropertyKeyString(rawKey, revivedKey, serializedKey);
+    if (rawKey instanceof Date) {
+        const propertyKey = toPropertyKeyString(rawKey, revivedKey, serializedKey);
+        return {
+            bucketKey: `${bucketTag}|${propertyKey}`,
+            propertyKey,
+        };
+    }
+    const propertyKey = toPropertyKeyString(rawKey, revivedKey, serializedKey);
+    if (typeof rawKey === "symbol") {
+        return {
+            bucketKey: `${bucketTag}|${getSymbolBucketKey(rawKey)}`,
+            propertyKey,
+        };
+    }
+    if (rawKey instanceof RegExp) {
+        return {
+            bucketKey: `${bucketTag}|${propertyKey}`,
+            propertyKey,
+        };
+    }
+    return {
+        bucketKey: `${bucketTag}|${serializedKey}`,
+        propertyKey,
+    };
 }
 function stringifyStringLiteral(value) {
     return JSON.stringify(normalizeStringLiteral(value));
 }
 function normalizeStringLiteral(value) {
     if (value.startsWith(STRING_LITERAL_SENTINEL_PREFIX)) {
+        if (needsStringLiteralSentinelEscape(value)) {
+            return `${STRING_LITERAL_SENTINEL_PREFIX}${value}`;
+        }
+        let innerValue = value.slice(STRING_LITERAL_SENTINEL_PREFIX.length);
+        while (innerValue.startsWith(STRING_LITERAL_SENTINEL_PREFIX)) {
+            innerValue = innerValue.slice(STRING_LITERAL_SENTINEL_PREFIX.length);
+        }
+        if (needsNestedStringLiteralSentinelEscape(innerValue)) {
+            if (value.startsWith(STRING_LITERAL_SENTINEL_PREFIX.repeat(2))) {
+                return value;
+            }
+            return `${STRING_LITERAL_SENTINEL_PREFIX}${value}`;
+        }
         return value;
     }
-    if (value === HOLE_SENTINEL_RAW) {
+    if (needsStringLiteralSentinelEscape(value)) {
         return `${STRING_LITERAL_SENTINEL_PREFIX}${value}`;
+    }
+    return value;
+}
+function needsNestedStringLiteralSentinelEscape(value) {
+    if (needsStringLiteralSentinelEscape(value)) {
+        return true;
+    }
+    return value.startsWith(STRING_LITERAL_SENTINEL_PREFIX);
+}
+function hasArrayBufferLikeSentinelPrefix(value) {
+    for (const prefix of ARRAY_BUFFER_LIKE_SENTINEL_PREFIXES) {
+        if (value.startsWith(prefix)) {
+            return true;
+        }
+    }
+    return false;
+}
+function needsStringLiteralSentinelEscape(value) {
+    if (value === HOLE_SENTINEL_RAW) {
+        return true;
+    }
+    if (value === UNDEFINED_SENTINEL) {
+        return true;
+    }
+    if (value.startsWith(SYMBOL_SENTINEL_PREFIX)) {
+        return true;
+    }
+    if (value.startsWith(DATE_SENTINEL_PREFIX)) {
+        return true;
+    }
+    if (hasArrayBufferLikeSentinelPrefix(value)) {
+        return true;
+    }
+    if (value.startsWith(SENTINEL_PREFIX) &&
+        value.endsWith(SENTINEL_SUFFIX)) {
+        const inner = value.slice(SENTINEL_PREFIX.length, -SENTINEL_SUFFIX.length);
+        const separatorIndex = inner.indexOf(":");
+        if (separatorIndex !== -1) {
+            const type = inner.slice(0, separatorIndex);
+            if (STRING_LITERAL_ESCAPED_SENTINEL_TYPES.has(type)) {
+                return true;
+            }
+        }
+    }
+    if (value.includes(MAP_ENTRY_INDEX_LITERAL_SEGMENT)) {
+        return true;
+    }
+    if (value.includes(MAP_ENTRY_INDEX_SENTINEL_SEGMENT)) {
+        return true;
+    }
+    return false;
+}
+function stripStringLiteralSentinelPrefix(value) {
+    if (value.startsWith(STRING_LITERAL_SENTINEL_PREFIX)) {
+        return value.slice(STRING_LITERAL_SENTINEL_PREFIX.length);
     }
     return value;
 }
@@ -227,6 +582,18 @@ function reviveFromSerialized(serialized) {
 }
 function reviveSentinelValue(value) {
     if (typeof value === "string" &&
+        value.startsWith(DATE_SENTINEL_PREFIX)) {
+        const payload = value.slice(DATE_SENTINEL_PREFIX.length);
+        if (payload === "invalid") {
+            return new Date(Number.NaN);
+        }
+        const revivedDate = new Date(payload);
+        if (Number.isFinite(revivedDate.getTime())) {
+            return revivedDate;
+        }
+        return value;
+    }
+    if (typeof value === "string" &&
         value.startsWith(SENTINEL_PREFIX) &&
         value.endsWith(SENTINEL_SUFFIX)) {
         const inner = value.slice(SENTINEL_PREFIX.length, -SENTINEL_SUFFIX.length);
@@ -254,22 +621,80 @@ function reviveSentinelValue(value) {
                     return value;
                 }
             }
+            if (type === REGEXP_SENTINEL_TYPE) {
+                try {
+                    const parsed = JSON.parse(payload);
+                    if (Array.isArray(parsed) && typeof parsed[0] === "string") {
+                        const flags = typeof parsed[1] === "string" ? parsed[1] : "";
+                        return new RegExp(parsed[0], flags);
+                    }
+                }
+                catch {
+                    return value;
+                }
+                return value;
+            }
         }
     }
     return value;
 }
+function toSymbolSentinel(symbol) {
+    const globalKey = typeof Symbol.keyFor === "function" ? Symbol.keyFor(symbol) : undefined;
+    if (globalKey !== undefined) {
+        const payload = JSON.stringify(["global", globalKey]);
+        return `${SYMBOL_SENTINEL_PREFIX}${payload}`;
+    }
+    const record = getLocalSymbolSentinelRecord(symbol);
+    return record.sentinel;
+}
+function getSymbolSortKey(symbol) {
+    const globalKey = typeof Symbol.keyFor === "function" ? Symbol.keyFor(symbol) : undefined;
+    if (globalKey !== undefined) {
+        return `global:${globalKey}`;
+    }
+    const record = peekLocalSymbolSentinelRecord(symbol) ??
+        getLocalSymbolSentinelRecord(symbol);
+    return `local:${record.identifier}`;
+}
+export { getLocalSymbolSentinelRecord as __getLocalSymbolSentinelRecordForTest, peekLocalSymbolSentinelRecord as __peekLocalSymbolSentinelRecordForTest, };
+function buildSetSortKey(value, serializedValue) {
+    if (typeof value === "symbol") {
+        return getSymbolSortKey(value);
+    }
+    return serializedValue;
+}
 function toPropertyKeyString(rawKey, revivedKey, serializedKey) {
+    if (rawKey instanceof Number ||
+        rawKey instanceof Boolean ||
+        isBigIntObject(rawKey)) {
+        return toPropertyKeyString(rawKey.valueOf(), revivedKey, serializedKey);
+    }
     if (typeof rawKey === "symbol") {
-        return rawKey.toString();
+        return toSymbolSentinel(rawKey);
     }
     if (rawKey === null) {
-        return "null";
+        return buildNullPropertyKeySentinel(serializedKey);
     }
     if (rawKey instanceof Date) {
-        if (typeof revivedKey === "string") {
+        if (typeof revivedKey === "string" &&
+            revivedKey.startsWith(DATE_SENTINEL_PREFIX)) {
             return escapeSentinelString(revivedKey);
         }
-        return `${DATE_SENTINEL_PREFIX}${rawKey.toISOString()}`;
+        const { key } = getDateSentinelParts(rawKey);
+        return key;
+    }
+    if (rawKey instanceof RegExp) {
+        const normalizedFromRaw = stripStringLiteralSentinelPrefix(normalizePlainObjectKey(escapeSentinelString(buildRegExpSentinel(rawKey))));
+        if (revivedKey instanceof RegExp) {
+            return stripStringLiteralSentinelPrefix(normalizePlainObjectKey(escapeSentinelString(buildRegExpSentinel(revivedKey))));
+        }
+        if (typeof revivedKey === "string") {
+            const normalizedRevived = normalizePlainObjectKey(escapeSentinelString(revivedKey));
+            if (normalizedRevived !== normalizedFromRaw) {
+                return normalizedRevived;
+            }
+        }
+        return normalizedFromRaw;
     }
     const rawType = typeof rawKey;
     if (rawType === "string") {
@@ -277,11 +702,9 @@ function toPropertyKeyString(rawKey, revivedKey, serializedKey) {
     }
     if (rawType === "number" ||
         rawType === "bigint" ||
-        rawType === "boolean") {
-        return String(rawKey);
-    }
-    if (rawType === "undefined") {
-        return "undefined";
+        rawType === "boolean" ||
+        rawType === "undefined") {
+        return buildPropertyKeySentinel(rawKey, serializedKey);
     }
     if (rawType === "object" || rawType === "function") {
         let stringified;
@@ -291,16 +714,17 @@ function toPropertyKeyString(rawKey, revivedKey, serializedKey) {
         catch {
             stringified = undefined;
         }
-        if (stringified !== undefined) {
-            const normalizedString = normalizePlainObjectKey(stringified);
-            if (typeof revivedKey === "string") {
-                const normalizedRevived = normalizePlainObjectKey(escapeSentinelString(revivedKey));
-                if (normalizedRevived !== normalizedString) {
-                    return normalizedRevived;
-                }
+        const propertyKeySentinel = buildPropertyKeySentinel(rawKey, serializedKey, stringified);
+        if (typeof revivedKey === "string") {
+            if (needsStringLiteralSentinelEscape(revivedKey)) {
+                return propertyKeySentinel;
             }
-            return normalizedString;
+            const normalizedRevived = normalizePlainObjectKey(escapeSentinelString(revivedKey));
+            if (normalizedRevived !== propertyKeySentinel) {
+                return normalizedRevived;
+            }
         }
+        return propertyKeySentinel;
     }
     if (typeof revivedKey === "string") {
         return normalizePlainObjectKey(escapeSentinelString(revivedKey));
