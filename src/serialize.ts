@@ -60,7 +60,7 @@ function getLocalSymbolSentinelIdentifier(
   symbol: symbol,
 ): LocalSymbolSentinelRecord | undefined {
   const symbolObject = toSymbolObject(symbol);
-  return LOCAL_SYMBOL_SENTINELS.get(symbolObject);
+  return LOCAL_SYMBOL_SENTINEL_REGISTRY.get(symbolObject);
 }
 
 function setLocalSymbolSentinelIdentifier(
@@ -68,7 +68,7 @@ function setLocalSymbolSentinelIdentifier(
   record: LocalSymbolSentinelRecord,
 ): void {
   const symbolObject = toSymbolObject(symbol);
-  LOCAL_SYMBOL_SENTINELS.set(symbolObject, record);
+  LOCAL_SYMBOL_SENTINEL_REGISTRY.set(symbolObject, record);
 }
 
 function getLocalSymbolSentinelRecord(
@@ -135,6 +135,7 @@ const STRING_LITERAL_ESCAPED_SENTINEL_TYPES = new Set<string>([
   "hole",
   PROPERTY_KEY_SENTINEL_TYPE,
   "map",
+  "set",
 ]);
 const ARRAY_BUFFER_LIKE_SENTINEL_PREFIXES = [
   `${SENTINEL_PREFIX}typedarray:`,
