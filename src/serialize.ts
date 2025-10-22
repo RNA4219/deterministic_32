@@ -56,11 +56,17 @@ function toSymbolObject(symbol: symbol): SymbolObject {
   return symbol as SymbolObject;
 }
 
+function peekLocalSymbolSentinelRecordFromObject(
+  symbolObject: SymbolObject,
+): LocalSymbolSentinelRecord | undefined {
+  return LOCAL_SYMBOL_SENTINEL_REGISTRY.get(symbolObject);
+}
+
 function peekLocalSymbolSentinelRecord(
   symbol: symbol,
 ): LocalSymbolSentinelRecord | undefined {
   const symbolObject = toSymbolObject(symbol);
-  return LOCAL_SYMBOL_SENTINEL_REGISTRY.get(symbolObject);
+  return peekLocalSymbolSentinelRecordFromObject(symbolObject);
 }
 
 function registerLocalSymbolSentinelRecord(
@@ -100,16 +106,12 @@ function getLocalSymbolSentinelRecord(
   symbol: symbol,
 ): LocalSymbolSentinelRecord {
   const symbolObject = toSymbolObject(symbol);
-  const existing = peekLocalSymbolSentinelRecord(symbol);
+  const existing = peekLocalSymbolSentinelRecordFromObject(symbolObject);
   if (existing !== undefined) {
     return existing;
   }
 
   return createLocalSymbolSentinelRecord(symbol, symbolObject);
-}
-
-function getLocalSymbolSentinelIdentifier(symbol: symbol): string {
-  return getLocalSymbolSentinelRecord(symbol).identifier;
 }
 
 function buildLocalSymbolSentinel(
