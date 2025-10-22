@@ -103,14 +103,16 @@ stableStringify(Object(false))
 → "false" // ボックス化 Boolean はアンボックス後に処理
 ```
 
-### Sparse array hole sentinel
+### Sentinel examples (RegExp)
 
 ```
-stableStringify([1,,3])
-→ "[1,\"\\u0000cat32:hole:__hole__\\u0000\",3]"
+const regex = /foo/i;
+stableStringify(regex)
+→ "\"\\u0000cat32:regexp:[\\"foo\\",\\"i\\"]\\u0000\""
 
-// `[1, undefined, 3]` は欠番ではなく `undefined` を要素に保持するため、
-// "[1,\"__undefined__\",3]" となり、疎配列とは区別される。
+const sentinelLiteral = "\u0000cat32:regexp:[\"foo\",\"i\"]\u0000";
+stableStringify(sentinelLiteral)
+→ "\"__string__:\\u0000cat32:regexp:[\\"foo\\",\\"i\\"]\\u0000\""
 ```
 
 ### Date sentinel examples
