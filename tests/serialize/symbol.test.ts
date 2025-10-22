@@ -72,6 +72,16 @@ test(
   },
 );
 
+test("Issue1: WeakRef 定義環境でローカルシンボルを複数回直列化できる", () => {
+  if (!("WeakRef" in globalThis)) return;
+
+  const symbol = Symbol("issue1:local");
+
+  stableStringify(symbol);
+  stableStringify(symbol);
+  stableStringify(symbol);
+});
+
 test("stableStringify serializes symbols nested in sets", () => {
   const description = "within set";
   const serialized = stableStringify(new Set([Symbol(description)]));
