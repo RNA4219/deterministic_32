@@ -157,8 +157,14 @@ test("ローカルシンボルのピークはレコードを生成しない", ()
 test("ローカルシンボルのシリアライズと assign が例外を送出しない", () => {
   const crash = Symbol("crash");
 
-  stableStringify(crash);
+  const sentinelFromStringify = JSON.parse(stableStringify(crash));
 
   const cat = new Cat32();
-  cat.assign(crash);
+  const assignment = cat.assign(crash);
+
+  const sentinelFromAssign = JSON.parse(assignment.key);
+  assert.equal(sentinelFromAssign, sentinelFromStringify);
+
+  const sentinelFromStringifyAgain = JSON.parse(stableStringify(crash));
+  assert.equal(sentinelFromStringifyAgain, sentinelFromStringify);
 });
