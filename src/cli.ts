@@ -24,7 +24,7 @@ const HELP_TEXT = [
   "Options:",
   "  --salt <value>           Salt to apply when assigning a category.",
   "  --namespace <value>      Namespace that scopes generated categories.",
-  "  --normalize <value>      Unicode normalization form (default: nfkc).",
+  "  --normalize <value>      Unicode normalization form (none|nfc|nfd|nfkc|nfkd; default: nfkc).",
   "  --json [format]          Output JSON format: compact or pretty (default: compact).",
   "  --pretty                 Shorthand for --json pretty.",
   "  --help                   Show this help message and exit.",
@@ -124,10 +124,10 @@ function parseNormalizeOption(value: string | undefined): NormalizeMode {
   if (value === undefined) {
     return "nfkc";
   }
-  if (value === "none" || value === "nfc" || value === "nfkc" || value === "nfkd") {
+  if (value === "none" || value === "nfc" || value === "nfd" || value === "nfkc" || value === "nfkd") {
     return value;
   }
-  throw new RangeError("normalize must be one of \"none\", \"nfc\", \"nfkc\", or \"nfkd\"");
+  throw new RangeError("normalize must be one of \"none\", \"nfc\", \"nfd\", \"nfkc\", or \"nfkd\"");
 }
 
 async function main() {
