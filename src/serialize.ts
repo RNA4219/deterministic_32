@@ -119,7 +119,7 @@ function registerLocalSymbolSentinelRecord(
     const holder: LocalSymbolFinalizerHolder = { target, ref };
     const holderRef = new WeakRef(holder);
     LOCAL_SYMBOL_IDENTIFIER_INDEX.set(record.identifier, holderRef);
-    LOCAL_SYMBOL_FINALIZER.register(holderTarget, record.identifier);
+    LOCAL_SYMBOL_FINALIZER.register(holder.target, record.identifier);
     record.finalizerHolder = holder;
   }
 

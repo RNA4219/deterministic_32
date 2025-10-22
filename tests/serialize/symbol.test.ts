@@ -1,7 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { stableStringify } from "../../src/serialize.js";
+import {
+  stableStringify,
+  __getLocalSymbolSentinelRecordForTest,
+} from "../../src/serialize.js";
 
 const SYMBOL_SENTINEL_PREFIX = "__symbol__:";
 const SET_SENTINEL_PREFIX = "\u0000cat32:set:";
@@ -81,6 +84,26 @@ test("Issue1: WeakRef 定義環境でローカルシンボルを複数回直列�
   stableStringify(symbol);
   stableStringify(symbol);
 });
+
+test(
+  "FinalizationRegistry 登録用ターゲットの作成が例外なく行われる",
+  () => {
+    if (!HAS_WEAKREF || !HAS_FINALIZATION_REGISTRY) return;
+
+    const symbol = Symbol("finalizer-target-index");
+
+    stableStringify(symbol);
+
+    const record = __getLocalSymbolSentinelRecordForTest(symbol);
+    const finalizerHolder = record.finalizerHolder;
+    if (finalizerHolder === undefined) {
+      throw new Error("finalizerHolder が設定されていません");
+    }
+
+    const dereferenced = finalizerHolder.ref.deref();
+    assert.equal(dereferenced, finalizerHolder.target);
+  },
+);
 
 test("stableStringify serializes symbols nested in sets", () => {
   const description = "within set";
