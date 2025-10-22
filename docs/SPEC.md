@@ -27,8 +27,11 @@ input (unknown)
 - 目的: **同値**で**キー順が違う**オブジェクトが**同一の文字列**になること。
 - 仕様（抜粋）:
   - `null` → `"null"`、`undefined` → `"__undefined__"`
-  - `boolean` → `"true"|"false"`、`number`/`bigint` → `JSON.stringify` に準拠
+  - `boolean` → `"true"|"false"`
+  - `number` → 有限値は `JSON.stringify` に準拠。`NaN` / `Infinity` / `-Infinity` は `typeSentinel("number", String(value))` を生成し、そのままセンチネル文字列として直列化する。
+  - `bigint` → 常に `typeSentinel("bigint", value.toString())` を生成し、センチネル文字列として直列化する。
   - `string` → `JSON.stringify` に準拠（`"` で囲む）。センチネル文字列（`__undefined__` や `\u0000cat32:...\u0000` など）と衝突する場合は `__string__:` プレフィックスを 1 回以上付与してエスケープする。
+  - `new Number(...)` / `new Boolean(...)` / `Object(1n)` などのボックス化プリミティブは `.valueOf()` でアンボックスした値に対して上記ルール（含センチネル処理）を適用する。
   - **Array**: `[...]`（順序維持）
   - **Object**: 自身の**列挙可能プロパティ**を**キー昇順**で `{k:v}` 並べる
   - **Date**: `"__date__:<ISO8601>"`
