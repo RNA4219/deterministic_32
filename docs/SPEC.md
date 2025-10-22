@@ -32,8 +32,19 @@ input (unknown)
   - **Array**: `[...]`（順序維持）
   - **Object**: 自身の**列挙可能プロパティ**を**キー昇順**で `{k:v}` 並べる
   - **Date**: `"__date__:<ISO8601>"`
-  - **Map**: `{"k":"v"...}`（キーをセンチネル含む**正規化キー**に変換後、昇順に整列）
-  - **Set**: `[...]`（要素を正規化直列化して配列化／順序の安定化は実装依存、推奨: 直列化後の文字列昇順）
+  - **Map**: `typeSentinel("map", payload)` 形式のセンチネル文字列（`"\u0000cat32:map:<payload>\u0000"`）。`payload` は `JSON.stringify` された
+    `[propertyKey, serializedValue]` 配列。生成手順は以下の通り。
+    1. 各エントリのキーと値をそれぞれ `stableStringify` する。キーは `toMapPropertyKey` を通じて `(bucketKey, propertyKey)` に正規化し、
+       `typeSentinel("propertykey", ...)` などのセンチネルを含む場合はそのまま保持する。
+    2. `bucketKey` ごとにエントリを集約し、`serializedKey` → `serializedValue` → 挿入順の優先度でソートする。
+    3. 1 つの `bucketKey` に同一 `propertyKey` が複数存在する場合や型衝突がある場合は `typeSentinel("map-entry-index", JSON.stringify([bucketKey,
+       propertyKey, uniqueIndex]))` を発番してキーの一意性を保証する。
+    4. 正規化済みの `[propertyKey, serializedValue]` を配列化して `JSON.stringify` し、最後に `typeSentinel("map", payload)` で包む。
+    - 例: `stableStringify(new Map([["a", 1], ["b", 2]]))` → `"\u0000cat32:map:[[\"a\",\"1\"],[\"b\",\"2\"]]\u0000"`
+  - **Set**: `typeSentinel("set", payload)` 形式のセンチネル文字列。要素を `stableStringify` した結果と `buildSetSortKey` が返すセンチネル対応
+    ソートキーで比較し、`sortKey` → `serializedValue` → 挿入順の優先度で整列した `serializedValue` の配列を `payload` (`"[... ]"`)
+    として埋め込む。
+    - 例: `stableStringify(new Set([1, 2]))` → `"\u0000cat32:set:[1,2]\u0000"`
   - `function`: `String(v)`
   - `symbol`: `"__symbol__:[...]"` 形式のセンチネル文字列（`global`/`local` 情報を JSON で保持）
   - **循環参照**を検出したら **`TypeError("Cyclic object")`** を投げる。
