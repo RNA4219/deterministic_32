@@ -7,6 +7,10 @@ export const retryQueueEntry = async <T>(
   recordId: string,
   attempt: RetryAttempt<T>,
 ): Promise<T> => {
+  const record = store.get(recordId);
+  if (!record) {
+    throw new Error(`Unknown refresh queue entry: ${recordId}`);
+  }
   store.recordAttempt(recordId);
   try {
     const result = await attempt();

@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
+import { rejects } from "node:assert/promises";
 import test from "node:test";
 
 import { createRefreshQueueStore } from "../../src/sw/refreshQueueStore.js";
+import type { RefreshQueueStore } from "../../src/sw/refreshQueueStore.js";
 import { retryQueueEntry } from "../../src/sw.js";
 
 type RequestConstructor = new (input: string | URL, init?: RequestInit) => Request;
@@ -151,6 +153,72 @@ const createFallbackRequest = (): RequestConstructor => {
 
 const RequestCtor: RequestConstructor =
   typeof Request !== "undefined" ? Request : createFallbackRequest();
+
+test("retryQueueEntry throws when record is missing", async () => {
+  const recordId = "missing-record";
+
+  let attemptInvocations = 0;
+  let recordAttemptInvocations = 0;
+  let recordFailureInvocations = 0;
+  let recordSuccessInvocations = 0;
+
+  const store: RefreshQueueStore = {
+    enqueue(request: Request) {
+      return createRefreshQueueStore().enqueue(request);
+    },
+    get(id: string) {
+      assert.equal(
+        id,
+        recordId,
+        "retryQueueEntry should query the provided record identifier",
+      );
+      return undefined;
+    },
+    recordAttempt() {
+      recordAttemptInvocations += 1;
+    },
+    recordFailure() {
+      recordFailureInvocations += 1;
+    },
+    recordSuccess() {
+      recordSuccessInvocations += 1;
+    },
+  };
+
+  await rejects(async () => {
+    await retryQueueEntry(store, recordId, async () => {
+      attemptInvocations += 1;
+      return undefined;
+    });
+  }, (error: unknown) => {
+    if (!(error instanceof Error)) {
+      return false;
+    }
+    assert.equal(
+      error.message,
+      `Unknown refresh queue entry: ${recordId}`,
+      "retryQueueEntry should throw when no queue entry exists",
+    );
+    return true;
+  });
+
+  assert.equal(attemptInvocations, 0, "attempt should not be executed when entry is missing");
+  assert.equal(
+    recordAttemptInvocations,
+    0,
+    "recordAttempt should not be called when entry lookup fails",
+  );
+  assert.equal(
+    recordFailureInvocations,
+    0,
+    "recordFailure should not be called when entry lookup fails",
+  );
+  assert.equal(
+    recordSuccessInvocations,
+    0,
+    "recordSuccess should not be called when entry lookup fails",
+  );
+});
 
 test("retryQueueEntry records failure metadata and preserves entry", async () => {
   const store = createRefreshQueueStore();
