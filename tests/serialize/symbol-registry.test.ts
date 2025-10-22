@@ -190,3 +190,28 @@ test("ローカルシンボルのシリアライズと assign が例外を送出
   const sentinelFromStringifyAgain = JSON.parse(stableStringify(crash));
   assert.equal(sentinelFromStringifyAgain, sentinelFromStringify);
 });
+
+test("WeakRef 環境で finalizer holder がシンボルオブジェクトを保持する", () => {
+  if (
+    typeof globalThis.WeakRef !== "function" ||
+    typeof globalThis.FinalizationRegistry !== "function"
+  ) {
+    return;
+  }
+
+  const holderSymbol = Symbol("finalizer holder");
+  const record = __getLocalSymbolSentinelRecordForTest(holderSymbol);
+  const { finalizerHolder } = record;
+
+  if (finalizerHolder === undefined) {
+    throw new Error("finalizer holder が設定されているべき");
+  }
+
+  const holder = finalizerHolder;
+
+  assert.equal(holder.ref.deref(), holder.target);
+  assert.equal(
+    Object.prototype.toString.call(holder.target),
+    "[object Symbol]",
+  );
+});
