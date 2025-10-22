@@ -18,7 +18,7 @@
 input (unknown)
    └─▶ stableStringify(input)              // 順序非依存の決定的シリアライズ（§4）
         └─▶ unicodeNormalize(str, mode)    // "nfkc" | "nfc" | "none"（既定: "nfkc"）
-             └─▶ salted(str, salt, ns)     // {str} + "|salt:" + salt + ("|ns:"+ns?)
+             └─▶ salted(str, salt, ns)     // {str} + (ns ? "|saltns:"+JSON.stringify([salt, ns]) : salt ? "|salt:"+salt : "")
                   └─▶ FNV-1a32(utf8)       // §5
                        └─▶ index = hash & 31
 ```
@@ -67,7 +67,9 @@ input (unknown)
 - `label = labels[index]`。
 
 ## 7. salt / namespace
-- `saltedKey = canonical + (salt||ns ? "|salt:" + salt + (ns ? "|ns:"+ns : "") : "")`
+- `saltedKey = canonical + (ns ? "|saltns:" + JSON.stringify([salt, ns]) : salt ? "|salt:" + salt : "")`
+- `namespace` 指定時は **必ず** `|saltns:` に `[salt, namespace]` を **JSON 文字列**化したものを連結する。
+- `namespace` を省略した場合のみ、`|salt:` で `salt` 単体を連結する。
 - 目的:
   - **salt**: システム間でバケット配置の**平行移動**（衝突回避／A/B切替）
   - **namespace**: **互換性が変わる**仕様変更を**明示的に切替**
