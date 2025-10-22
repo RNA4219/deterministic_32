@@ -22,6 +22,22 @@ test("stableStringify(Symbol('x')) が決定的キーを返す", () => {
   assert.equal(typeof first, "string");
 });
 
+const stableStringifyMissingWeakRefs =
+  typeof globalThis.WeakRef !== "function" ||
+  typeof globalThis.FinalizationRegistry !== "function";
+
+if (!stableStringifyMissingWeakRefs) {
+  test(
+    "WeakRef/FinalizationRegistry 環境で stableStringify(Symbol('x')) が例外を送出しない",
+    () => {
+      const symbol = Symbol("x");
+
+      stableStringify(symbol);
+      stableStringify(symbol);
+    },
+  );
+}
+
 test("Cat32.assign(Symbol('x')) が決定的キーを返す", () => {
   const symbol = Symbol("x");
 
