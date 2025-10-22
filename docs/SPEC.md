@@ -35,13 +35,19 @@ input (unknown)
   - **Array**: `[...]`（順序維持）
   - **Object**: 自身の**列挙可能プロパティ**を**キー昇順**で `{k:v}` 並べる
   - **Date**: `"__date__:<ISO8601>"`
-  - **Map**: `typeSentinel("map", JSON.stringify([[keySentinel, valueJson], ...]))`
-    - 各エントリのキーを `stableStringify` し、センチネル化した `keySentinel`（`typeSentinel("propertykey", ...)` 等）としつつ、**挿入順または安定ソート順**を保ったまま配列へ格納する。
-    - 同一キーでもセンチネル化したキー情報で衝突を解決し、`JSON.stringify` 済みの値を `valueJson` として格納する。
-    - Map 全体は **JSON 文字列**をペイロードに持つセンチネル経由で返されるため、キー情報と順序が復元可能。
-  - **Set**: `typeSentinel("set", JSON.stringify([valueJson, ...]))`
-    - 各要素を `stableStringify` 済み文字列として `valueJson` に格納し、センチネル内の配列で並び順を安定化する（推奨: 直列化後の文字列昇順＋挿入順タイブレーク）。
-    - Set も **センチネル文字列**を介して返され、要素順序が再構成できる。
+  - **Map**: `typeSentinel("map", payload)` 形式のセンチネル文字列（`"\u0000cat32:map:<payload>\u0000"`）。`payload` は `JSON.stringify` された
+    `[propertyKey, serializedValue]` 配列。生成手順は以下の通り。
+    1. 各エントリのキーと値をそれぞれ `stableStringify` する。キーは `toMapPropertyKey` を通じて `(bucketKey, propertyKey)` に正規化し、
+       `typeSentinel("propertykey", ...)` などのセンチネルを含む場合はそのまま保持する。
+    2. `bucketKey` ごとにエントリを集約し、`serializedKey` → `serializedValue` → 挿入順の優先度でソートする。
+    3. 1 つの `bucketKey` に同一 `propertyKey` が複数存在する場合や型衝突がある場合は `typeSentinel("map-entry-index", JSON.stringify([bucketKey,
+       propertyKey, uniqueIndex]))` を発番してキーの一意性を保証する。
+    4. 正規化済みの `[propertyKey, serializedValue]` を配列化して `JSON.stringify` し、最後に `typeSentinel("map", payload)` で包む。
+    - 例: `stableStringify(new Map([["a", 1], ["b", 2]]))` → `"\u0000cat32:map:[[\"a\",\"1\"],[\"b\",\"2\"]]\u0000"`
+  - **Set**: `typeSentinel("set", payload)` 形式のセンチネル文字列。要素を `stableStringify` した結果と `buildSetSortKey` が返すセンチネル対応
+    ソートキーで比較し、`sortKey` → `serializedValue` → 挿入順の優先度で整列した `serializedValue` の配列を `payload` (`"[... ]"`)
+    として埋め込む。
+    - 例: `stableStringify(new Set([1, 2]))` → `"\u0000cat32:set:[1,2]\u0000"`
   - `function`: `String(v)`
   - `symbol`: `"__symbol__:[...]"` 形式のセンチネル文字列（`global`/`local` 情報を JSON で保持）
   - **循環参照**を検出したら **`TypeError("Cyclic object")`** を投げる。

@@ -25,12 +25,12 @@ tests/
 ## 4. 直列化の詳細（serialize.ts）
 - **循環検出**は `Set<object>` スタックで実施。
 - **Map/Set**:
-  - Map: 直列化キーは `typeSentinel("propertykey", ...)` や `typeSentinel("map-entry-index", ...)` を含む**正規化キー**へ変換する。処理の流れは以下の通り。
-    1. 各エントリのキーを `stableStringify` し、`toMapPropertyKey` で `(bucketKey, propertyKey)` に分解する。`bucketKey` には型タグ（`symbol`、`arraybuffer` など）とセンチネル化したキー情報を含める。
-    2. 同一 `bucketKey` ごとにエントリを集約し、`serializedKey`/`serializedValue`/挿入順でソートする。
-    3. バケット内で `propertyKey` が重複する場合や複数型を含む場合は `typeSentinel("map-entry-index", JSON.stringify([bucketKey, propertyKey, uniqueIndex]))` を生成してインデックスを埋め込み、衝突を解消する。
-    4. 正規化済みの `[propertyKey, serializedValue]` 配列を `JSON.stringify` し、最後に `typeSentinel("map", payloadJson)`（`payloadJson` は JSON 文字列）で包む。センチネル経由でキー情報と順序を保持する。
-  - Set: 各要素を `stableStringify` した結果と `buildSetSortKey` が返すセンチネル対応ソートキーで比較し、`sortKey` → `serializedValue` → 挿入順の優先度で整列する。生成した配列を `JSON.stringify` し、`typeSentinel("set", payloadJson)` の形で返す。
+  - Map: 直列化キーは `typeSentinel("propertykey", ...)` や `typeSentinel("map-entry-index", ...)` を含む**正規化キー**へ変換する。処理は次の 4 ステップでセンチネル化され、最終的に `typeSentinel("map", payload)` にまとめられる。
+    1. 各エントリのキーと値をそれぞれ `stableStringify` し、キーは `toMapPropertyKey` で `(bucketKey, propertyKey)` に分解する。`bucketKey` には型タグ（`symbol`、`set`、`arraybuffer` など）とセンチネル化済みキー情報を含める。
+    2. `bucketKey` 単位でエントリを集約し、`serializedKey` → `serializedValue` → 挿入順の優先度でソートする。
+    3. 同一 `bucketKey` に `propertyKey` が重複する場合や型衝突がある場合は `typeSentinel("map-entry-index", JSON.stringify([bucketKey, propertyKey, uniqueIndex]))` を付与してキーの一意性を保証する。
+    4. 正規化済みの `[propertyKey, serializedValue]` 配列を `JSON.stringify` し、最後に `typeSentinel("map", payload)` で包む。
+  - Set: 要素の `stableStringify` 結果と `buildSetSortKey` が返すセンチネル対応ソートキーで比較し、`sortKey` → `serializedValue` → 挿入順の優先度で整列した配列を `payload` (`"[... ]"`) として `typeSentinel("set", payload)` に埋め込む。重複要素も同じ順序規則で保持される。
 - **Date**: `__date__:<ISO8601>`
 - `undefined` は `"__undefined__"` の**文字列**にエンコード。
 
