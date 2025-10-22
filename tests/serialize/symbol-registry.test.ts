@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  Cat32,
   stableStringify,
 } from "../../src/index.js";
 import {
@@ -59,4 +60,21 @@ test("ローカルシンボルのピークはレコードを生成しない", ()
     record,
     "センチネル作成後は同一レコードを返す",
   );
+});
+
+test("stableStringify と Cat32.assign はローカルシンボルを決定的に扱う", () => {
+  const symbol = Symbol("x");
+
+  const firstStringify = stableStringify(symbol);
+  const secondStringify = stableStringify(symbol);
+  assert.equal(secondStringify, firstStringify);
+
+  const cat32 = new Cat32();
+
+  const firstAssignment = cat32.assign(symbol);
+  const secondAssignment = cat32.assign(symbol);
+
+  assert.equal(firstAssignment.key, firstStringify);
+  assert.equal(secondAssignment.key, firstStringify);
+  assert.equal(secondAssignment.key, firstAssignment.key);
 });

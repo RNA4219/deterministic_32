@@ -34,7 +34,7 @@ function isBigIntObject(value: unknown): value is { valueOf(): bigint } {
 
 type ValueOfCapable = { valueOf(): unknown };
 
-type SymbolObject = symbol & object;
+type SymbolObject = { value: symbol };
 
 type LocalSymbolFinalizerHolder = {
   ref: WeakRef<SymbolObject>;
@@ -51,6 +51,8 @@ const HAS_FINALIZATION_REGISTRY = typeof FinalizationRegistry === "function";
 
 const LOCAL_SYMBOL_SENTINEL_REGISTRY =
   new WeakMap<SymbolObject, LocalSymbolSentinelRecord>();
+const LOCAL_SYMBOL_HOLDER_CACHE = new Map<symbol, SymbolObject>();
+const LOCAL_SYMBOL_RECORD_CACHE = new Map<symbol, LocalSymbolSentinelRecord>();
 const LOCAL_SYMBOL_IDENTIFIER_INDEX =
   HAS_WEAK_REFS && HAS_FINALIZATION_REGISTRY
     ? new Map<string, WeakRef<SymbolObject>>()
@@ -65,7 +67,14 @@ const LOCAL_SYMBOL_FINALIZER =
 let nextLocalSymbolSentinelId = 0;
 
 function toSymbolObject(symbol: symbol): SymbolObject {
-  return symbol as SymbolObject;
+  const cached = LOCAL_SYMBOL_HOLDER_CACHE.get(symbol);
+  if (cached !== undefined) {
+    return cached;
+  }
+
+  const holder: SymbolObject = { value: symbol };
+  LOCAL_SYMBOL_HOLDER_CACHE.set(symbol, holder);
+  return holder;
 }
 
 function peekLocalSymbolSentinelRecordFromObject(
@@ -77,8 +86,17 @@ function peekLocalSymbolSentinelRecordFromObject(
 function peekLocalSymbolSentinelRecord(
   symbol: symbol,
 ): LocalSymbolSentinelRecord | undefined {
+  const cached = LOCAL_SYMBOL_RECORD_CACHE.get(symbol);
+  if (cached !== undefined) {
+    return cached;
+  }
+
   const symbolObject = toSymbolObject(symbol);
-  return peekLocalSymbolSentinelRecordFromObject(symbolObject);
+  const record = peekLocalSymbolSentinelRecordFromObject(symbolObject);
+  if (record !== undefined) {
+    LOCAL_SYMBOL_RECORD_CACHE.set(symbol, record);
+  }
+  return record;
 }
 
 function registerLocalSymbolSentinelRecord(
@@ -97,6 +115,7 @@ function registerLocalSymbolSentinelRecord(
   }
 
   LOCAL_SYMBOL_SENTINEL_REGISTRY.set(symbolObject, record);
+  LOCAL_SYMBOL_RECORD_CACHE.set(symbolObject.value, record);
 }
 
 function createLocalSymbolSentinelRecord(
@@ -117,9 +136,15 @@ function createLocalSymbolSentinelRecord(
 function getLocalSymbolSentinelRecord(
   symbol: symbol,
 ): LocalSymbolSentinelRecord {
+  const cached = LOCAL_SYMBOL_RECORD_CACHE.get(symbol);
+  if (cached !== undefined) {
+    return cached;
+  }
+
   const symbolObject = toSymbolObject(symbol);
   const existing = peekLocalSymbolSentinelRecordFromObject(symbolObject);
   if (existing !== undefined) {
+    LOCAL_SYMBOL_RECORD_CACHE.set(symbol, existing);
     return existing;
   }
 
