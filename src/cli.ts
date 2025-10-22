@@ -88,13 +88,14 @@ function parseArgs(argv: string[]): ParsedArgs {
 
         const next = argv[i + 1];
 
-        if (next !== undefined && next !== "--" && !next.startsWith("--")) {
-          assertAllowedFlagValue(key, next, spec.allowedValues);
-          args[key] = next;
-          i += 1;
-        } else {
+        if (next === undefined || next === "--" || next.startsWith("--")) {
           args[key] = spec.defaultValue;
+          continue;
         }
+
+        assertAllowedFlagValue(key, next, spec.allowedValues);
+        args[key] = next;
+        i += 1;
       } else {
         let value: string | undefined;
         if (eq >= 0) {
