@@ -67,3 +67,106 @@ test(
     assert.equal(stableStringify(localSymbol), symbolSerialized);
   },
 );
+
+test(
+  "stableStringify reuses local symbol sentinel across serializations",
+  () => {
+    const symbol = Symbol("repeat");
+    const first = stableStringify(symbol);
+    const firstSentinel = JSON.parse(first);
+
+    assert.equal(typeof firstSentinel, "string");
+    assert.ok(firstSentinel.startsWith("__symbol__:"));
+
+    for (let index = 0; index < 5; index += 1) {
+      const serialized = stableStringify(symbol);
+      assert.equal(serialized, first);
+    }
+  },
+);
+
+test(
+  "stableStringify allows local symbol sentinel re-registration after GC",
+  async () => {
+    if (typeof WeakRef !== "function" || typeof FinalizationRegistry !== "function") {
+      return;
+    }
+
+    const originalFinalizationRegistry = FinalizationRegistry;
+    type RegisteredEntry = {
+      target: object;
+      heldValue: unknown;
+      token: unknown;
+    };
+    const registered: RegisteredEntry[] = [];
+    let registryInstance: TestFinalizationRegistry | null = null;
+
+    class TestFinalizationRegistry {
+      #callback: (heldValue: unknown) => void;
+
+      constructor(callback: (heldValue: unknown) => void) {
+        this.#callback = callback;
+        registryInstance = this;
+      }
+
+      register(target: object, heldValue: unknown, token?: unknown): void {
+        registered.push({ target, heldValue, token: token ?? null });
+      }
+
+      unregister(token: unknown): boolean {
+        let removed = false;
+        for (let index = registered.length - 1; index >= 0; index -= 1) {
+          if (registered[index]!.token === token) {
+            registered.splice(index, 1);
+            removed = true;
+          }
+        }
+        return removed;
+      }
+
+      cleanup(): void {
+        const entries = registered.splice(0, registered.length);
+        for (const entry of entries) {
+          this.#callback(entry.heldValue);
+        }
+      }
+    }
+
+    globalThis.FinalizationRegistry = TestFinalizationRegistry as unknown as typeof FinalizationRegistry;
+
+    const moduleUrl = new URL(
+      `../src/serialize.js?gc-test=${Date.now()}`,
+      import.meta.url,
+    ).href;
+    const module = await import(moduleUrl);
+
+    try {
+      const {
+        stableStringify: localStableStringify,
+        __peekLocalSymbolSentinelRecordForTest,
+      } = module as typeof import("../src/serialize.js");
+
+      const symbol = Symbol("gc-reuse");
+      const map = new Map([[symbol, "value"]]);
+      const firstSerialized = localStableStringify(map);
+
+      assert.equal(typeof firstSerialized, "string");
+      assert.ok(registryInstance !== null);
+      assert.ok(registered.length > 0);
+      assert.ok(__peekLocalSymbolSentinelRecordForTest(symbol) !== undefined);
+
+      registryInstance!.cleanup();
+
+      assert.equal(__peekLocalSymbolSentinelRecordForTest(symbol), undefined);
+
+      const secondMap = new Map([[symbol, "next"]]);
+      const secondSerialized = localStableStringify(secondMap);
+      const secondSentinel = JSON.parse(secondSerialized);
+
+      assert.equal(typeof secondSentinel, "string");
+      assert.ok(secondSentinel.startsWith("\u0000cat32:map:"));
+    } finally {
+      globalThis.FinalizationRegistry = originalFinalizationRegistry;
+    }
+  },
+);
