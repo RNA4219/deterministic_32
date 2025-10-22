@@ -77,6 +77,21 @@ const LOCAL_SYMBOL_IDENTIFIER_INDEX =
         })
       : undefined;
 
+const HAS_LOCAL_SYMBOL_FINALIZATION_SUPPORT =
+  typeof globalThis.WeakRef === "function" &&
+  typeof globalThis.FinalizationRegistry === "function";
+
+const LOCAL_SYMBOL_IDENTIFIER_INDEX: Set<string> | undefined =
+  HAS_LOCAL_SYMBOL_FINALIZATION_SUPPORT ? new Set<string>() : undefined;
+
+const LOCAL_SYMBOL_IDENTIFIER_FINALIZATION_REGISTRY:
+  | FinalizationRegistry<string>
+  | undefined = HAS_LOCAL_SYMBOL_FINALIZATION_SUPPORT
+  ? new FinalizationRegistry<string>((identifier) => {
+      LOCAL_SYMBOL_IDENTIFIER_INDEX?.delete(identifier);
+    })
+  : undefined;
+
 let nextLocalSymbolSentinelId = 0;
 
 function getLocalSymbolHolder(symbol: symbol): LocalSymbolHolder {
