@@ -123,6 +123,25 @@ const mapArgument = (argument, options = {}) => {
       0,
       -extension.length,
     );
+    if (!matchedPathExists) {
+      const testsRelativePath = path.join(
+        "tests",
+        `${withoutExtension}${extension}`,
+      );
+      const testsAbsolutePath = path.join(
+        projectRoot,
+        testsRelativePath,
+      );
+      if (fs.existsSync(testsAbsolutePath)) {
+        const mappedTestsPath = path.join(
+          projectRoot,
+          "dist",
+          "tests",
+          `${withoutExtension}${replacement}`,
+        );
+        return { value: mappedTestsPath, isTarget: true };
+      }
+    }
     const mapped = path.join(
       projectRoot,
       "dist",
