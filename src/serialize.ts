@@ -22,6 +22,16 @@ const HEX_DIGITS = "0123456789abcdef";
 const PROPERTY_KEY_SENTINEL_TYPE = "propertykey";
 const MAP_SENTINEL_TYPE = "map";
 
+const OBJECT_TO_STRING = Object.prototype.toString;
+
+function isBigIntObject(value: unknown): value is { valueOf(): bigint } {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    OBJECT_TO_STRING.call(value) === "[object BigInt]"
+  );
+}
+
 type SymbolObject = symbol & object;
 
 type LocalSymbolFinalizerHolder = {
@@ -69,6 +79,39 @@ function peekLocalSymbolSentinelRecord(
   return peekLocalSymbolSentinelRecordFromObject(symbolObject);
 }
 
+function registerLocalSymbolSentinelRecord(
+  symbolObject: SymbolObject,
+  record: LocalSymbolSentinelRecord,
+): void {
+  if (
+    LOCAL_SYMBOL_IDENTIFIER_INDEX !== undefined &&
+    LOCAL_SYMBOL_FINALIZER !== undefined
+  ) {
+    const ref = new WeakRef(symbolObject);
+    const holder: LocalSymbolFinalizerHolder = { ref };
+    LOCAL_SYMBOL_IDENTIFIER_INDEX.set(record.identifier, ref);
+    LOCAL_SYMBOL_FINALIZER.register(holder, record.identifier);
+    record.finalizerHolder = holder;
+  }
+
+  LOCAL_SYMBOL_SENTINEL_REGISTRY.set(symbolObject, record);
+}
+
+function createLocalSymbolSentinelRecord(
+  symbol: symbol,
+  symbolObject: SymbolObject,
+): LocalSymbolSentinelRecord {
+  const identifier = nextLocalSymbolSentinelId.toString(36);
+  nextLocalSymbolSentinelId += 1;
+
+  const description = symbol.description ?? "";
+  const sentinel = buildLocalSymbolSentinel(identifier, description);
+  const record: LocalSymbolSentinelRecord = { identifier, sentinel };
+
+  registerLocalSymbolSentinelRecord(symbolObject, record);
+  return record;
+}
+
 function getLocalSymbolSentinelRecord(
   symbol: symbol,
 ): LocalSymbolSentinelRecord {
@@ -78,26 +121,7 @@ function getLocalSymbolSentinelRecord(
     return existing;
   }
 
-  const identifier = nextLocalSymbolSentinelId.toString(36);
-  nextLocalSymbolSentinelId += 1;
-
-  const description = symbol.description ?? "";
-  const sentinel = buildLocalSymbolSentinel(identifier, description);
-  const record: LocalSymbolSentinelRecord = { identifier, sentinel };
-
-  if (
-    LOCAL_SYMBOL_IDENTIFIER_INDEX !== undefined &&
-    LOCAL_SYMBOL_FINALIZER !== undefined
-  ) {
-    const ref = new WeakRef(symbolObject);
-    const holder: LocalSymbolFinalizerHolder = { ref };
-    LOCAL_SYMBOL_IDENTIFIER_INDEX.set(identifier, ref);
-    LOCAL_SYMBOL_FINALIZER.register(holder, identifier);
-    record.finalizerHolder = holder;
-  }
-
-  LOCAL_SYMBOL_SENTINEL_REGISTRY.set(symbolObject, record);
-  return record;
+  return createLocalSymbolSentinelRecord(symbol, symbolObject);
 }
 
 function buildLocalSymbolSentinel(
@@ -255,8 +279,11 @@ function _stringify(v: unknown, stack: Set<unknown>): string {
   }
   if (t === "function") return String(v);
 
-  if (v instanceof Number || v instanceof Boolean || v instanceof BigInt) {
-    return _stringify(v.valueOf(), stack);
+  if (v instanceof Number || v instanceof Boolean || isBigIntObject(v)) {
+    return _stringify(
+      (v as Number | Boolean | { valueOf(): unknown }).valueOf(),
+      stack,
+    );
   }
 
   if (Array.isArray(v)) {
@@ -513,8 +540,14 @@ function mapEntryPropertyKey(
 }
 
 function mapBucketTypeTag(rawKey: unknown): string {
-  if (rawKey instanceof Number || rawKey instanceof Boolean || rawKey instanceof BigInt) {
-    return mapBucketTypeTag(rawKey.valueOf());
+  if (
+    rawKey instanceof Number ||
+    rawKey instanceof Boolean ||
+    isBigIntObject(rawKey)
+  ) {
+    return mapBucketTypeTag(
+      (rawKey as Number | Boolean | { valueOf(): unknown }).valueOf(),
+    );
   }
   if (typeof rawKey === "symbol") return "symbol";
   if (rawKey === null) return "null";
@@ -598,6 +631,9 @@ function normalizeStringLiteral(value: string): string {
     }
 
     if (needsNestedStringLiteralSentinelEscape(innerValue)) {
+      if (value.startsWith(STRING_LITERAL_SENTINEL_PREFIX.repeat(2))) {
+        return value;
+      }
       return `${STRING_LITERAL_SENTINEL_PREFIX}${value}`;
     }
 
@@ -612,7 +648,10 @@ function normalizeStringLiteral(value: string): string {
 }
 
 function needsNestedStringLiteralSentinelEscape(value: string): boolean {
-  return value.startsWith(DATE_SENTINEL_PREFIX);
+  if (needsStringLiteralSentinelEscape(value)) {
+    return true;
+  }
+  return value.startsWith(STRING_LITERAL_SENTINEL_PREFIX);
 }
 
 function hasArrayBufferLikeSentinelPrefix(value: string): boolean {
@@ -804,8 +843,16 @@ function toPropertyKeyString(
   revivedKey: unknown,
   serializedKey: string,
 ): string {
-  if (rawKey instanceof Number || rawKey instanceof Boolean || rawKey instanceof BigInt) {
-    return toPropertyKeyString(rawKey.valueOf(), revivedKey, serializedKey);
+  if (
+    rawKey instanceof Number ||
+    rawKey instanceof Boolean ||
+    isBigIntObject(rawKey)
+  ) {
+    return toPropertyKeyString(
+      (rawKey as Number | Boolean | { valueOf(): unknown }).valueOf(),
+      revivedKey,
+      serializedKey,
+    );
   }
   if (typeof rawKey === "symbol") {
     return toSymbolSentinel(rawKey as symbol);
