@@ -2,6 +2,7 @@
 import test from "node:test";
 import assert from "node:assert";
 import { Cat32 } from "../src/index.js";
+import { fnv1a32, toHex32 } from "../src/hash.js";
 import { escapeSentinelString, stableStringify, typeSentinel } from "../src/serialize.js";
 const dynamicImport = new Function("specifier", "return import(specifier);");
 const CLI_PATH = new URL("../src/cli.js", import.meta.url).pathname;
@@ -11,6 +12,39 @@ const CLI_LITERAL_KEY_EVAL_SCRIPT = [
     "process.argv = [process.argv[0], cliPath, '--', '--literal-key'];",
     "import(cliPath).catch((error) => { console.error(error); process.exit(1); });",
 ].join(" ");
+const SYMBOL_SENTINEL_PREFIX = "__symbol__:";
+const MAP_SENTINEL_PREFIX = "\u0000cat32:map:";
+const SENTINEL_SUFFIX = "\u0000";
+function decodeSymbolSentinel(value) {
+    const raw = value.startsWith("\"") && value.endsWith("\"")
+        ? JSON.parse(value)
+        : value;
+    assert.equal(typeof raw, "string");
+    const sentinel = raw;
+    assert.ok(sentinel.startsWith(SYMBOL_SENTINEL_PREFIX));
+    const payload = JSON.parse(sentinel.slice(SYMBOL_SENTINEL_PREFIX.length));
+    assert.ok(Array.isArray(payload));
+    return payload;
+}
+function decodeMapSentinel(serialized) {
+    const sentinel = JSON.parse(serialized);
+    assert.equal(typeof sentinel, "string");
+    assert.ok(sentinel.startsWith(MAP_SENTINEL_PREFIX) &&
+        sentinel.endsWith(SENTINEL_SUFFIX));
+    const payload = sentinel.slice(MAP_SENTINEL_PREFIX.length, -SENTINEL_SUFFIX.length);
+    return JSON.parse(payload);
+}
+function expectLocalSymbolSentinel(value, description) {
+    const payload = decodeSymbolSentinel(value);
+    assert.equal(payload[0], "local");
+    assert.equal(payload[payload.length - 1], description);
+}
+function expectGlobalSymbolSentinel(value, description) {
+    const payload = decodeSymbolSentinel(value);
+    assert.equal(payload.length, 2);
+    assert.equal(payload[0], "global");
+    assert.equal(payload[1], description);
+}
 test("package.json bin exposes deterministic-32 entry", async () => {
     const { readFile } = (await dynamicImport("node:fs/promises"));
     const packageJsonUrl = import.meta.url.includes("/dist/tests/")
@@ -52,7 +86,10 @@ test("direct dist import exposes stableStringify", async () => {
         assert.equal(typeof distModule.stableStringify, "function");
         return;
     }
-    const distModule = (await import("../dist/index.js"));
+    const sourceImportMetaUrl = import.meta.url.includes("/dist/tests/")
+        ? new URL("../../tests/categorizer.test.ts", import.meta.url)
+        : import.meta.url;
+    const distModule = (await import(new URL("../dist/index.js", sourceImportMetaUrl).href));
     assert.equal(typeof distModule.stableStringify, "function");
 });
 test("dist stableStringify matches JSON.stringify for string literals", async () => {
@@ -72,7 +109,7 @@ test("dist stableStringify preserves prefixed sentinel string literal content", 
     assert.equal(typeof distSerializeModule.stableStringify, "function");
     const distStableStringify = distSerializeModule.stableStringify;
     const prefixedLiteral = "__string__:" + typeSentinel("number", "NaN");
-    assert.equal(distStableStringify(prefixedLiteral), JSON.stringify(prefixedLiteral));
+    assert.equal(distStableStringify(prefixedLiteral), JSON.stringify(`__string__:${prefixedLiteral}`));
     assert.ok(distStableStringify(prefixedLiteral) !== distStableStringify(NaN));
 });
 test("stableStringify matches JSON.stringify for string literals", () => {
@@ -80,26 +117,100 @@ test("stableStringify matches JSON.stringify for string literals", () => {
 });
 test("stableStringify matches JSON.stringify for stringified sentinel string literals", () => {
     const sentinelStringLiteral = `__string__:${typeSentinel("number", "NaN")}`;
-    assert.equal(stableStringify(sentinelStringLiteral), JSON.stringify(sentinelStringLiteral));
+    assert.equal(stableStringify(sentinelStringLiteral), JSON.stringify(`__string__:${sentinelStringLiteral}`));
 });
 test("stableStringify preserves prefixed sentinel string literal content", () => {
     const value = "__string__:" + typeSentinel("number", "NaN");
-    assert.equal(stableStringify(value), JSON.stringify(value));
+    assert.equal(stableStringify(value), JSON.stringify(`__string__:${value}`));
 });
-test("stableStringify matches JSON.stringify for sentinel-like string literals", () => {
+test("global and local symbols remain distinguishable", () => {
+    const cat32 = new Cat32();
+    const globalSymbol = Symbol.for("id");
+    const localSymbol = Symbol("id");
+    const globalAssignment = cat32.assign(globalSymbol);
+    const localAssignment = cat32.assign(localSymbol);
+    assert.ok(globalAssignment.key !== localAssignment.key);
+    assert.ok(globalAssignment.hash !== localAssignment.hash);
+    const serializedMap = stableStringify(new Map([
+        [globalSymbol, "global"],
+        [localSymbol, "local"],
+    ]));
+    const parsedEntries = decodeMapSentinel(serializedMap);
+    const parsedMap = Object.fromEntries(parsedEntries.map(([key, serializedValue]) => [
+        key,
+        JSON.parse(serializedValue),
+    ]));
+    assert.equal(parsedMap['__symbol__:["global","id"]'], "global");
+    const localKey = Object.keys(parsedMap).find((key) => {
+        if (key.startsWith(SYMBOL_SENTINEL_PREFIX)) {
+            const payload = decodeSymbolSentinel(key);
+            return payload[0] === "local" && payload[payload.length - 1] === "id";
+        }
+        if (key.startsWith("\u0000cat32:map-entry-index:")) {
+            try {
+                const rawPayload = key.slice("\u0000cat32:map-entry-index:".length, -1);
+                const parsedPayload = JSON.parse(rawPayload);
+                if (Array.isArray(parsedPayload) &&
+                    typeof parsedPayload[1] === "string" &&
+                    parsedPayload[1].startsWith(SYMBOL_SENTINEL_PREFIX)) {
+                    const payload = decodeSymbolSentinel(parsedPayload[1]);
+                    return payload[0] === "local" && payload[payload.length - 1] === "id";
+                }
+            }
+            catch {
+                return false;
+            }
+        }
+        return false;
+    });
+    assert.ok(localKey);
+    assert.equal(parsedMap[localKey], "local");
+});
+test("Cat32 assign distinguishes maps and objects keyed by global vs local symbols", () => {
+    const cat32 = new Cat32();
+    const globalSymbol = Symbol.for("id");
+    const localSymbol = Symbol("id");
+    const mapGlobalAssignment = cat32.assign(new Map([[globalSymbol, "value"]]));
+    const mapLocalAssignment = cat32.assign(new Map([[localSymbol, "value"]]));
+    assert.ok(mapGlobalAssignment.key !== mapLocalAssignment.key);
+    assert.ok(mapGlobalAssignment.hash !== mapLocalAssignment.hash);
+    const objectWithGlobal = {
+        [globalSymbol]: "value",
+    };
+    const objectWithLocal = {
+        [localSymbol]: "value",
+    };
+    const objectGlobalAssignment = cat32.assign(objectWithGlobal);
+    const objectLocalAssignment = cat32.assign(objectWithLocal);
+    assert.ok(objectGlobalAssignment.key !== objectLocalAssignment.key);
+    assert.ok(objectGlobalAssignment.hash !== objectLocalAssignment.hash);
+});
+test("stableStringify escapes sentinel-like string literals", () => {
     const sentinelLike = "\u0000cat32:number:Infinity\u0000";
-    assert.equal(stableStringify(sentinelLike), JSON.stringify(sentinelLike));
+    assert.equal(stableStringify(sentinelLike), JSON.stringify(`__string__:${sentinelLike}`));
 });
-test("stableStringify distinguishes prefixed string literals from hole sentinels", () => {
+test("stableStringify distinguishes symbol keys from their string descriptions", () => {
+    const symbolKey = Symbol("id");
+    const objectWithSymbol = { [symbolKey]: 1 };
+    const objectWithString = { [String(symbolKey)]: 1 };
+    assert.ok(stableStringify(objectWithSymbol) !== stableStringify(objectWithString));
+});
+test("stableStringify escapes hole sentinels without colliding with sparse arrays", () => {
     const prefixedLiteral = `__string__:${typeSentinel("hole")}`;
     const sentinelLiteral = typeSentinel("hole");
+    const holeSentinelLiteral = typeSentinel("hole", "__hole__");
     const sparseArray = new Array(1);
     const prefixedResult = stableStringify([prefixedLiteral]);
     const sentinelResult = stableStringify([sentinelLiteral]);
+    const holeSentinelResult = stableStringify([holeSentinelLiteral]);
     const sparseResult = stableStringify(sparseArray);
+    assert.equal(prefixedResult, JSON.stringify([`__string__:${prefixedLiteral}`]));
+    assert.equal(sentinelResult, JSON.stringify([`__string__:${sentinelLiteral}`]));
     assert.ok(prefixedResult !== sentinelResult);
     assert.ok(prefixedResult !== sparseResult);
     assert.ok(sentinelResult !== sparseResult);
+    assert.ok(holeSentinelResult !== sparseResult);
+    assert.ok(holeSentinelResult !== prefixedResult);
 });
 test("stableStringify differentiates sentinel key from literal NaN key", () => {
     const sentinelKey = typeSentinel("number", "NaN");
@@ -120,12 +231,12 @@ test("Cat32 assign key matches JSON.stringify for string literals", () => {
 test("Cat32 assign key preserves prefixed sentinel string literal content", () => {
     const value = "__string__:" + typeSentinel("number", "NaN");
     const assignment = new Cat32().assign(value);
-    assert.equal(assignment.key, JSON.stringify(value));
+    assert.equal(assignment.key, JSON.stringify(`__string__:${value}`));
 });
-test("Cat32 assign key matches JSON.stringify for sentinel-like string literals", () => {
+test("Cat32 assign escapes sentinel-like string literal keys", () => {
     const sentinelLike = "\u0000cat32:number:Infinity\u0000";
     const assignment = new Cat32().assign(sentinelLike);
-    assert.equal(assignment.key, JSON.stringify(sentinelLike));
+    assert.equal(assignment.key, JSON.stringify(`__string__:${sentinelLike}`));
 });
 test("Cat32 assign differentiates sentinel key from literal NaN key", () => {
     const sentinelKey = typeSentinel("number", "NaN");
@@ -143,20 +254,26 @@ test("Cat32 assign keeps literal sentinel-like keys distinct from NaN", () => {
     assert.ok(sentinelAssignment.key !== literalAssignment.key);
     assert.ok(sentinelAssignment.hash !== literalAssignment.hash);
 });
-test("Cat32 assign keeps prefixed string literals distinct from hole sentinels", () => {
+test("Cat32 assign keeps hole sentinel literals distinct from sparse array holes", () => {
     const categorizer = new Cat32();
     const prefixedLiteral = `__string__:${typeSentinel("hole")}`;
     const sentinelLiteral = typeSentinel("hole");
+    const holeSentinelLiteral = typeSentinel("hole", "__hole__");
     const sparseArray = new Array(1);
     const prefixedAssignment = categorizer.assign([prefixedLiteral]);
     const sentinelAssignment = categorizer.assign([sentinelLiteral]);
+    const holeSentinelAssignment = categorizer.assign([holeSentinelLiteral]);
     const sparseAssignment = categorizer.assign(sparseArray);
+    assert.equal(prefixedAssignment.key, JSON.stringify([`__string__:${prefixedLiteral}`]));
+    assert.equal(sentinelAssignment.key, JSON.stringify([`__string__:${sentinelLiteral}`]));
     assert.ok(prefixedAssignment.key !== sentinelAssignment.key);
-    assert.ok(prefixedAssignment.key !== sparseAssignment.key);
-    assert.ok(sentinelAssignment.key !== sparseAssignment.key);
     assert.ok(prefixedAssignment.hash !== sentinelAssignment.hash);
+    assert.ok(prefixedAssignment.key !== sparseAssignment.key);
     assert.ok(prefixedAssignment.hash !== sparseAssignment.hash);
-    assert.ok(sentinelAssignment.hash !== sparseAssignment.hash);
+    assert.ok(holeSentinelAssignment.key !== sparseAssignment.key);
+    assert.ok(holeSentinelAssignment.hash !== sparseAssignment.hash);
+    assert.ok(holeSentinelAssignment.key !== prefixedAssignment.key);
+    assert.ok(holeSentinelAssignment.hash !== prefixedAssignment.hash);
 });
 test("Cat32 assign treats prefixed literal strings as distinct from NaN", () => {
     const categorizer = new Cat32();
@@ -165,6 +282,8 @@ test("Cat32 assign treats prefixed literal strings as distinct from NaN", () => 
     const sentinelAssignment = categorizer.assign(typeSentinel("number", "NaN"));
     assert.ok(literalAssignment.key !== nanAssignment.key);
     assert.ok(literalAssignment.hash !== nanAssignment.hash);
+    assert.equal(literalAssignment.key, JSON.stringify(`__string__:__string__:\u0000cat32:number:NaN\u0000`));
+    assert.equal(sentinelAssignment.key, JSON.stringify(`__string__:\u0000cat32:number:NaN\u0000`));
     assert.ok(literalAssignment.key !== sentinelAssignment.key);
     assert.ok(literalAssignment.hash !== sentinelAssignment.hash);
 });
@@ -197,25 +316,36 @@ test("dist stableStringify and Cat32 assign keep hole sentinel cases distinct", 
     const DistCat32 = distModule.Cat32;
     const prefixedLiteral = `__string__:${typeSentinel("hole")}`;
     const sentinelLiteral = typeSentinel("hole");
+    const holeSentinelLiteral = typeSentinel("hole", "__hole__");
     const sparseArray = new Array(1);
     const prefixedKey = distStableStringify([prefixedLiteral]);
     const sentinelKey = distStableStringify([sentinelLiteral]);
+    const holeSentinelKey = distStableStringify([holeSentinelLiteral]);
     const sparseKey = distStableStringify(sparseArray);
+    assert.equal(prefixedKey, JSON.stringify([`__string__:${prefixedLiteral}`]));
+    assert.equal(sentinelKey, JSON.stringify([`__string__:${sentinelLiteral}`]));
     assert.ok(prefixedKey !== sentinelKey);
     assert.ok(prefixedKey !== sparseKey);
     assert.ok(sentinelKey !== sparseKey);
+    assert.ok(holeSentinelKey !== sparseKey);
+    assert.ok(holeSentinelKey !== prefixedKey);
     const categorizer = new DistCat32();
     const prefixedAssignment = categorizer.assign([prefixedLiteral]);
     const sentinelAssignment = categorizer.assign([sentinelLiteral]);
+    const holeSentinelAssignment = categorizer.assign([holeSentinelLiteral]);
     const sparseAssignment = categorizer.assign(sparseArray);
+    assert.equal(prefixedAssignment.key, JSON.stringify([`__string__:${prefixedLiteral}`]));
+    assert.equal(sentinelAssignment.key, JSON.stringify([`__string__:${sentinelLiteral}`]));
     assert.ok(prefixedAssignment.key !== sentinelAssignment.key);
-    assert.ok(prefixedAssignment.key !== sparseAssignment.key);
-    assert.ok(sentinelAssignment.key !== sparseAssignment.key);
     assert.ok(prefixedAssignment.hash !== sentinelAssignment.hash);
+    assert.ok(prefixedAssignment.key !== sparseAssignment.key);
     assert.ok(prefixedAssignment.hash !== sparseAssignment.hash);
-    assert.ok(sentinelAssignment.hash !== sparseAssignment.hash);
+    assert.ok(holeSentinelAssignment.key !== sparseAssignment.key);
+    assert.ok(holeSentinelAssignment.hash !== sparseAssignment.hash);
+    assert.ok(holeSentinelAssignment.key !== prefixedAssignment.key);
+    assert.ok(holeSentinelAssignment.hash !== prefixedAssignment.hash);
 });
-test("dist Cat32 assign normalizes Map keys by string representation", async () => {
+test("dist Cat32 assign distinguishes Map keys when String(key) collides", async () => {
     const sourceImportMetaUrl = import.meta.url.includes("/dist/tests/")
         ? new URL("../../tests/categorizer.test.ts", import.meta.url)
         : import.meta.url;
@@ -229,23 +359,100 @@ test("dist Cat32 assign normalizes Map keys by string representation", async () 
         [String(obj), "string"],
     ]));
     const stringOnlyAssignment = instance.assign(new Map([[String(obj), "string"]]));
-    assert.equal(mixedAssignment.hash, stringOnlyAssignment.hash);
-    assert.equal(mixedAssignment.key, stringOnlyAssignment.key);
+    assert.ok(mixedAssignment.hash !== stringOnlyAssignment.hash);
+    assert.ok(mixedAssignment.key !== stringOnlyAssignment.key);
 });
 test("stableStringify maps simple entries without throwing", () => {
     const map = new Map([["k", 1]]);
     const result = stableStringify(map);
-    assert.equal(result, "{\"k\":1}");
+    assert.equal(JSON.stringify(decodeMapSentinel(result)), JSON.stringify([["k", stableStringify(1)]]));
 });
 test("Cat32 assign handles Map input deterministically", () => {
     const instance = new Cat32();
-    const assignment = instance.assign(new Map([["k", 1]]));
-    assert.equal(assignment.index, 23);
-    assert.equal(assignment.label, "X");
-    assert.equal(assignment.hash, "4f77d9b7");
-    assert.equal(assignment.key, "{\"k\":1}");
+    const map = new Map([["k", 1]]);
+    const assignment = instance.assign(map);
+    const expectedKey = stableStringify(map);
+    const hashValue = fnv1a32(expectedKey);
+    const expectedIndex = hashValue & 31;
+    const expectedLabel = "ABCDEFGHIJKLMNOPQRSTUVWXYZ012345".charAt(expectedIndex);
+    assert.equal(assignment.key, expectedKey);
+    assert.equal(assignment.hash, toHex32(hashValue));
+    assert.equal(assignment.index, expectedIndex);
+    assert.equal(assignment.label, expectedLabel);
 });
-test("Cat32 assign normalizes Map keys by string representation", () => {
+test("Cat32 assign retains distinct Map entries for identical property keys", () => {
+    const c = new Cat32();
+    const first = c.assign(new Map([
+        [{}, "a"],
+        [{}, "b"],
+    ]));
+    const second = c.assign(new Map([[{}, "a"]]));
+    assert.ok(first.key !== second.key);
+    assert.ok(first.hash !== second.hash);
+});
+function createNonEnumerableToStringObject(literal) {
+    const object = {};
+    Object.defineProperty(object, "toString", {
+        value() {
+            return literal;
+        },
+        enumerable: false,
+    });
+    return object;
+}
+function customObjectReturning(literal) {
+    return createNonEnumerableToStringObject(literal);
+}
+test("stableStringify differentiates Map entries from sentinel-style literal strings", () => {
+    const baseLiteral = "__string__:foo";
+    const suffix = "__string__:\u0000cat32:map-entry-index:1\u0000";
+    const duplicateLike = new Map([
+        [createNonEnumerableToStringObject(baseLiteral), "a"],
+        [createNonEnumerableToStringObject(baseLiteral), "b"],
+    ]);
+    const sentinelLike = new Map([
+        [createNonEnumerableToStringObject(baseLiteral), "a"],
+        [
+            createNonEnumerableToStringObject(`${baseLiteral}${suffix}`),
+            "b",
+        ],
+    ]);
+    assert.ok(stableStringify(duplicateLike) !== stableStringify(sentinelLike));
+});
+test("Cat32 assign differentiates Map entries from sentinel-style literal strings", () => {
+    const baseLiteral = "__string__:foo";
+    const suffix = "__string__:\u0000cat32:map-entry-index:1\u0000";
+    const duplicateLike = new Map([
+        [createNonEnumerableToStringObject(baseLiteral), "a"],
+        [createNonEnumerableToStringObject(baseLiteral), "b"],
+    ]);
+    const sentinelLike = new Map([
+        [createNonEnumerableToStringObject(baseLiteral), "a"],
+        [
+            createNonEnumerableToStringObject(`${baseLiteral}${suffix}`),
+            "b",
+        ],
+    ]);
+    const categorizer = new Cat32();
+    const duplicateAssignment = categorizer.assign(duplicateLike);
+    const sentinelAssignment = categorizer.assign(sentinelLike);
+    assert.ok(duplicateAssignment.key !== sentinelAssignment.key);
+    assert.ok(duplicateAssignment.hash !== sentinelAssignment.hash);
+});
+test("Map serialization differentiates duplicate-like object entries", () => {
+    const withDuplicates = new Map([
+        [{}, "a"],
+        [{}, "b"],
+    ]);
+    const singleEntry = new Map([[{}, "a"]]);
+    assert.ok(stableStringify(withDuplicates) !== stableStringify(singleEntry));
+    const cat = new Cat32();
+    const withDuplicatesAssignment = cat.assign(withDuplicates);
+    const singleEntryAssignment = cat.assign(singleEntry);
+    assert.ok(withDuplicatesAssignment.key !== singleEntryAssignment.key);
+    assert.ok(withDuplicatesAssignment.hash !== singleEntryAssignment.hash);
+});
+test("Cat32 assign distinguishes Map keys when String(key) collides", () => {
     const obj = { foo: 1 };
     const instance = new Cat32();
     const mixedAssignment = instance.assign(new Map([
@@ -253,19 +460,134 @@ test("Cat32 assign normalizes Map keys by string representation", () => {
         [String(obj), "string"],
     ]));
     const stringOnlyAssignment = instance.assign(new Map([[String(obj), "string"]]));
-    assert.equal(mixedAssignment.hash, stringOnlyAssignment.hash);
-    assert.equal(mixedAssignment.key, stringOnlyAssignment.key);
+    assert.ok(mixedAssignment.hash !== stringOnlyAssignment.hash);
+    assert.ok(mixedAssignment.key !== stringOnlyAssignment.key);
 });
-test("stableStringify aligns Map object keys with object literals", () => {
+test("stableStringify and Cat32 assign distinguish Map array key collisions", () => {
+    const mapWithArrayKey = new Map([
+        [[1, 2], "array"],
+        ["1,2", "string"],
+    ]);
+    const mapWithStringKey = new Map([["1,2", "string"]]);
+    assert.ok(stableStringify(mapWithArrayKey) !==
+        stableStringify(mapWithStringKey));
+    const cat = new Cat32();
+    const arrayAssignment = cat.assign(mapWithArrayKey);
+    const stringAssignment = cat.assign(mapWithStringKey);
+    assert.ok(arrayAssignment.key !== stringAssignment.key);
+});
+test("stableStringify and Cat32 assign distinguish Map toString collisions", () => {
+    const mapWithCustomObject = new Map([
+        [customObjectReturning("1,2"), "array"],
+        ["1,2", "string"],
+    ]);
+    const mapWithStringKey = new Map([["1,2", "string"]]);
+    assert.ok(stableStringify(mapWithCustomObject) !==
+        stableStringify(mapWithStringKey));
+    const cat = new Cat32();
+    const customObjectAssignment = cat.assign(mapWithCustomObject);
+    const stringAssignment = cat.assign(mapWithStringKey);
+    assert.ok(customObjectAssignment.key !== stringAssignment.key);
+});
+test("Map null key remains distinct from string 'null' key", () => {
+    const c = new Cat32();
+    const mapWithNullKey = new Map([[null, "a"]]);
+    const mapWithStringKey = new Map([["null", "a"]]);
+    const nullAssignment = c.assign(mapWithNullKey);
+    const stringAssignment = c.assign(mapWithStringKey);
+    assert.ok(nullAssignment.key !== stringAssignment.key, 'Cat32 canonical key should differ for null and "null" Map keys');
+    assert.ok(nullAssignment.hash !== stringAssignment.hash, 'Cat32 hash should differ for null and "null" Map keys');
+    const nullSerialized = stableStringify(mapWithNullKey);
+    const stringSerialized = stableStringify(mapWithStringKey);
+    assert.ok(nullSerialized !== stringSerialized, 'stableStringify should distinguish null and "null" Map keys');
+});
+test("Cat32 assign differentiates Map object keys from sentinel-style string keys", () => {
+    const cat = new Cat32();
+    const objectKeyAssignment = cat.assign(new Map([
+        [{}, "a"],
+        [{}, "b"],
+    ]));
+    const stringKeyAssignment = cat.assign(new Map([
+        ["[object Object]", "a"],
+        ["[object Object]\u0000cat32:map-entry-index:1\u0000", "b"],
+    ]));
+    assert.ok(objectKeyAssignment.key !== stringKeyAssignment.key);
+    assert.ok(objectKeyAssignment.hash !== stringKeyAssignment.hash);
+});
+test("Cat32 distinguishes Map symbol keys from string descriptions", () => {
+    const symbolKey = Symbol("id");
+    const cat = new Cat32();
+    const symbolMapAssignment = cat.assign(new Map([[symbolKey, 1]]));
+    const stringMapAssignment = cat.assign(new Map([[String(symbolKey), 1]]));
+    assert.ok(stableStringify(new Map([[symbolKey, 1]])) !==
+        stableStringify(new Map([[String(symbolKey), 1]])));
+    assert.ok(symbolMapAssignment.key !== stringMapAssignment.key);
+    assert.ok(symbolMapAssignment.hash !== stringMapAssignment.hash);
+});
+test("stableStringify and Cat32 assign distinguish duplicate symbol sentinel collisions", () => {
+    const left = Symbol("dup");
+    const right = Symbol("dup");
+    const original = new Map([
+        [left, "left"],
+        [right, "right"],
+    ]);
+    const swapped = new Map([
+        [left, "right"],
+        [right, "left"],
+    ]);
+    const originalStable = stableStringify(original);
+    const swappedStable = stableStringify(swapped);
+    assert.ok(originalStable !== swappedStable);
+    const cat = new Cat32();
+    const originalAssignment = cat.assign(original);
+    const swappedAssignment = cat.assign(swapped);
+    console.log(JSON.stringify({
+        originalKey: originalAssignment.key,
+        swappedKey: swappedAssignment.key,
+        originalStable,
+        swappedStable,
+    }, null, 2));
+    assert.ok(originalAssignment.key !== swappedAssignment.key);
+});
+test("stableStringify distinguishes Map object keys from plain object keys", () => {
     const obj = { foo: 1 };
     const mapKey = stableStringify(new Map([[obj, "value"]]));
     const objectKey = stableStringify({ [String(obj)]: "value" });
-    assert.equal(mapKey, objectKey);
+    assert.ok(mapKey !== objectKey);
     const cat = new Cat32();
     const mapAssignment = cat.assign(new Map([[obj, "value"]]));
     const objectAssignment = cat.assign({ [String(obj)]: "value" });
-    assert.equal(mapAssignment.key, objectAssignment.key);
-    assert.equal(mapAssignment.hash, objectAssignment.hash);
+    assert.ok(mapAssignment.key !== objectAssignment.key);
+    assert.ok(mapAssignment.hash !== objectAssignment.hash);
+});
+test("Map serialization preserves entries when String(key) collisions occur", () => {
+    const keyA = { id: 1 };
+    const keyB = { id: 2 };
+    const scenarios = [
+        {
+            map: new Map([
+                [1, "number"],
+                ["1", "string"],
+            ]),
+            comparator: new Map([["1", "string"]]),
+        },
+        {
+            map: new Map([
+                [keyA, "a"],
+                [keyB, "b"],
+            ]),
+            comparator: new Map([[keyA, "a"]]),
+        },
+    ];
+    for (const { map, comparator } of scenarios) {
+        const serialized = stableStringify(map);
+        const baseline = stableStringify(comparator);
+        assert.ok(serialized !== baseline);
+        const cat = new Cat32();
+        const mapAssignment = cat.assign(map);
+        const baselineAssignment = cat.assign(comparator);
+        assert.ok(mapAssignment.key !== baselineAssignment.key);
+    }
 });
 test("tsc succeeds without duplicate identifier errors", async () => {
     const sourceImportMetaUrl = import.meta.url.includes("/dist/tests/")
@@ -357,25 +679,27 @@ test("Cat32 normalizes Map keys with special numeric values", () => {
     const cat = new Cat32();
     const mapNaN = cat.assign(new Map([[Number.NaN, "v"]]));
     const objectNaN = cat.assign({ NaN: "v" });
-    assert.equal(mapNaN.key, objectNaN.key);
-    assert.equal(mapNaN.hash, objectNaN.hash);
+    assert.ok(mapNaN.key !== objectNaN.key);
+    assert.ok(mapNaN.hash !== objectNaN.hash);
+    assert.ok(mapNaN.key.includes("\\u0000cat32:propertykey:"), "Map NaN key should carry a property key sentinel");
     const sentinelNaNKey = typeSentinel("number", "NaN");
     const objectNaNSentinel = cat.assign(Object.fromEntries([[sentinelNaNKey, "v"]]));
     assert.ok(mapNaN.key !== objectNaNSentinel.key);
     assert.ok(mapNaN.hash !== objectNaNSentinel.hash);
     const mapInfinity = cat.assign(new Map([[Infinity, "v"]]));
     const objectInfinity = cat.assign({ Infinity: "v" });
-    assert.equal(mapInfinity.key, objectInfinity.key);
-    assert.equal(mapInfinity.hash, objectInfinity.hash);
+    assert.ok(mapInfinity.key !== objectInfinity.key);
+    assert.ok(mapInfinity.hash !== objectInfinity.hash);
+    assert.ok(mapInfinity.key.includes("\\u0000cat32:propertykey:"), "Map Infinity key should carry a property key sentinel");
     const sentinelInfinityKey = typeSentinel("number", "Infinity");
     const objectInfinitySentinel = cat.assign(Object.fromEntries([[sentinelInfinityKey, "v"]]));
     assert.ok(mapInfinity.key !== objectInfinitySentinel.key);
     assert.ok(mapInfinity.hash !== objectInfinitySentinel.hash);
     const mapBigInt = cat.assign(new Map([[1n, "v"]]));
-    const bigIntObjectKey = String(1n);
-    const objectBigInt = cat.assign({ [bigIntObjectKey]: "v" });
-    assert.equal(mapBigInt.key, objectBigInt.key);
-    assert.equal(mapBigInt.hash, objectBigInt.hash);
+    const objectBigInt = cat.assign({ [String(1n)]: "v" });
+    assert.ok(mapBigInt.key !== objectBigInt.key);
+    assert.ok(mapBigInt.hash !== objectBigInt.hash);
+    assert.ok(mapBigInt.key.includes("\\u0000cat32:propertykey:"), "Map bigint key should carry a property key sentinel");
     const sentinelBigIntKey = typeSentinel("bigint", "1");
     const objectBigIntSentinel = cat.assign(Object.fromEntries([[sentinelBigIntKey, "v"]]));
     assert.ok(mapBigInt.key !== objectBigIntSentinel.key);
@@ -404,23 +728,46 @@ test("Cat32 treats enumerable Symbol keys consistently between objects and maps"
     assert.ok(objectWithSymbol.key !== emptyObject.key);
     assert.ok(objectWithSymbol.hash !== emptyObject.hash);
     const mapWithSymbol = cat.assign(new Map([[symbolKey, "value"]]));
-    assert.equal(objectWithSymbol.key, mapWithSymbol.key);
-    assert.equal(objectWithSymbol.hash, mapWithSymbol.hash);
+    assert.ok(objectWithSymbol.key !== mapWithSymbol.key);
+    assert.ok(objectWithSymbol.hash !== mapWithSymbol.hash);
 });
-test("Cat32 serializes Maps with distinct Symbols sharing descriptions", () => {
+test("Cat32 assigns Maps with distinct Symbols sharing descriptions uniquely", () => {
     const cat = new Cat32();
     const symbolA = Symbol("duplicate");
     const symbolB = Symbol("duplicate");
-    const mapWithDuplicateSymbols = cat.assign(new Map([
+    const mapWithDuplicateSymbols = new Map([
         [symbolA, "first"],
         [symbolB, "second"],
-    ]));
-    const objectWithDuplicateSymbols = cat.assign({
+    ]);
+    const objectWithDuplicateSymbols = {
         [symbolA]: "first",
         [symbolB]: "second",
-    });
-    assert.equal(mapWithDuplicateSymbols.key, objectWithDuplicateSymbols.key);
-    assert.equal(mapWithDuplicateSymbols.hash, objectWithDuplicateSymbols.hash);
+    };
+    const mapAssignment = cat.assign(mapWithDuplicateSymbols);
+    const objectAssignment = cat.assign(objectWithDuplicateSymbols);
+    assert.ok(mapAssignment.key !== objectAssignment.key);
+    assert.ok(mapAssignment.hash !== objectAssignment.hash);
+    assert.equal(mapAssignment.key, stableStringify(mapWithDuplicateSymbols));
+    assert.equal(objectAssignment.key, stableStringify(objectWithDuplicateSymbols));
+});
+test("stableStringify distinguishes swapped Map values for duplicate Symbol descriptions", () => {
+    const cat = new Cat32();
+    const left = Symbol("duplicate");
+    const right = Symbol("duplicate");
+    const original = new Map([
+        [left, "left"],
+        [right, "right"],
+    ]);
+    const swapped = new Map([
+        [left, "right"],
+        [right, "left"],
+    ]);
+    const originalSerialized = stableStringify(original);
+    const swappedSerialized = stableStringify(swapped);
+    assert.ok(originalSerialized !== swappedSerialized);
+    const originalAssignment = cat.assign(original);
+    const swappedAssignment = cat.assign(swapped);
+    assert.ok(originalAssignment.key !== swappedAssignment.key);
 });
 test("dist entry point exports Cat32", async () => {
     const sourceImportMetaUrl = import.meta.url.includes("/dist/tests/")
@@ -429,7 +776,7 @@ test("dist entry point exports Cat32", async () => {
     const distModule = (await import(new URL("../dist/index.js", sourceImportMetaUrl)));
     assert.equal(typeof distModule.Cat32, "function");
 });
-test("dist index and cli modules are importable", async () => {
+test("dist index module loads and cli help lists nfkd normalization", async () => {
     const sourceImportMetaUrl = import.meta.url.includes("/dist/tests/")
         ? new URL("../../tests/categorizer.test.ts", import.meta.url)
         : import.meta.url;
@@ -444,7 +791,7 @@ test("dist index and cli modules are importable", async () => {
     const captured = [];
     try {
         const distCliPath = new URL("../dist/cli.js", sourceImportMetaUrl).pathname;
-        process.argv = [originalArgv[0], distCliPath, "__cat32_test_key__"];
+        process.argv = [originalArgv[0], distCliPath, "--help"];
         stdin.isTTY = true;
         process.exit = (() => undefined);
         process.stdout.write = ((chunk) => {
@@ -463,7 +810,28 @@ test("dist index and cli modules are importable", async () => {
         process.exit = originalExit;
         process.stdout.write = originalStdoutWrite;
     }
-    assert.ok(captured.some((chunk) => chunk.includes("index")));
+    const helpOutput = captured.join("");
+    assert.ok(helpOutput.includes("none|nfc|nfd|nfkc|nfkd"), "dist CLI help should list nfkd normalization");
+});
+test("dist Cat32 accepts nfkd normalization with saltns encoding", async () => {
+    const sourceImportMetaUrl = import.meta.url.includes("/dist/tests/")
+        ? new URL("../../tests/categorizer.test.ts", import.meta.url)
+        : import.meta.url;
+    const [distCategorizer, distHash] = await Promise.all([
+        import(new URL("../dist/categorizer.js", sourceImportMetaUrl)),
+        import(new URL("../dist/hash.js", sourceImportMetaUrl)),
+    ]);
+    const cat = new distCategorizer.Cat32({
+        salt: "pepper",
+        namespace: "ns",
+        normalize: "nfkd",
+    });
+    const assignment = cat.assign("résumé");
+    const expectedKey = JSON.stringify("résumé").normalize("NFKD");
+    assert.equal(assignment.key, expectedKey);
+    const saltnsEncoding = `|saltns:${JSON.stringify(["pepper", "ns"])}`;
+    const expectedHash = distHash.toHex32(distHash.fnv1a32(`${expectedKey}${saltnsEncoding}`));
+    assert.equal(assignment.hash, expectedHash);
 });
 test("CLI treats values after double dash as literal key", async () => {
     const { spawn } = (await dynamicImport("node:child_process"));
@@ -581,9 +949,9 @@ test("cat32 binary accepts flag values separated by whitespace", async () => {
     assert.equal(parsed.hash, expected.hash);
     assert.equal(parsed.key, expected.key);
 });
-test("cat32 binary outputs compact JSON when --json is followed by positional input", async () => {
+test("cat32 binary rejects unsupported --json positional value", async () => {
     const { spawn } = (await dynamicImport("node:child_process"));
-    const child = spawn(process.argv[0], [CLI_BIN_PATH, "--json", "foo"], {
+    const child = spawn(process.argv[0], [CLI_BIN_PATH, "--json", "invalid"], {
         stdio: ["pipe", "pipe", "pipe"],
     });
     child.stdin.end();
@@ -600,14 +968,9 @@ test("cat32 binary outputs compact JSON when --json is followed by positional in
     const exitCode = await new Promise((resolve) => {
         child.on("close", (code) => resolve(code));
     });
-    assert.equal(exitCode, 0, `cat32 failed: exit code ${exitCode}\nstdout:\n${stdout}\nstderr:\n${stderr}`);
-    assert.ok(stdout.endsWith("\n"));
-    const body = stdout.slice(0, -1);
-    const parsed = JSON.parse(body);
-    const expected = new Cat32().assign("foo");
-    assert.equal(parsed.hash, expected.hash);
-    assert.equal(parsed.key, expected.key);
-    assert.equal(body, JSON.stringify(parsed));
+    assert.equal(stdout, "");
+    assert.equal(exitCode, 2);
+    assert.ok(stderr.includes('RangeError: unsupported --json value "invalid"'), `stderr did not include unsupported --json value message: ${stderr}`);
 });
 test("cat32 binary exits with code 2 for unsupported --json= value", async () => {
     const { spawn } = (await dynamicImport("node:child_process"));
@@ -767,6 +1130,36 @@ test("deterministic mapping for object key order", () => {
     assert.equal(a1.label, a2.label);
     assert.equal(a1.hash, a2.hash);
 });
+test("Cat32 salt namespace options avoid literal collision", () => {
+    const literal = new Cat32({ salt: "foo|ns:bar" }).assign("value");
+    const namespaced = new Cat32({ salt: "foo", namespace: "bar" }).assign("value");
+    assert.ok(literal.hash !== namespaced.hash);
+});
+test("salt/namespace combinations yield distinct canonical key/hash pairs", () => {
+    const input = { value: "payload" };
+    const baseCanonicalKey = new Cat32().assign(input).key;
+    const combinations = [
+        { name: "default", options: {} },
+        { name: "namespace empty", options: { namespace: "" } },
+        { name: "salt only", options: { salt: "salt-value" } },
+        { name: "salt with empty namespace", options: { salt: "salt-value", namespace: "" } },
+        { name: "namespace provided", options: { namespace: "namespace-value" } },
+        { name: "salt and namespace provided", options: { salt: "salt-value", namespace: "namespace-value" } },
+    ];
+    const seenPairs = new Map();
+    const seenHashes = new Map();
+    for (const { name, options } of combinations) {
+        const assignment = new Cat32(options).assign(input);
+        assert.equal(assignment.key, baseCanonicalKey);
+        const pair = `${assignment.key}|${assignment.hash}`;
+        const previousPair = seenPairs.get(pair);
+        assert.equal(previousPair, undefined, `combination "${name}" reuses canonical key/hash from "${previousPair}"`);
+        seenPairs.set(pair, name);
+        const previousHash = seenHashes.get(assignment.hash);
+        assert.equal(previousHash, undefined, `combination "${name}" reuses hash from "${previousHash}"`);
+        seenHashes.set(assignment.hash, name);
+    }
+});
 test("canonical key encodes undefined sentinel", () => {
     const c = new Cat32();
     const assignment = c.assign({ value: undefined });
@@ -805,21 +1198,29 @@ test("canonical key matches stableStringify for basic primitives", () => {
     assert.equal(c.assign(nanValue).key, stableStringify(nanValue));
     assert.equal(c.assign(symbolValue).key, stableStringify(symbolValue));
 });
-test("functions and symbols serialize to bare strings", () => {
+test("functions serialize to strings and symbols use canonical sentinels", () => {
     const fn = function foo() { };
-    const sym = Symbol("x");
+    const localSymbol = Symbol("x");
+    const globalSymbol = Symbol.for("x");
     assert.equal(stableStringify(fn), String(fn));
-    assert.equal(stableStringify(sym), String(sym));
+    const localSerialized = stableStringify(localSymbol);
+    expectLocalSymbolSentinel(localSerialized, "x");
+    const globalSerialized = stableStringify(globalSymbol);
+    expectGlobalSymbolSentinel(globalSerialized, "x");
     const c = new Cat32();
     assert.equal(c.assign(fn).key, String(fn));
-    assert.equal(c.assign(sym).key, String(sym));
+    assert.equal(c.assign(localSymbol).key, localSerialized);
+    assert.equal(c.assign(globalSymbol).key, globalSerialized);
 });
-test("string sentinel matches date value", () => {
+test("string sentinel literal is distinct from date value", () => {
     const c = new Cat32();
     const iso = "2024-01-02T03:04:05.000Z";
-    const sentinelAssignment = c.assign(`__date__:${iso}`);
+    const literal = `__date__:${iso}`;
+    const sentinelAssignment = c.assign(literal);
     const dateAssignment = c.assign(new Date(iso));
-    assert.equal(sentinelAssignment.key, dateAssignment.key);
+    assert.ok(sentinelAssignment.key !== dateAssignment.key);
+    assert.equal(sentinelAssignment.key, JSON.stringify(`__string__:${literal}`));
+    assert.equal(dateAssignment.key, JSON.stringify(`__date__:${iso}`));
 });
 test("deterministic mapping for bigint values", () => {
     const c = new Cat32({ salt: "s", namespace: "ns" });
@@ -892,8 +1293,21 @@ test("normalization NFKC merges fullwidth", () => {
     const y = c.assign("A");
     assert.equal(x.index, y.index);
 });
+test("normalization NFD merges canonical equivalents", () => {
+    const c = new Cat32({ normalize: "nfd" });
+    const composed = c.assign("é");
+    const decomposed = c.assign("e\u0301");
+    assert.equal(composed.index, decomposed.index);
+    assert.equal(composed.key, decomposed.key);
+});
+test("normalization NFKD merges compatibility characters", () => {
+    const c = new Cat32({ normalize: "nfkd" });
+    const x = c.assign("Ａ"); // fullwidth A
+    const y = c.assign("A");
+    assert.equal(x.index, y.index);
+});
 test("unsupported normalization option throws", () => {
-    assert.throws(() => new Cat32({ normalize: "nfkd" }), (error) => error instanceof RangeError);
+    assert.throws(() => new Cat32({ normalize: "unsupported" }), (error) => error instanceof RangeError);
 });
 test("bigint values serialize deterministically", () => {
     const c = new Cat32({ salt: "s", namespace: "ns" });
@@ -917,8 +1331,8 @@ test("NaN serialized distinctly from null", () => {
     assert.equal(nanAssignment.key === nullAssignment.key, false);
     assert.equal(nanAssignment.hash === nullAssignment.hash, false);
 });
-test("stableStringify leaves sentinel-like strings untouched", () => {
-    assert.equal(stableStringify("__undefined__"), JSON.stringify("__undefined__"));
+test("stableStringify escapes undefined sentinel string literal", () => {
+    assert.equal(stableStringify("__undefined__"), JSON.stringify("__string__:__undefined__"));
 });
 test("stableStringify serializes undefined and Date sentinels", () => {
     const iso = "2024-01-02T03:04:05.678Z";
@@ -940,18 +1354,26 @@ test("Cat32 assign handles undefined and Date literals", () => {
     cat.assign(undefined);
     cat.assign(new Date(iso));
 });
-test("stableStringify uses String() for functions and symbols", () => {
+test("stableStringify uses String() for functions and sentinels for symbols", () => {
     const fn = function foo() { };
-    const sym = Symbol("x");
+    const localSymbol = Symbol("x");
+    const globalSymbol = Symbol.for("x");
     assert.equal(stableStringify(fn), String(fn));
-    assert.equal(stableStringify(sym), String(sym));
+    expectLocalSymbolSentinel(stableStringify(localSymbol), "x");
+    expectGlobalSymbolSentinel(stableStringify(globalSymbol), "x");
 });
-test("canonical key follows String() for functions and symbols", () => {
+test("canonical key follows String() for functions and sentinel encoding for symbols", () => {
     const c = new Cat32();
     const fn = function foo() { };
-    const sym = Symbol("x");
+    const localSymbol = Symbol("x");
+    const globalSymbol = Symbol.for("x");
     assert.equal(c.assign(fn).key, String(fn));
-    assert.equal(c.assign(sym).key, String(sym));
+    const localKey = c.assign(localSymbol).key;
+    expectLocalSymbolSentinel(localKey, "x");
+    assert.equal(localKey, stableStringify(localSymbol));
+    const globalKey = c.assign(globalSymbol).key;
+    expectGlobalSymbolSentinel(globalKey, "x");
+    assert.equal(globalKey, stableStringify(globalSymbol));
 });
 test("string sentinel literals remain literal canonical keys", () => {
     const assignment = new Cat32().assign("__date__:2024-01-01Z");
@@ -972,22 +1394,30 @@ test("values containing __string__ escape exactly once", () => {
     assert.equal(stableStringify(literal), JSON.stringify(literal));
     assert.equal(stableStringify(sentinel), JSON.stringify(sentinel));
 });
-test("undefined sentinel string matches literal undefined in arrays", () => {
+test("undefined sentinel string literal differs from literal undefined in arrays", () => {
     const c = new Cat32();
     const sentinelAssignment = c.assign({ list: ["__undefined__"] });
     const literalAssignment = c.assign({ list: [undefined] });
-    assert.equal(sentinelAssignment.key, literalAssignment.key);
-    assert.equal(sentinelAssignment.hash, literalAssignment.hash);
+    const sentinelKey = stableStringify({ list: ["__undefined__"] });
+    const literalKey = stableStringify({ list: [undefined] });
+    assert.equal(sentinelAssignment.key, sentinelKey);
+    assert.equal(literalAssignment.key, literalKey);
+    assert.ok(sentinelAssignment.key !== literalAssignment.key);
+    assert.ok(sentinelAssignment.hash !== literalAssignment.hash);
 });
-test("date sentinel string matches Date instance in arrays", () => {
+test("date sentinel string literal differs from Date instance in arrays", () => {
     const c = new Cat32();
     const iso = "2024-04-01T12:34:56.789Z";
     const sentinelAssignment = c.assign({ list: [`__date__:${iso}`] });
     const literalAssignment = c.assign({ list: [new Date(iso)] });
-    assert.equal(sentinelAssignment.key, literalAssignment.key);
-    assert.equal(sentinelAssignment.hash, literalAssignment.hash);
+    const sentinelKey = stableStringify({ list: [`__date__:${iso}`] });
+    const literalKey = stableStringify({ list: [new Date(iso)] });
+    assert.equal(sentinelAssignment.key, sentinelKey);
+    assert.equal(literalAssignment.key, literalKey);
+    assert.ok(sentinelAssignment.key !== literalAssignment.key);
+    assert.ok(sentinelAssignment.hash !== literalAssignment.hash);
 });
-test("Map keys match plain object representation regardless of entry order", () => {
+test("Map canonical key encodes unique property keys deterministically", () => {
     const c = new Cat32();
     const map = new Map([
         ["10", 10],
@@ -995,15 +1425,22 @@ test("Map keys match plain object representation regardless of entry order", () 
     ]);
     const mapAssignment = c.assign(map);
     const objectAssignment = c.assign({ 2: 2, 10: 10 });
-    assert.equal(mapAssignment.key, objectAssignment.key);
-    assert.equal(mapAssignment.hash, objectAssignment.hash);
+    const expectedMapEntries = [
+        ["10", stableStringify(10)],
+        ["2", stableStringify(2)],
+    ];
+    assert.equal(mapAssignment.key, stableStringify(map));
+    assert.equal(JSON.stringify(decodeMapSentinel(mapAssignment.key)), JSON.stringify(expectedMapEntries));
+    assert.equal(objectAssignment.key, stableStringify({ 2: 2, 10: 10 }));
+    assert.ok(mapAssignment.key !== objectAssignment.key);
+    assert.ok(mapAssignment.hash !== objectAssignment.hash);
     const reorderedMapAssignment = c.assign(new Map([
         ["2", 2],
         ["10", 10],
     ]));
     const reorderedObjectAssignment = c.assign({ 10: 10, 2: 2 });
-    assert.equal(reorderedMapAssignment.key, objectAssignment.key);
-    assert.equal(reorderedMapAssignment.hash, objectAssignment.hash);
+    assert.equal(JSON.stringify(decodeMapSentinel(reorderedMapAssignment.key)), JSON.stringify(expectedMapEntries));
+    assert.equal(reorderedMapAssignment.key, stableStringify(map));
     assert.equal(reorderedObjectAssignment.key, objectAssignment.key);
     assert.equal(reorderedObjectAssignment.hash, objectAssignment.hash);
     const duplicateKeyMapAssignment = c.assign(new Map([
@@ -1011,18 +1448,23 @@ test("Map keys match plain object representation regardless of entry order", () 
         ["0", "same"],
     ]));
     const duplicateKeyObjectAssignment = c.assign({ 0: "same" });
-    assert.equal(duplicateKeyMapAssignment.key, duplicateKeyObjectAssignment.key);
-    assert.equal(duplicateKeyMapAssignment.hash, duplicateKeyObjectAssignment.hash);
+    assert.ok(duplicateKeyMapAssignment.key !== duplicateKeyObjectAssignment.key);
+    assert.ok(duplicateKeyMapAssignment.hash !== duplicateKeyObjectAssignment.hash);
 });
-test("Map Date key matches plain object string key", () => {
+test("Map Date key uses ISO sentinel distinct from plain object string key", () => {
     const c = new Cat32();
     const date = new Date("2024-05-01T00:00:00.000Z");
     const mapAssignment = c.assign(new Map([[date, "value"]]));
     const objectAssignment = c.assign({ [String(date)]: "value" });
-    assert.equal(mapAssignment.key, objectAssignment.key);
-    assert.equal(mapAssignment.hash, objectAssignment.hash);
+    const expectedEntries = [
+        [`__date__:${date.toISOString()}`, stableStringify("value")],
+    ];
+    assert.equal(mapAssignment.key, stableStringify(new Map([[date, "value"]])));
+    assert.equal(JSON.stringify(decodeMapSentinel(mapAssignment.key)), JSON.stringify(expectedEntries));
+    assert.ok(mapAssignment.key !== objectAssignment.key);
+    assert.ok(mapAssignment.hash !== objectAssignment.hash);
 });
-test("Map duplicate property keys deterministically pick a single representative", () => {
+test("Map duplicate property keys retain distinct entries per key type", () => {
     const c = new Cat32();
     const mapAssignment = c.assign(new Map([
         [0, "number"],
@@ -1033,10 +1475,32 @@ test("Map duplicate property keys deterministically pick a single representative
         [0, "number"],
     ]));
     const objectAssignment = c.assign({ 0: "string" });
-    assert.equal(mapAssignment.key, objectAssignment.key);
-    assert.equal(mapAssignment.hash, objectAssignment.hash);
-    assert.equal(reverseMapAssignment.key, objectAssignment.key);
-    assert.equal(reverseMapAssignment.hash, objectAssignment.hash);
+    assert.equal(mapAssignment.key, reverseMapAssignment.key);
+    assert.equal(mapAssignment.hash, reverseMapAssignment.hash);
+    assert.ok(mapAssignment.key !== objectAssignment.key);
+    assert.ok(mapAssignment.hash !== objectAssignment.hash);
+});
+test("Map canonicalization differentiates object keys sharing string identity", () => {
+    const c = new Cat32();
+    const objectKey = { label: "duplicate" };
+    const stringKey = String(objectKey);
+    const map = new Map([
+        [objectKey, "object"],
+        [stringKey, "string"],
+    ]);
+    const assignment = c.assign(map);
+    const serialized = stableStringify(map);
+    assert.ok(serialized.includes("\\u0000cat32:propertykey:"), "stableStringify should sentinelize non-string Map keys");
+    assert.ok(assignment.key.includes("\\u0000cat32:propertykey:"), "Cat32 canonical key should retain property key sentinel");
+    const reversedAssignment = c.assign(new Map([
+        [stringKey, "string"],
+        [objectKey, "object"],
+    ]));
+    assert.equal(assignment.key, reversedAssignment.key);
+    assert.equal(assignment.hash, reversedAssignment.hash);
+    const stringOnlyAssignment = c.assign(new Map([[stringKey, "string"]]));
+    assert.ok(assignment.key !== stringOnlyAssignment.key);
+    assert.ok(assignment.hash !== stringOnlyAssignment.hash);
 });
 test("Cat32 normalizes duplicate-like Map entries deterministically", () => {
     const c = new Cat32();
@@ -1067,51 +1531,100 @@ test("Map collisions with identical property keys produce deterministic output",
     assert.equal(forwardAssignment.key, reverseAssignment.key);
     assert.equal(forwardAssignment.hash, reverseAssignment.hash);
 });
-test("Map values serialize identically to plain object values", () => {
+test("Map numeric keys remain distinct from string keys in canonical form", () => {
+    const c = new Cat32();
+    const mixedKeyMap = new Map([
+        [1, "number"],
+        ["1", "string"],
+    ]);
+    const assignment = c.assign(mixedKeyMap);
+    const serialized = stableStringify(mixedKeyMap);
+    assert.ok(serialized.includes("\\u0000cat32:propertykey:"), "stableStringify should encode property key sentinel for numeric Map keys");
+    assert.ok(assignment.key.includes("\\u0000cat32:propertykey:"), "Cat32 canonical key should encode property key sentinel for numeric Map keys");
+    const stringOnlyAssignment = c.assign(new Map([["1", "string"]]));
+    assert.ok(assignment.key !== stringOnlyAssignment.key);
+    assert.ok(assignment.hash !== stringOnlyAssignment.hash);
+});
+test("Map bigint keys remain distinct from string keys in canonical form", () => {
+    const c = new Cat32();
+    const mixedKeyMap = new Map([
+        [1n, "bigint"],
+        ["1", "string"],
+    ]);
+    const assignment = c.assign(mixedKeyMap);
+    const serialized = stableStringify(mixedKeyMap);
+    assert.ok(serialized.includes("\\u0000cat32:propertykey:"), "stableStringify should encode property key sentinel for bigint Map keys");
+    assert.ok(assignment.key.includes("\\u0000cat32:propertykey:"), "Cat32 canonical key should encode property key sentinel for bigint Map keys");
+    const stringOnlyAssignment = c.assign(new Map([["1", "string"]]));
+    assert.ok(assignment.key !== stringOnlyAssignment.key);
+    assert.ok(assignment.hash !== stringOnlyAssignment.hash);
+});
+test("Map values retain the same serialized payload as plain object values", () => {
     const c = new Cat32();
     const fn = function foo() { };
     const sym = Symbol("x");
-    const mapAssignment = c.assign(new Map([
+    const map = new Map([
         ["fn", fn],
         ["sym", sym],
-    ]));
-    const objectAssignment = c.assign({ fn, sym });
-    assert.equal(mapAssignment.key, objectAssignment.key);
-    assert.equal(mapAssignment.hash, objectAssignment.hash);
+    ]);
+    const plainObject = { fn, sym };
+    const mapAssignment = c.assign(map);
+    const objectAssignment = c.assign(plainObject);
+    const expectedEntries = Array.from(map.entries()).map(([key, value]) => [key, stableStringify(value)]);
+    assert.equal(mapAssignment.key, stableStringify(map));
+    assert.equal(objectAssignment.key, stableStringify(plainObject));
+    assert.equal(JSON.stringify(decodeMapSentinel(mapAssignment.key)), JSON.stringify(expectedEntries));
+    assert.ok(mapAssignment.key !== objectAssignment.key);
+    assert.ok(mapAssignment.hash !== objectAssignment.hash);
 });
-test("Map object key matches plain object string key", () => {
+test("Map object key differs from plain object string key", () => {
     const obj = { foo: 1 };
     const map = new Map([[obj, "value"]]);
     const plainObject = { [String(obj)]: "value" };
-    assert.equal(stableStringify(map), stableStringify(plainObject));
+    assert.ok(stableStringify(map) !== stableStringify(plainObject));
     const cat = new Cat32();
     const mapAssignment = cat.assign(map);
     const objectAssignment = cat.assign(plainObject);
-    assert.equal(mapAssignment.key, objectAssignment.key);
-    assert.equal(mapAssignment.hash, objectAssignment.hash);
+    assert.ok(mapAssignment.key !== objectAssignment.key);
+    assert.ok(mapAssignment.hash !== objectAssignment.hash);
 });
-test("Map function value matches plain object value", () => {
+test("Map function value serialization is preserved via sentinel", () => {
     const c = new Cat32();
     const fn = function foo() { };
-    const mapAssignment = c.assign(new Map([["fn", fn]]));
-    const objectAssignment = c.assign({ fn });
-    assert.equal(mapAssignment.key, objectAssignment.key);
-    assert.equal(mapAssignment.hash, objectAssignment.hash);
+    const map = new Map([["fn", fn]]);
+    const plainObject = { fn };
+    const mapAssignment = c.assign(map);
+    const objectAssignment = c.assign(plainObject);
+    assert.equal(mapAssignment.key, stableStringify(map));
+    assert.equal(objectAssignment.key, stableStringify(plainObject));
+    assert.equal(JSON.stringify(decodeMapSentinel(mapAssignment.key)), JSON.stringify([["fn", stableStringify(fn)]]));
+    assert.ok(mapAssignment.key !== objectAssignment.key);
+    assert.ok(mapAssignment.hash !== objectAssignment.hash);
 });
-test("Map symbol value matches plain object value", () => {
+test("Map symbol value serialization is preserved via sentinel", () => {
     const c = new Cat32();
     const sym = Symbol("x");
-    const mapAssignment = c.assign(new Map([["sym", sym]]));
-    const objectAssignment = c.assign({ sym });
-    assert.equal(mapAssignment.key, objectAssignment.key);
-    assert.equal(mapAssignment.hash, objectAssignment.hash);
+    const map = new Map([["sym", sym]]);
+    const plainObject = { sym };
+    const mapAssignment = c.assign(map);
+    const objectAssignment = c.assign(plainObject);
+    assert.equal(mapAssignment.key, stableStringify(map));
+    assert.equal(objectAssignment.key, stableStringify(plainObject));
+    assert.equal(JSON.stringify(decodeMapSentinel(mapAssignment.key)), JSON.stringify([["sym", stableStringify(sym)]]));
+    assert.ok(mapAssignment.key !== objectAssignment.key);
+    assert.ok(mapAssignment.hash !== objectAssignment.hash);
 });
-test("Map string sentinel key matches object property", () => {
+test("Map string sentinel key remains distinct from plain object property", () => {
     const c = new Cat32();
-    const mapAssignment = c.assign(new Map([["__undefined__", 1]]));
-    const objectAssignment = c.assign({ "__undefined__": 1 });
-    assert.equal(mapAssignment.key, objectAssignment.key);
-    assert.equal(mapAssignment.hash, objectAssignment.hash);
+    const map = new Map([["__undefined__", 1]]);
+    const plainObject = { "__undefined__": 1 };
+    const mapAssignment = c.assign(map);
+    const objectAssignment = c.assign(plainObject);
+    assert.equal(mapAssignment.key, stableStringify(map));
+    assert.equal(objectAssignment.key, stableStringify(plainObject));
+    assert.equal(JSON.stringify(decodeMapSentinel(mapAssignment.key)), JSON.stringify([["__string__:__undefined__", stableStringify(1)]]));
+    assert.ok(mapAssignment.key !== objectAssignment.key);
+    assert.ok(mapAssignment.hash !== objectAssignment.hash);
 });
 test("stableStringify accepts Map with sentinel-style string key", () => {
     const sentinelKey = "\u0000cat32:string:value\u0000";
@@ -1127,13 +1640,14 @@ test("Infinity serialized distinctly from string sentinel", () => {
     assert.equal(infinityAssignment.key === sentinelAssignment.key, false);
     assert.equal(infinityAssignment.hash === sentinelAssignment.hash, false);
 });
-test("raw number sentinel string matches Infinity value", () => {
+test("raw number sentinel string remains distinct from Infinity value", () => {
     const c = new Cat32();
     const sentinelLiteral = typeSentinel("number", "Infinity");
     const sentinelAssignment = c.assign(sentinelLiteral);
     const infinityAssignment = c.assign(Infinity);
-    assert.equal(sentinelAssignment.key, infinityAssignment.key);
-    assert.equal(sentinelAssignment.hash, infinityAssignment.hash);
+    assert.ok(sentinelAssignment.key !== infinityAssignment.key);
+    assert.ok(sentinelAssignment.hash !== infinityAssignment.hash);
+    assert.equal(sentinelAssignment.key, JSON.stringify(`__string__:${sentinelLiteral}`));
 });
 test("top-level bigint differs from number", () => {
     const c = new Cat32();
@@ -1153,10 +1667,11 @@ test("top-level bigint canonical key uses bigint prefix", () => {
 });
 test("canonical key for primitives uses stable stringify", () => {
     const c = new Cat32();
+    const symbolValue = Symbol("x");
     assert.equal(c.assign("foo").key, stableStringify("foo"));
     assert.equal(c.assign(1n).key, stableStringify(1n));
     assert.equal(c.assign(Number.NaN).key, stableStringify(Number.NaN));
-    assert.equal(c.assign(Symbol("x")).key, stableStringify(Symbol("x")));
+    assert.equal(c.assign(symbolValue).key, stableStringify(symbolValue));
 });
 test("bigint sentinel string differs from bigint value", () => {
     const c = new Cat32();
@@ -1165,12 +1680,14 @@ test("bigint sentinel string differs from bigint value", () => {
     assert.ok(bigintAssignment.key !== stringAssignment.key);
     assert.ok(bigintAssignment.hash !== stringAssignment.hash);
 });
-test("undefined sentinel string matches undefined value", () => {
+test("undefined sentinel string literal differs from undefined value", () => {
     const c = new Cat32();
     const undefinedAssignment = c.assign(undefined);
     const stringAssignment = c.assign("__undefined__");
-    assert.equal(undefinedAssignment.key, stringAssignment.key);
-    assert.equal(undefinedAssignment.hash, stringAssignment.hash);
+    assert.equal(undefinedAssignment.key, JSON.stringify("__undefined__"));
+    assert.equal(stringAssignment.key, JSON.stringify("__string__:__undefined__"));
+    assert.ok(undefinedAssignment.key !== stringAssignment.key);
+    assert.ok(undefinedAssignment.hash !== stringAssignment.hash);
 });
 test("top-level undefined serializes with sentinel string", () => {
     const assignment = new Cat32().assign(undefined);
@@ -1195,7 +1712,7 @@ test("top-level sparse arrays differ from empty arrays", () => {
     assert.ok(sparseAssignment.key !== emptyAssignment.key);
     assert.ok(sparseAssignment.hash !== emptyAssignment.hash);
 });
-test("sentinel strings align with actual values at top level", () => {
+test("sentinel string literals remain distinct from actual values at top level", () => {
     const c = new Cat32();
     const bigintValue = c.assign(1n);
     const bigintSentinel = c.assign("__bigint__:1");
@@ -1203,13 +1720,17 @@ test("sentinel strings align with actual values at top level", () => {
     assert.ok(bigintValue.hash !== bigintSentinel.hash);
     const undefinedValue = c.assign(undefined);
     const undefinedSentinel = c.assign("__undefined__");
-    assert.equal(undefinedValue.key, undefinedSentinel.key);
-    assert.equal(undefinedValue.hash, undefinedSentinel.hash);
+    assert.equal(undefinedValue.key, JSON.stringify("__undefined__"));
+    assert.equal(undefinedSentinel.key, JSON.stringify("__string__:__undefined__"));
+    assert.ok(undefinedValue.key !== undefinedSentinel.key);
+    assert.ok(undefinedValue.hash !== undefinedSentinel.hash);
     const date = new Date("2024-01-02T03:04:05.678Z");
     const dateValue = c.assign(date);
     const dateSentinel = c.assign("__date__:" + date.toISOString());
-    assert.equal(dateValue.key, dateSentinel.key);
-    assert.equal(dateValue.hash, dateSentinel.hash);
+    assert.equal(dateValue.key, JSON.stringify(`__date__:${date.toISOString()}`));
+    assert.equal(dateSentinel.key, JSON.stringify(`__string__:__date__:${date.toISOString()}`));
+    assert.ok(dateValue.key !== dateSentinel.key);
+    assert.ok(dateValue.hash !== dateSentinel.hash);
 });
 test("sentinel string literals match nested undefined/date but not bigint", () => {
     const c = new Cat32();
@@ -1219,13 +1740,17 @@ test("sentinel string literals match nested undefined/date but not bigint", () =
     assert.ok(bigintValue.hash !== bigintSentinel.hash);
     const undefinedValue = c.assign({ value: undefined });
     const undefinedLiteral = c.assign({ value: "__undefined__" });
-    assert.equal(undefinedValue.key, undefinedLiteral.key);
-    assert.equal(undefinedValue.hash, undefinedLiteral.hash);
+    assert.equal(undefinedValue.key, stableStringify({ value: undefined }));
+    assert.equal(undefinedLiteral.key, stableStringify({ value: "__undefined__" }));
+    assert.ok(undefinedValue.key !== undefinedLiteral.key);
+    assert.ok(undefinedValue.hash !== undefinedLiteral.hash);
     const date = new Date("2024-01-02T03:04:05.678Z");
     const dateValue = c.assign({ value: date });
     const dateLiteral = c.assign({ value: "__date__:" + date.toISOString() });
-    assert.equal(dateValue.key, dateLiteral.key);
-    assert.equal(dateValue.hash, dateLiteral.hash);
+    assert.equal(dateValue.key, stableStringify({ value: date }));
+    assert.equal(dateLiteral.key, stableStringify({ value: "__date__:" + date.toISOString() }));
+    assert.ok(dateValue.key !== dateLiteral.key);
+    assert.ok(dateValue.hash !== dateLiteral.hash);
 });
 test("date object property serializes with sentinel", () => {
     const c = new Cat32();
@@ -1259,7 +1784,7 @@ test("map object key differs from same-name string key", () => {
     const b = c.assign(inputWithStringKey);
     assert.ok(a.key !== b.key);
 });
-test("map payload matches plain object with same entries", () => {
+test("map payload remains distinct from plain object with numeric keys", () => {
     const c = new Cat32();
     const mapInput = {
         payload: new Map([
@@ -1275,16 +1800,17 @@ test("map payload matches plain object with same entries", () => {
     };
     const mapAssignment = c.assign(mapInput);
     const objectAssignment = c.assign(objectInput);
-    assert.equal(mapAssignment.key, objectAssignment.key);
-    assert.equal(mapAssignment.hash, objectAssignment.hash);
+    assert.ok(mapAssignment.key !== objectAssignment.key);
+    assert.ok(mapAssignment.hash !== objectAssignment.hash);
+    assert.ok(mapAssignment.key.includes("\\u0000cat32:propertykey:"), "Map numeric keys should carry property key sentinels");
 });
-test("set serialization matches array entries regardless of insertion order", () => {
+test("set serialization matches across insertion order but differs from arrays", () => {
     const c = new Cat32();
     const values = [1, 2, 3];
     const setAssignment = c.assign(new Set(values));
     const arrayAssignment = c.assign([...values]);
-    assert.equal(setAssignment.key, arrayAssignment.key);
-    assert.equal(setAssignment.hash, arrayAssignment.hash);
+    assert.ok(setAssignment.key !== arrayAssignment.key);
+    assert.ok(setAssignment.hash !== arrayAssignment.hash);
     const reorderedSetAssignment = c.assign(new Set([...values].reverse()));
     assert.equal(reorderedSetAssignment.key, setAssignment.key);
     assert.equal(reorderedSetAssignment.hash, setAssignment.hash);
@@ -1469,13 +1995,13 @@ test("CLI outputs compact JSON by default", async () => {
     const expected = new Cat32().assign("default-json");
     assert.equal(stdout, JSON.stringify(expected) + "\n");
 });
-test("cat32 command outputs compact JSON when --json is followed by positional input", async () => {
+test("cat32 command rejects unsupported --json positional value", async () => {
     const { spawn } = (await dynamicImport("node:child_process"));
     const cat32CommandPath = import.meta.url.includes("/dist/tests/")
         ? new URL("../cli.js", import.meta.url).pathname
         : new URL("../dist/cli.js", import.meta.url).pathname;
     let command = cat32CommandPath;
-    let commandArgs = ["--json", "foo"];
+    let commandArgs = ["--json", "invalid"];
     try {
         const { access } = (await dynamicImport("node:fs/promises"));
         const { constants } = (await dynamicImport("node:fs"));
@@ -1483,7 +2009,7 @@ test("cat32 command outputs compact JSON when --json is followed by positional i
     }
     catch {
         command = process.argv[0];
-        commandArgs = [cat32CommandPath, "--json", "foo"];
+        commandArgs = [cat32CommandPath, "--json", "invalid"];
     }
     const child = spawn(command, commandArgs, {
         stdio: ["ignore", "pipe", "inherit"],
@@ -1493,12 +2019,17 @@ test("cat32 command outputs compact JSON when --json is followed by positional i
     child.stdout.on("data", (chunk) => {
         stdout += chunk;
     });
+    let stderr = "";
+    child.stderr.setEncoding("utf8");
+    child.stderr.on("data", (chunk) => {
+        stderr += chunk;
+    });
     const exitCode = await new Promise((resolve) => {
         child.on("close", (code) => resolve(code));
     });
-    assert.equal(exitCode, 0);
-    const expected = new Cat32().assign("foo");
-    assert.equal(stdout, JSON.stringify(expected) + "\n");
+    assert.equal(stdout, "");
+    assert.equal(exitCode, 2);
+    assert.ok(stderr.includes('RangeError: unsupported --json value "invalid"'), `stderr did not include unsupported --json value message: ${stderr}`);
 });
 test("CLI outputs compact JSON when --json is provided without a value", async () => {
     const { spawn } = (await dynamicImport("node:child_process"));
@@ -1517,22 +2048,27 @@ test("CLI outputs compact JSON when --json is provided without a value", async (
     const expected = new Cat32().assign("json-flag");
     assert.equal(stdout, JSON.stringify(expected) + "\n");
 });
-test("CLI outputs compact JSON when --json is followed by positional input", async () => {
+test("CLI rejects unsupported --json positional value", async () => {
     const { spawn } = (await dynamicImport("node:child_process"));
-    const child = spawn(process.argv[0], [CLI_PATH, "--json", "foo"], {
-        stdio: ["ignore", "pipe", "inherit"],
+    const child = spawn(process.argv[0], [CLI_PATH, "--json", "invalid"], {
+        stdio: ["ignore", "pipe", "pipe"],
     });
     let stdout = "";
     child.stdout.setEncoding("utf8");
     child.stdout.on("data", (chunk) => {
         stdout += chunk;
     });
+    let stderr = "";
+    child.stderr.setEncoding("utf8");
+    child.stderr.on("data", (chunk) => {
+        stderr += chunk;
+    });
     const exitCode = await new Promise((resolve) => {
         child.on("close", (code) => resolve(code));
     });
-    assert.equal(exitCode, 0);
-    const expected = new Cat32().assign("foo");
-    assert.equal(stdout, JSON.stringify(expected) + "\n");
+    assert.equal(stdout, "");
+    assert.equal(exitCode, 2);
+    assert.ok(stderr.includes('RangeError: unsupported --json value "invalid"'), `stderr did not include unsupported --json value message: ${stderr}`);
 });
 test("CLI exits with code 2 when --json= has an invalid value", async () => {
     const { spawn } = (await dynamicImport("node:child_process"));
@@ -1583,6 +2119,59 @@ test("CLI outputs pretty JSON when --json=pretty is provided", async () => {
     assert.equal(exitCode, 0);
     const expected = new Cat32().assign("json-pretty");
     assert.equal(stdout, JSON.stringify(expected, null, 2) + "\n");
+});
+test("CLI accepts NFKD normalization flag", async () => {
+    const { spawn } = (await dynamicImport("node:child_process"));
+    const child = spawn(process.argv[0], [CLI_PATH, "--normalize=nfkd", "Ａ"], {
+        stdio: ["ignore", "pipe", "inherit"],
+    });
+    let stdout = "";
+    child.stdout.setEncoding("utf8");
+    child.stdout.on("data", (chunk) => {
+        stdout += chunk;
+    });
+    const exitCode = await new Promise((resolve) => {
+        child.on("close", (code) => resolve(code));
+    });
+    assert.equal(exitCode, 0);
+    const expected = new Cat32({ normalize: "nfkd" }).assign("A");
+    assert.equal(stdout, JSON.stringify(expected) + "\n");
+});
+test("CLI accepts NFD normalization flag", async () => {
+    const { spawn } = (await dynamicImport("node:child_process"));
+    const child = spawn(process.argv[0], [CLI_PATH, "--normalize=nfd", "é"], {
+        stdio: ["ignore", "pipe", "inherit"],
+    });
+    let stdout = "";
+    child.stdout.setEncoding("utf8");
+    child.stdout.on("data", (chunk) => {
+        stdout += chunk;
+    });
+    const exitCode = await new Promise((resolve) => {
+        child.on("close", (code) => resolve(code));
+    });
+    assert.equal(exitCode, 0);
+    const expected = new Cat32({ normalize: "nfd" }).assign("e\u0301");
+    assert.equal(stdout, JSON.stringify(expected) + "\n");
+});
+test("CLI accepts NFD normalization flag from stdin", async () => {
+    const { spawn } = (await dynamicImport("node:child_process"));
+    const child = spawn(process.argv[0], [CLI_PATH, "--normalize=nfd"], {
+        stdio: ["pipe", "pipe", "inherit"],
+    });
+    child.stdin.write("é\n");
+    child.stdin.end();
+    let stdout = "";
+    child.stdout.setEncoding("utf8");
+    child.stdout.on("data", (chunk) => {
+        stdout += chunk;
+    });
+    const exitCode = await new Promise((resolve) => {
+        child.on("close", (code) => resolve(code));
+    });
+    assert.equal(exitCode, 0);
+    const expected = new Cat32({ normalize: "nfd" }).assign("é\n");
+    assert.equal(stdout, JSON.stringify(expected) + "\n");
 });
 test("CLI pretty flag indents JSON output", async () => {
     const { spawn } = (await dynamicImport("node:child_process"));
