@@ -56,6 +56,9 @@ test("dist/cli.js trims trailing newline when reading stdin", async () => {
     const [line] = stdout.split("\n");
     const record = JSON.parse(line);
     assert.equal(record.key, JSON.stringify("foo"));
+    if (isRunningFromDistTests) {
+        assert.equal(record.key.includes("\\\\r"), false);
+    }
 });
 test("dist/src/cli.js trims trailing newline when reading stdin", async () => {
     const { exitCode, stdout, stderr } = await runCat32WithInput("foo\n", {
