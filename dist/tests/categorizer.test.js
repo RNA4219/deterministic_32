@@ -101,6 +101,21 @@ test("dist stableStringify matches JSON.stringify for string literals", async ()
     const distStableStringify = distSerializeModule.stableStringify;
     assert.equal(distStableStringify("__string__:payload"), JSON.stringify("__string__:payload"));
 });
+test("dist Cat32 instances keep independent label arrays", async () => {
+    const sourceImportMetaUrl = import.meta.url.includes("/dist/tests/")
+        ? new URL("../../tests/categorizer.test.ts", import.meta.url)
+        : import.meta.url;
+    const distModule = (await import(new URL("../dist/index.js", sourceImportMetaUrl).href));
+    assert.equal(typeof distModule.Cat32, "function");
+    const DistCat32 = distModule.Cat32;
+    const first = new DistCat32();
+    const second = new DistCat32();
+    const firstLabels = first.labels;
+    const secondLabels = second.labels;
+    assert.ok(firstLabels !== secondLabels);
+    firstLabels[0] = "Z";
+    assert.equal(secondLabels[0], "A");
+});
 test("default Cat32 instances keep independent label arrays", () => {
     const first = new Cat32();
     const second = new Cat32();
