@@ -34,7 +34,7 @@ function isBigIntObject(value: unknown): value is { valueOf(): bigint } {
 
 type ValueOfCapable = { valueOf(): unknown };
 
-type SymbolObject = symbol & object;
+type SymbolObject = Symbol & object;
 
 type LocalSymbolFinalizerTarget = { holder: LocalSymbolHolder };
 
@@ -79,16 +79,26 @@ const LOCAL_SYMBOL_IDENTIFIER_INDEX =
 
 let nextLocalSymbolSentinelId = 0;
 
+function getOrCreateSymbolObject(symbol: symbol): SymbolObject {
+  const existing = LOCAL_SYMBOL_OBJECT_REGISTRY.get(symbol);
+  if (existing !== undefined) {
+    return existing;
+  }
+
+  const created = Object(symbol) as SymbolObject;
+  LOCAL_SYMBOL_OBJECT_REGISTRY.set(symbol, created);
+  return created;
+}
+
 function getLocalSymbolHolder(symbol: symbol): LocalSymbolHolder {
   const existing = LOCAL_SYMBOL_HOLDER_REGISTRY.get(symbol);
   if (existing !== undefined) {
     return existing;
   }
 
-  const target = Object(symbol) as SymbolObject;
+  const target = getOrCreateSymbolObject(symbol);
   const holder: LocalSymbolHolder = { symbol, target };
   LOCAL_SYMBOL_HOLDER_REGISTRY.set(symbol, holder);
-  LOCAL_SYMBOL_OBJECT_REGISTRY.set(symbol, target);
   return holder;
 }
 
@@ -867,6 +877,7 @@ export {
   getLocalSymbolSentinelRecord as __getLocalSymbolSentinelRecordForTest,
   peekLocalSymbolSentinelRecord as __peekLocalSymbolSentinelRecordForTest,
 };
+export type { SymbolObject as __SymbolObjectForTest };
 
 function buildSetSortKey(value: unknown, serializedValue: string): string {
   if (typeof value === "symbol") {
