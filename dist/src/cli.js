@@ -17,7 +17,7 @@ const HELP_TEXT = [
     "Options:",
     "  --salt <value>           Salt to apply when assigning a category.",
     "  --namespace <value>      Namespace that scopes generated categories.",
-    "  --normalize <value>      Unicode normalization form (default: nfkc).",
+    "  --normalize <value>      Unicode normalization form (none|nfc|nfd|nfkc|nfkd; default: nfkc).",
     "  --json [format]          Output JSON format: compact or pretty (default: compact).",
     "  --pretty                 Shorthand for --json pretty.",
     "  --help                   Show this help message and exit.",
@@ -118,9 +118,11 @@ async function main() {
     const normalize = parseNormalizeOption(typeof args.normalize === "string" ? args.normalize : undefined);
     const cat = new Cat32({ salt, namespace, normalize });
     const shouldReadFromStdin = key === undefined;
-    const stderrStream = globalThis.process.stderr;
-    const preserveTrailingNewline = (stderrStream === null || stderrStream === void 0 ? void 0 : stderrStream.isTTY) === false;
-    const input = shouldReadFromStdin ? await readStdin({ preserveTrailingNewline }) : key;
+    const stderrStream = process.stderr;
+    const preserveTrailingNewline = stderrStream?.isTTY === false;
+    const input = shouldReadFromStdin
+        ? await readStdin({ preserveTrailingNewline })
+        : key;
     const res = cat.assign(input);
     const normalizedKey = normalizeCanonicalKey(res.key);
     const outputRecord = normalizedKey === res.key ? res : { ...res, key: normalizedKey };

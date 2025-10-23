@@ -87,7 +87,7 @@ const HELP_OUTPUT = [
   "Options:",
   "  --salt <value>           Salt to apply when assigning a category.",
   "  --namespace <value>      Namespace that scopes generated categories.",
-  "  --normalize <value>      Unicode normalization form (default: nfkc).",
+  "  --normalize <value>      Unicode normalization form (none|nfc|nfd|nfkc|nfkd; default: nfkc).",
   "  --json [format]          Output JSON format: compact or pretty (default: compact).",
   "  --pretty                 Shorthand for --json pretty.",
   "  --help                   Show this help message and exit.",
