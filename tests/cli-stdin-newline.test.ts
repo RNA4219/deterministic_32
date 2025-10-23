@@ -33,9 +33,18 @@ const dynamicImport = new Function(
   "return import(specifier);",
 ) as (specifier: string) => Promise<unknown>;
 
-const CAT32_BIN = import.meta.url.includes("/dist/tests/")
-  ? new URL("../cli.js", import.meta.url).pathname
-  : new URL("../dist/cli.js", import.meta.url).pathname;
+const isRunningFromDistTests = import.meta.url.includes("/dist/tests/");
+
+const distDirectoryUrl = new URL(
+  isRunningFromDistTests ? "../" : "../dist/",
+  import.meta.url,
+);
+
+const DIST_CLI_BIN = new URL("./cli.js", distDirectoryUrl).pathname;
+
+const CAT32_BIN = DIST_CLI_BIN;
+
+const DIST_SRC_CLI_BIN = new URL("./src/cli.js", distDirectoryUrl).pathname;
 
 type Cat32ExecutionResult = {
   exitCode: number;
@@ -43,12 +52,21 @@ type Cat32ExecutionResult = {
   stderr: string;
 };
 
-async function runCat32WithInput(input: string): Promise<Cat32ExecutionResult> {
+type Cat32ExecutionOptions = {
+  bin?: string;
+};
+
+async function runCat32WithInput(
+  input: string,
+  options: Cat32ExecutionOptions = {},
+): Promise<Cat32ExecutionResult> {
   const { spawn } = (await dynamicImport("node:child_process")) as {
     spawn: SpawnFunction;
   };
 
-  const child = spawn(process.argv[0], [CAT32_BIN], {
+  const { bin = CAT32_BIN } = options;
+
+  const child = spawn(process.argv[0], [bin], {
     stdio: ["pipe", "pipe", "pipe"],
   });
 
@@ -87,6 +105,34 @@ async function runCat32WithInput(input: string): Promise<Cat32ExecutionResult> {
 
 test("cat32 trims trailing newline when reading stdin", async () => {
   const { exitCode, stdout, stderr } = await runCat32WithInput("foo\n");
+
+  assert.equal(exitCode, 0);
+  assert.equal(stderr, "");
+
+  const [line] = stdout.split("\n");
+  const record = JSON.parse(line);
+
+  assert.equal(record.key, JSON.stringify("foo"));
+});
+
+test("dist/cli.js trims trailing newline when reading stdin", async () => {
+  const { exitCode, stdout, stderr } = await runCat32WithInput("foo\n", {
+    bin: DIST_CLI_BIN,
+  });
+
+  assert.equal(exitCode, 0);
+  assert.equal(stderr, "");
+
+  const [line] = stdout.split("\n");
+  const record = JSON.parse(line);
+
+  assert.equal(record.key, JSON.stringify("foo"));
+});
+
+test("dist/src/cli.js trims trailing newline when reading stdin", async () => {
+  const { exitCode, stdout, stderr } = await runCat32WithInput("foo\n", {
+    bin: DIST_SRC_CLI_BIN,
+  });
 
   assert.equal(exitCode, 0);
   assert.equal(stderr, "");

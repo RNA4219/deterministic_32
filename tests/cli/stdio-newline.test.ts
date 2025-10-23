@@ -95,22 +95,22 @@ function waitForExit(child: ChildProcessWithoutNullStreams): Promise<number> {
   });
 }
 
-function assertKeyWithoutTrailingNewline(output: string) {
+function assertCanonicalKey(output: string) {
   const [line] = output.split("\n");
   const record = JSON.parse(line);
   assert.equal(record.key, JSON.stringify("foo"));
 }
 
-test("cat32 preserves newline when stderr is a TTY", async () => {
+test("cat32 trims newline when stderr is a TTY", async () => {
   const result = await runCat32(true);
   assert.equal(result.exitCode, 0);
   assert.equal(result.stderr, "");
-  assertKeyWithoutTrailingNewline(result.stdout);
+  assertCanonicalKey(result.stdout);
 });
 
-test("cat32 preserves newline when stderr is not a TTY", async () => {
+test("cat32 trims newline when stderr is not a TTY", async () => {
   const result = await runCat32(false);
   assert.equal(result.exitCode, 0);
   assert.equal(result.stderr, "");
-  assertKeyWithoutTrailingNewline(result.stdout);
+  assertCanonicalKey(result.stdout);
 });
