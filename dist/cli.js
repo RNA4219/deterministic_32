@@ -62,13 +62,19 @@ function parseArgs(argv) {
                     continue;
                 }
                 const next = argv[i + 1];
-                if (next === undefined || next === "--" || next.startsWith("--")) {
+                const isNextFlag = next === undefined || next === "--" || next.startsWith("--");
+                if (isNextFlag) {
                     args[key] = spec.defaultValue;
                     continue;
                 }
-                assertAllowedFlagValue(key, next, spec.allowedValues);
+                const isNextAllowed = spec.allowedValues === undefined || spec.allowedValues.includes(next);
+                if (!isNextAllowed) {
+                    args[key] = spec.defaultValue;
+                    continue;
+                }
                 args[key] = next;
                 i += 1;
+                continue;
             }
             else {
                 let value;

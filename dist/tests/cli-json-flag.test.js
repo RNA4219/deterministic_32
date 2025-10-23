@@ -1,12 +1,15 @@
 import test from "node:test";
 import assert from "node:assert";
 const dynamicImport = new Function("specifier", "return import(specifier);");
-const CAT32_BIN = import.meta.url.includes("/dist/tests/")
-    ? new URL("../cli.js", import.meta.url).pathname
-    : new URL("../dist/cli.js", import.meta.url).pathname;
-test("cat32 --json invalid reports an error", async () => {
+const isRunningFromDistTests = import.meta.url.includes("/dist/tests/");
+const distDirectoryUrl = new URL(isRunningFromDistTests ? "../" : "../dist/", import.meta.url);
+const DIST_CLI_BIN = new URL("./cli.js", distDirectoryUrl).pathname;
+const CAT32_BIN = DIST_CLI_BIN;
+const DIST_SRC_CLI_BIN = new URL("./src/cli.js", distDirectoryUrl).pathname;
+async function runCat32(args, options = {}) {
     const { spawn } = (await dynamicImport("node:child_process"));
-    const child = spawn(process.argv[0], [CAT32_BIN, "--json", "invalid"], {
+    const { bin = CAT32_BIN } = options;
+    const child = spawn(process.argv[0], [bin, ...args], {
         stdio: ["ignore", "pipe", "pipe"],
     });
     const stdoutChunks = [];
@@ -29,7 +32,33 @@ test("cat32 --json invalid reports an error", async () => {
             resolve(code ?? -1);
         });
     });
-    assert.equal(stdoutChunks.join(""), "");
+    return {
+        exitCode,
+        stdout: stdoutChunks.join(""),
+        stderr: stderrChunks.join(""),
+    };
+}
+test("cat32 --json=invalid reports an error", async () => {
+    const { exitCode, stdout, stderr } = await runCat32(["--json=invalid"]);
+    assert.equal(stdout, "");
     assert.equal(exitCode, 2);
-    assert.ok(stderrChunks.join("").includes('RangeError: unsupported --json value "invalid"'), "stderr should report unsupported --json value");
+    assert.ok(stderr.includes('RangeError: unsupported --json value "invalid"'), "stderr should report unsupported --json value");
+});
+test("cat32 --json foo falls back to default format", async () => {
+    const { exitCode, stdout, stderr } = await runCat32(["--json", "foo"]);
+    assert.equal(exitCode, 0);
+    assert.equal(stderr, "");
+    const [line] = stdout.split("\n");
+    const record = JSON.parse(line);
+    assert.equal(record.key, JSON.stringify("foo"));
+});
+test("dist/src/cli.js --json foo falls back to default format", async () => {
+    const { exitCode, stdout, stderr } = await runCat32(["--json", "foo"], {
+        bin: DIST_SRC_CLI_BIN,
+    });
+    assert.equal(exitCode, 0);
+    assert.equal(stderr, "");
+    const [line] = stdout.split("\n");
+    const record = JSON.parse(line);
+    assert.equal(record.key, JSON.stringify("foo"));
 });
