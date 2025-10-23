@@ -72,12 +72,19 @@ const LOCAL_SYMBOL_IDENTIFIER_BY_HOLDER =
 const LOCAL_SYMBOL_FINALIZER =
   HAS_WEAK_REFS && HAS_FINALIZATION_REGISTRY
     ? new FinalizationRegistry<string>((identifier) => {
-        const entry = LOCAL_SYMBOL_IDENTIFIER_INDEX?.get(identifier);
+        const index = LOCAL_SYMBOL_IDENTIFIER_INDEX;
+        const identifiersByHolder = LOCAL_SYMBOL_IDENTIFIER_BY_HOLDER;
+        if (index === undefined || identifiersByHolder === undefined) {
+          return;
+        }
+
+        const entry = index.get(identifier);
         if (entry === undefined) {
           return;
         }
-        LOCAL_SYMBOL_IDENTIFIER_INDEX.delete(identifier);
-        LOCAL_SYMBOL_IDENTIFIER_BY_HOLDER.delete(entry.holder);
+
+        index.delete(identifier);
+        identifiersByHolder.delete(entry.holder);
         resetLocalSymbolHolder(entry.holder);
       })
     : undefined;
