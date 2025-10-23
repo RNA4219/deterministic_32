@@ -1538,7 +1538,7 @@ test("cat32 binary accepts flag values separated by whitespace", async () => {
   assert.equal(parsed.key, expected.key);
 });
 
-test("cat32 binary rejects unsupported --json positional value", async () => {
+test("cat32 binary treats unsupported --json positional value as input", async () => {
   const { spawn } = (await dynamicImport("node:child_process")) as { spawn: SpawnFunction };
 
   const child = spawn(process.argv[0], [CLI_BIN_PATH, "--json", "invalid"], {
@@ -1563,12 +1563,17 @@ test("cat32 binary rejects unsupported --json positional value", async () => {
     child.on("close", (code: number | null) => resolve(code));
   });
 
-  assert.equal(stdout, "");
-  assert.equal(exitCode, 2);
-  assert.ok(
-    stderr.includes('RangeError: unsupported --json value "invalid"'),
-    `stderr did not include unsupported --json value message: ${stderr}`,
+  assert.equal(
+    exitCode,
+    0,
+    `cat32 failed: exit code ${exitCode}\nstdout:\n${stdout}\nstderr:\n${stderr}`,
   );
+  assert.equal(stderr, "");
+
+  const parsed = JSON.parse(stdout) as { hash: string; key: string };
+  const expected = new Cat32().assign("invalid");
+  assert.equal(parsed.hash, expected.hash);
+  assert.equal(parsed.key, expected.key);
 });
 
 test("cat32 binary exits with code 2 for unsupported --json= value", async () => {
@@ -3051,7 +3056,7 @@ test("CLI outputs compact JSON by default", async () => {
   assert.equal(stdout, JSON.stringify(expected) + "\n");
 });
 
-test("cat32 command rejects unsupported --json positional value", async () => {
+test("cat32 command treats unsupported --json positional value as input", async () => {
   const { spawn } = (await dynamicImport("node:child_process")) as { spawn: SpawnFunction };
 
   const cat32CommandPath = import.meta.url.includes("/dist/tests/")
@@ -3094,12 +3099,13 @@ test("cat32 command rejects unsupported --json positional value", async () => {
     child.on("close", (code: number | null) => resolve(code));
   });
 
-  assert.equal(stdout, "");
-  assert.equal(exitCode, 2);
-  assert.ok(
-    stderr.includes('RangeError: unsupported --json value "invalid"'),
-    `stderr did not include unsupported --json value message: ${stderr}`,
-  );
+  assert.equal(exitCode, 0);
+  assert.equal(stderr, "");
+
+  const parsed = JSON.parse(stdout) as { hash: string; key: string };
+  const expected = new Cat32().assign("invalid");
+  assert.equal(parsed.hash, expected.hash);
+  assert.equal(parsed.key, expected.key);
 });
 
 test("CLI outputs compact JSON when --json is provided without a value", async () => {
@@ -3123,7 +3129,7 @@ test("CLI outputs compact JSON when --json is provided without a value", async (
   assert.equal(stdout, JSON.stringify(expected) + "\n");
 });
 
-test("CLI rejects unsupported --json positional value", async () => {
+test("CLI treats unsupported --json positional value as input", async () => {
   const { spawn } = (await dynamicImport("node:child_process")) as { spawn: SpawnFunction };
   const child = spawn(process.argv[0], [CLI_PATH, "--json", "invalid"], {
     stdio: ["ignore", "pipe", "pipe"],
@@ -3145,12 +3151,13 @@ test("CLI rejects unsupported --json positional value", async () => {
     child.on("close", (code: number | null) => resolve(code));
   });
 
-  assert.equal(stdout, "");
-  assert.equal(exitCode, 2);
-  assert.ok(
-    stderr.includes('RangeError: unsupported --json value "invalid"'),
-    `stderr did not include unsupported --json value message: ${stderr}`,
-  );
+  assert.equal(exitCode, 0);
+  assert.equal(stderr, "");
+
+  const parsed = JSON.parse(stdout) as { hash: string; key: string };
+  const expected = new Cat32().assign("invalid");
+  assert.equal(parsed.hash, expected.hash);
+  assert.equal(parsed.key, expected.key);
 });
 
 test("CLI exits with code 2 when --json= has an invalid value", async () => {

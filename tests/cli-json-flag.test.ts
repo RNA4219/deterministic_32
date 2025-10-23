@@ -36,14 +36,14 @@ const CAT32_BIN = import.meta.url.includes("/dist/tests/")
   ? new URL("../cli.js", import.meta.url).pathname
   : new URL("../dist/cli.js", import.meta.url).pathname;
 
-test("cat32 --json invalid reports an error", async () => {
+test("cat32 --json=invalid reports an error", async () => {
   const { spawn } = (await dynamicImport("node:child_process")) as {
     spawn: SpawnFunction;
   };
 
   const child = spawn(
     process.argv[0],
-    [CAT32_BIN, "--json", "invalid"],
+    [CAT32_BIN, "--json=invalid"],
     {
       stdio: ["ignore", "pipe", "pipe"],
     },
@@ -79,4 +79,96 @@ test("cat32 --json invalid reports an error", async () => {
     stderrChunks.join("").includes('RangeError: unsupported --json value "invalid"'),
     "stderr should report unsupported --json value",
   );
+});
+
+test("cat32 --json foo falls back to default format and treats foo as input", async () => {
+  const { spawn } = (await dynamicImport("node:child_process")) as {
+    spawn: SpawnFunction;
+  };
+
+  const { existsSync } = (await dynamicImport("node:fs")) as {
+    existsSync: (path: string) => boolean;
+  };
+
+  const distCliUrl = import.meta.url.includes("/dist/tests/")
+    ? new URL("../cli.js", import.meta.url)
+    : new URL("../dist/cli.js", import.meta.url);
+
+  const sourceCliUrl = import.meta.url.includes("/dist/tests/")
+    ? new URL("../src/cli.js", import.meta.url)
+    : new URL("../dist/src/cli.js", import.meta.url);
+
+  const cliScripts = [distCliUrl, sourceCliUrl]
+    .map((url) => url.pathname)
+    .filter((pathname, index, all) => all.indexOf(pathname) === index)
+    .filter((pathname) => existsSync(pathname));
+
+  assert.ok(cliScripts.length > 0, "expected at least one CLI script to test");
+
+  const run = (args: string[]) => {
+    const child = spawn(process.argv[0], args, {
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+
+    const stdoutChunks: string[] = [];
+    const stderrChunks: string[] = [];
+
+    child.stdout.setEncoding("utf8");
+    child.stdout.on("data", (chunk) => {
+      stdoutChunks.push(chunk);
+    });
+
+    child.stderr.setEncoding("utf8");
+    child.stderr.on("data", (chunk) => {
+      stderrChunks.push(chunk);
+    });
+
+    return new Promise<{
+      exitCode: number;
+      stdout: string;
+      stderr: string;
+    }>((resolve, reject) => {
+      child.on("error", reject);
+      child.on("close", (code, signal) => {
+        if (signal !== null) {
+          reject(new Error(`terminated by signal ${signal}`));
+          return;
+        }
+
+        resolve({
+          exitCode: code ?? -1,
+          stdout: stdoutChunks.join(""),
+          stderr: stderrChunks.join(""),
+        });
+      });
+    });
+  };
+
+  for (const scriptPath of cliScripts) {
+    const baseline = await run([scriptPath, "foo"]);
+
+    assert.equal(
+      baseline.exitCode,
+      0,
+      `expected baseline run for ${scriptPath} to exit successfully`,
+    );
+
+    const withJson = await run([scriptPath, "--json", "foo"]);
+
+    assert.equal(
+      withJson.exitCode,
+      0,
+      `expected --json foo run for ${scriptPath} to exit successfully`,
+    );
+    assert.equal(
+      withJson.stderr,
+      "",
+      `expected --json foo run for ${scriptPath} to produce no stderr output`,
+    );
+    assert.equal(
+      withJson.stdout,
+      baseline.stdout,
+      `expected --json foo run for ${scriptPath} to match baseline output`,
+    );
+  }
 });
