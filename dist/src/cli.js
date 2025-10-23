@@ -66,7 +66,11 @@ function parseArgs(argv) {
                     args[key] = spec.defaultValue;
                     continue;
                 }
-                assertAllowedFlagValue(key, next, spec.allowedValues);
+                if (spec.allowedValues !== undefined &&
+                    !spec.allowedValues.includes(next)) {
+                    args[key] = spec.defaultValue;
+                    continue;
+                }
                 args[key] = next;
                 i += 1;
             }

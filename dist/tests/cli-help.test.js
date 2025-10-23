@@ -4,9 +4,9 @@ const dynamicImport = new Function("specifier", "return import(specifier);");
 const CAT32_BIN = import.meta.url.includes("/dist/tests/")
     ? new URL("../cli.js", import.meta.url).pathname
     : new URL("../dist/cli.js", import.meta.url).pathname;
-test("cat32 --json invalid reports an error", async () => {
+test("cat32 --json=invalid reports an error", async () => {
     const { spawn } = (await dynamicImport("node:child_process"));
-    const child = spawn(process.argv[0], [CAT32_BIN, "--json", "invalid", "sample"], {
+    const child = spawn(process.argv[0], [CAT32_BIN, "--json=invalid", "sample"], {
         stdio: ["ignore", "pipe", "pipe"],
     });
     const stdoutChunks = [];
