@@ -132,7 +132,14 @@ function splitMarkdownRow(line) {
 }
 function deriveSaltedKey(key, options) {
     const baseSalt = options?.salt ?? "";
-    const namespaceSuffix = options?.namespace ? `|ns:${options.namespace}` : "";
-    const combined = `${baseSalt}${namespaceSuffix}`;
-    return combined ? `${key}|salt:${combined}` : key;
+    const namespaceValue = options?.namespace;
+    const hasNamespace = namespaceValue !== undefined;
+    if (!baseSalt && !hasNamespace) {
+        return key;
+    }
+    if (!hasNamespace) {
+        return `${key}|salt:${baseSalt}`;
+    }
+    const encoded = JSON.stringify([baseSalt, namespaceValue]);
+    return `${key}|saltns:${encoded}`;
 }

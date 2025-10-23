@@ -1,3 +1,3 @@
 import type { RefreshQueueStore } from "./sw/refreshQueueStore.js";
-export type RetryAttempt = () => Promise<void>;
-export declare const retryQueueEntry: (store: RefreshQueueStore, recordId: string, attempt: RetryAttempt) => Promise<void>;
+export type RetryAttempt<TResult = unknown> = () => TResult | PromiseLike<TResult>;
+export declare const retryQueueEntry: <T>(store: RefreshQueueStore, recordId: string, attempt: RetryAttempt<T>) => Promise<T>;

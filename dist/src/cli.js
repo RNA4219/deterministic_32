@@ -118,11 +118,7 @@ async function main() {
     const normalize = parseNormalizeOption(typeof args.normalize === "string" ? args.normalize : undefined);
     const cat = new Cat32({ salt, namespace, normalize });
     const shouldReadFromStdin = key === undefined;
-    const stderrStream = process.stderr;
-    const preserveTrailingNewline = stderrStream?.isTTY === false;
-    const input = shouldReadFromStdin
-        ? await readStdin({ preserveTrailingNewline })
-        : key;
+    const input = shouldReadFromStdin ? await readStdin() : key;
     const res = cat.assign(input);
     const normalizedKey = normalizeCanonicalKey(res.key);
     const outputRecord = normalizedKey === res.key ? res : { ...res, key: normalizedKey };
@@ -145,7 +141,8 @@ function resolveOutputFormat(args) {
     throw new RangeError(`unsupported --json value "${jsonOption}"`);
 }
 function readStdin(options = {}) {
-    const { preserveTrailingNewline = false } = options;
+    const { preserveTrailingNewline } = options;
+    const shouldPreserveTrailingNewline = preserveTrailingNewline ?? true;
     return new Promise((resolve, reject) => {
         const stdin = process.stdin;
         let data = "";
@@ -163,7 +160,7 @@ function readStdin(options = {}) {
             }
             settled = true;
             cleanup();
-            if (preserveTrailingNewline) {
+            if (shouldPreserveTrailingNewline) {
                 resolve(data);
                 return;
             }

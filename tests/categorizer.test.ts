@@ -1821,6 +1821,38 @@ test("dist categorizer matches source sentinel encoding", async () => {
   assert.equal(distAssignment.key, sourceAssignment.key);
 });
 
+test("dist Cat32 rejects non-string labels", async () => {
+  let distModule: { Cat32?: unknown };
+  try {
+    distModule = (await import("../dist/categorizer.js")) as {
+      Cat32?: unknown;
+    };
+  } catch (error) {
+    if (import.meta.url.includes("/dist/tests/")) {
+      const fallbackUrl = new URL("../categorizer.js", import.meta.url).href;
+      distModule = (await import(fallbackUrl)) as { Cat32?: unknown };
+    } else {
+      throw error;
+    }
+  }
+
+  assert.equal(typeof distModule.Cat32, "function");
+  const DistCat32 = distModule.Cat32 as typeof Cat32;
+  const invalidLabels = Array.from({ length: 32 }, (_, index) =>
+    index === 0 ? "L0" : index,
+  );
+
+  assert.throws(
+    () =>
+      new DistCat32({
+        labels: invalidLabels as unknown as string[],
+      }),
+    (error) =>
+      error instanceof TypeError &&
+      error.message === "labels must be an array of 32 strings",
+  );
+});
+
 test("canonical key encodes date sentinel", () => {
   const c = new Cat32();
   const date = new Date("2024-01-02T03:04:05.000Z");

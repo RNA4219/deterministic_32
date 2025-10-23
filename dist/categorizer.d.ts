@@ -1,9 +1,4 @@
-export type NormalizeMode =
-    | "none"
-    | "nfc"
-    | "nfd"
-    | "nfkc"
-    | "nfkd";
+export type NormalizeMode = "none" | "nfc" | "nfd" | "nfkc" | "nfkd";
 export interface CategorizerOptions {
     salt?: string;
     namespace?: string;

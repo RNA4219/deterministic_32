@@ -100,6 +100,124 @@ test("WeakRef と FinalizationRegistry が存在する環境でも stableStringi
         assert.ok(false, message);
     }
 });
+test("FinalizationRegistry.register に渡されるターゲットに holder プロパティが無い", async () => {
+    if (typeof globalThis.WeakRef !== "function" ||
+        typeof globalThis.FinalizationRegistry !== "function") {
+        return;
+    }
+    const originalFinalizationRegistry = globalThis.FinalizationRegistry;
+    class AssertFinalizationRegistry {
+        #registry;
+        constructor(cleanup) {
+            this.#registry = new originalFinalizationRegistry(cleanup);
+        }
+        register(target, heldValue, unregisterToken) {
+            assert.ok(!Reflect.has(target, "holder"), "FinalizationRegistry target must not expose holder property");
+            this.#registry.register(target, heldValue, unregisterToken);
+        }
+        unregister(unregisterToken) {
+            return this.#registry.unregister(unregisterToken);
+        }
+    }
+    Object.defineProperty(globalThis, "FinalizationRegistry", {
+        value: AssertFinalizationRegistry,
+        configurable: true,
+        writable: true,
+    });
+    try {
+        const moduleSpecifier = `../../src/serialize.js?finalizer-target-leak=${weakRefReloadSequence}`;
+        weakRefReloadSequence += 1;
+        const { stableStringify: strictStableStringify } = await import(moduleSpecifier);
+        strictStableStringify(Symbol("finalizer-target"));
+    }
+    finally {
+        weakRefReloadSequence += 1;
+        Object.defineProperty(globalThis, "FinalizationRegistry", {
+            value: originalFinalizationRegistry,
+            configurable: true,
+            writable: true,
+        });
+    }
+});
+test("WeakRef と FinalizationRegistry が存在する環境でローカルシンボルキャッシュがクリーンアップされる", async () => {
+    if (typeof globalThis.WeakRef !== "function" ||
+        typeof globalThis.FinalizationRegistry !== "function") {
+        return;
+    }
+    const originalWeakRef = globalThis.WeakRef;
+    const originalFinalizationRegistry = globalThis.FinalizationRegistry;
+    const cleanupRecords = [];
+    class TestWeakRef {
+        #inner;
+        constructor(target) {
+            this.#inner = new originalWeakRef(target);
+        }
+        deref() {
+            return this.#inner.deref();
+        }
+    }
+    class TestFinalizationRegistry {
+        #cleanup;
+        constructor(cleanup) {
+            this.#cleanup = cleanup;
+        }
+        register(target, heldValue, unregisterToken) {
+            const cleanup = this.#cleanup;
+            cleanupRecords.push({ heldValue, token: unregisterToken, cleanup });
+        }
+        unregister(unregisterToken) {
+            const cleanup = this.#cleanup;
+            const index = cleanupRecords.findIndex((record) => record.token === unregisterToken && record.cleanup === cleanup);
+            if (index === -1) {
+                return false;
+            }
+            cleanupRecords.splice(index, 1);
+            return true;
+        }
+        static flush() {
+            const records = cleanupRecords.splice(0, cleanupRecords.length);
+            for (const record of records) {
+                record.cleanup(record.heldValue);
+            }
+        }
+    }
+    Object.defineProperty(globalThis, "WeakRef", {
+        value: TestWeakRef,
+        configurable: true,
+        writable: true,
+    });
+    Object.defineProperty(globalThis, "FinalizationRegistry", {
+        value: TestFinalizationRegistry,
+        configurable: true,
+        writable: true,
+    });
+    try {
+        const moduleSpecifier = `../../src/serialize.js?weakref-cleanup=${weakRefReloadSequence}`;
+        weakRefReloadSequence += 1;
+        const { stableStringify: strictStableStringify, __getLocalSymbolRegistrySizeForTest: getRegistrySize, } = await import(moduleSpecifier);
+        const baseline = getRegistrySize();
+        for (let i = 0; i < 512; i += 1) {
+            strictStableStringify(Symbol(`temp-${i}`));
+        }
+        assert.ok(getRegistrySize() > baseline, "センチネル登録後はキャッシュ件数が増加していること");
+        TestFinalizationRegistry.flush();
+        assert.equal(getRegistrySize(), baseline, "最終化後はキャッシュ件数が元に戻ること");
+    }
+    finally {
+        weakRefReloadSequence += 1;
+        cleanupRecords.splice(0, cleanupRecords.length);
+        Object.defineProperty(globalThis, "WeakRef", {
+            value: originalWeakRef,
+            configurable: true,
+            writable: true,
+        });
+        Object.defineProperty(globalThis, "FinalizationRegistry", {
+            value: originalFinalizationRegistry,
+            configurable: true,
+            writable: true,
+        });
+    }
+});
 test("ローカルシンボルのセンチネルレコードがキャッシュされる", () => {
     const local = Symbol("local sentinel");
     assert.equal(__peekLocalSymbolSentinelRecordForTest(local), undefined, "登録前はレコードが存在しない");

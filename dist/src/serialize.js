@@ -25,42 +25,121 @@ function isBigIntObject(value) {
         value !== null &&
         OBJECT_TO_STRING.call(value) === "[object BigInt]");
 }
+function isWeakRegistryEntry(entry) {
+    return "ref" in entry;
+}
 const HAS_WEAK_REFS = typeof WeakRef === "function", HAS_FINALIZATION_REGISTRY = typeof FinalizationRegistry === "function";
-const LOCAL_SYMBOL_SENTINEL_REGISTRY = new WeakMap(), LOCAL_SYMBOL_OBJECT_REGISTRY = new Map(), LOCAL_SYMBOL_HOLDER_REGISTRY = new Map();
+const LOCAL_SYMBOL_SENTINEL_REGISTRY = new WeakMap();
+const LOCAL_SYMBOL_OBJECT_REGISTRY = new Map();
+const LOCAL_SYMBOL_HOLDER_REGISTRY = new Map();
 const LOCAL_SYMBOL_IDENTIFIER_INDEX = HAS_WEAK_REFS && HAS_FINALIZATION_REGISTRY
     ? new Map()
-    : undefined, LOCAL_SYMBOL_IDENTIFIER_BY_HOLDER = HAS_WEAK_REFS && HAS_FINALIZATION_REGISTRY
+    : undefined;
+const LOCAL_SYMBOL_IDENTIFIER_BY_HOLDER = HAS_WEAK_REFS && HAS_FINALIZATION_REGISTRY
     ? new WeakMap()
-    : undefined, LOCAL_SYMBOL_FINALIZER = HAS_WEAK_REFS && HAS_FINALIZATION_REGISTRY
+    : undefined;
+const LOCAL_SYMBOL_FINALIZER = HAS_WEAK_REFS && HAS_FINALIZATION_REGISTRY
     ? new FinalizationRegistry((identifier) => {
-        const entry = LOCAL_SYMBOL_IDENTIFIER_INDEX?.get(identifier);
+        const index = LOCAL_SYMBOL_IDENTIFIER_INDEX;
+        const identifiersByHolder = LOCAL_SYMBOL_IDENTIFIER_BY_HOLDER;
+        if (index === undefined || identifiersByHolder === undefined) {
+            return;
+        }
+        const entry = index.get(identifier);
         if (entry === undefined) {
             return;
         }
-        LOCAL_SYMBOL_IDENTIFIER_INDEX?.delete(identifier);
-        LOCAL_SYMBOL_IDENTIFIER_BY_HOLDER?.delete(entry.holder);
-        entry.holder.finalizerToken = undefined;
-        LOCAL_SYMBOL_HOLDER_REGISTRY.delete(entry.holder.symbol);
-        LOCAL_SYMBOL_OBJECT_REGISTRY.delete(entry.holder.symbol);
+        index.delete(identifier);
+        identifiersByHolder.delete(entry.holder);
+        resetLocalSymbolHolder(entry.holder);
     })
     : undefined;
+const LOCAL_SYMBOL_OBJECT_REGISTRY_FINALIZER = HAS_WEAK_REFS && HAS_FINALIZATION_REGISTRY
+    ? new FinalizationRegistry((symbol) => {
+        const entry = LOCAL_SYMBOL_OBJECT_REGISTRY.get(symbol);
+        if (entry === undefined || !isWeakRegistryEntry(entry)) {
+            return;
+        }
+        if (entry.ref.deref() === undefined) {
+            LOCAL_SYMBOL_OBJECT_REGISTRY.delete(symbol);
+        }
+    })
+    : undefined;
+function resetLocalSymbolHolder(holder) {
+    holder.finalizerToken = undefined;
+    LOCAL_SYMBOL_HOLDER_REGISTRY.delete(holder.symbol);
+    LOCAL_SYMBOL_OBJECT_REGISTRY.delete(holder.symbol);
+}
 let nextLocalSymbolSentinelId = 0;
+function getOrCreateSymbolObject(symbol) {
+    const holder = LOCAL_SYMBOL_HOLDER_REGISTRY.get(symbol);
+    if (holder !== undefined) {
+        return holder.target;
+    }
+    const existing = LOCAL_SYMBOL_OBJECT_REGISTRY.get(symbol);
+    if (existing !== undefined) {
+        if (isWeakRegistryEntry(existing)) {
+            const revived = existing.ref.deref();
+            if (revived !== undefined) {
+                return revived;
+            }
+            if (LOCAL_SYMBOL_OBJECT_REGISTRY_FINALIZER !== undefined) {
+                LOCAL_SYMBOL_OBJECT_REGISTRY_FINALIZER.unregister(existing.unregisterToken);
+            }
+            LOCAL_SYMBOL_OBJECT_REGISTRY.delete(symbol);
+        }
+        else {
+            return existing.holder.target;
+        }
+    }
+    const created = Object(symbol);
+    if (LOCAL_SYMBOL_OBJECT_REGISTRY_FINALIZER !== undefined) {
+        const unregisterToken = {};
+        const entry = {
+            ref: new WeakRef(created),
+            unregisterToken,
+        };
+        LOCAL_SYMBOL_OBJECT_REGISTRY.set(symbol, entry);
+        LOCAL_SYMBOL_OBJECT_REGISTRY_FINALIZER.register(created, symbol, unregisterToken);
+    }
+    else {
+        const placeholderHolder = { symbol, target: created };
+        LOCAL_SYMBOL_OBJECT_REGISTRY.set(symbol, { holder: placeholderHolder });
+    }
+    return created;
+}
+function getExistingLocalSymbolHolder(symbol) {
+    return LOCAL_SYMBOL_HOLDER_REGISTRY.get(symbol);
+}
 function getLocalSymbolHolder(symbol) {
-    const existing = LOCAL_SYMBOL_HOLDER_REGISTRY.get(symbol);
+    const existing = getExistingLocalSymbolHolder(symbol);
     if (existing !== undefined) {
         return existing;
     }
-    const target = Object(symbol);
-    const holder = { symbol, target };
+    const registryEntryBefore = LOCAL_SYMBOL_OBJECT_REGISTRY.get(symbol);
+    let holder;
+    if (registryEntryBefore !== undefined && !isWeakRegistryEntry(registryEntryBefore)) {
+        holder = registryEntryBefore.holder;
+    }
+    else {
+        const target = getOrCreateSymbolObject(symbol);
+        holder = { symbol, target };
+    }
+    const registryEntryAfter = LOCAL_SYMBOL_OBJECT_REGISTRY.get(symbol);
+    if (registryEntryAfter !== undefined &&
+        isWeakRegistryEntry(registryEntryAfter) &&
+        LOCAL_SYMBOL_OBJECT_REGISTRY_FINALIZER !== undefined) {
+        LOCAL_SYMBOL_OBJECT_REGISTRY_FINALIZER.unregister(registryEntryAfter.unregisterToken);
+    }
     LOCAL_SYMBOL_HOLDER_REGISTRY.set(symbol, holder);
-    LOCAL_SYMBOL_OBJECT_REGISTRY.set(symbol, target);
+    LOCAL_SYMBOL_OBJECT_REGISTRY.set(symbol, { holder });
     return holder;
 }
 function peekLocalSymbolSentinelRecordFromObject(symbolObject) {
     return LOCAL_SYMBOL_SENTINEL_REGISTRY.get(symbolObject);
 }
 function peekLocalSymbolSentinelRecord(symbol) {
-    const holder = LOCAL_SYMBOL_HOLDER_REGISTRY.get(symbol);
+    const holder = getExistingLocalSymbolHolder(symbol);
     if (holder === undefined) {
         return undefined;
     }
@@ -682,7 +761,10 @@ function getSymbolSortKey(symbol) {
         getLocalSymbolSentinelRecord(symbol);
     return `local:${record.identifier}`;
 }
-export { getLocalSymbolSentinelRecord as __getLocalSymbolSentinelRecordForTest, peekLocalSymbolSentinelRecord as __peekLocalSymbolSentinelRecordForTest, };
+export { getLocalSymbolSentinelRecord as __getLocalSymbolSentinelRecordForTest, peekLocalSymbolSentinelRecord as __peekLocalSymbolSentinelRecordForTest, getLocalSymbolRegistrySizeForTest as __getLocalSymbolRegistrySizeForTest, };
+function getLocalSymbolRegistrySizeForTest() {
+    return LOCAL_SYMBOL_OBJECT_REGISTRY.size;
+}
 function buildSetSortKey(value, serializedValue) {
     if (typeof value === "symbol") {
         return getSymbolSortKey(value);
