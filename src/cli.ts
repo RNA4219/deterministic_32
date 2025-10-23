@@ -93,9 +93,13 @@ function parseArgs(argv: string[]): ParsedArgs {
           continue;
         }
 
-        assertAllowedFlagValue(key, next, spec.allowedValues);
-        args[key] = next;
-        i += 1;
+        if (spec.allowedValues === undefined || spec.allowedValues.includes(next)) {
+          args[key] = next;
+          i += 1;
+          continue;
+        }
+
+        args[key] = spec.defaultValue;
       } else {
         let value: string | undefined;
         if (eq >= 0) {
