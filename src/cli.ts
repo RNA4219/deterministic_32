@@ -187,7 +187,7 @@ type ReadStdinOptions = {
 
 function readStdin(options: ReadStdinOptions = {}): Promise<string> {
   const { preserveTrailingNewline } = options;
-  const shouldPreserveTrailingNewline = preserveTrailingNewline ?? true;
+  const shouldPreserveTrailingNewline = preserveTrailingNewline ?? false;
   return new Promise((resolve, reject) => {
     const stdin = process.stdin as ReadableStdin;
     let data = "";
