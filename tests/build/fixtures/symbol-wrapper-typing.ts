@@ -4,8 +4,8 @@ type SymbolObject = __SymbolObjectForTest;
 
 type AssertFalse<T extends false> = T;
 type SymbolObjectIsNever = [SymbolObject] extends [never] ? true : false;
-export type AssertSymbolObjectIsNotNever = AssertFalse<SymbolObjectIsNever>;
-export const assertSymbolObjectIsNotNever: AssertSymbolObjectIsNotNever = false;
+type SymbolObjectIsNotNever = AssertFalse<SymbolObjectIsNever>;
+export const assertSymbolObjectIsNotNever: SymbolObjectIsNotNever = false;
 
 const localSymbolObjectRegistry = new Map<symbol, SymbolObject>();
 const localSymbolSentinelRegistry = new WeakMap<SymbolObject, { sentinel: string }>();
@@ -28,6 +28,7 @@ const exampleSymbol = Symbol("symbol-wrapper-typing");
 const exampleObject = getOrCreateSymbolObject(exampleSymbol);
 const maybeRecord = localSymbolSentinelRegistry.get(exampleObject);
 
-if (maybeRecord) {
-  void maybeRecord.sentinel.length;
+const sentinelLength = maybeRecord?.sentinel.length;
+if (typeof sentinelLength === "number") {
+  sentinelLength.toFixed();
 }

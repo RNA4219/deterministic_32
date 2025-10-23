@@ -34,7 +34,10 @@ function isBigIntObject(value: unknown): value is { valueOf(): bigint } {
 
 type ValueOfCapable = { valueOf(): unknown };
 
-type SymbolObject = ValueOfCapable & { valueOf(): symbol };
+type SymbolObject = ValueOfCapable & {
+  valueOf(): symbol;
+  readonly __cat32SymbolObjectBrand?: never;
+};
 
 type LocalSymbolHolder = {
   symbol: symbol;
