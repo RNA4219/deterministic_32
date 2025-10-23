@@ -45,6 +45,11 @@ type LocalSymbolHolder = {
   finalizerToken?: LocalSymbolFinalizerToken;
 };
 
+type LocalSymbolRegistryEntry = {
+  holder?: LocalSymbolHolder;
+  target: SymbolObject;
+};
+
 type LocalSymbolSentinelRecord = {
   identifier: string;
   sentinel: string;
@@ -62,7 +67,8 @@ const HAS_WEAK_REFS = typeof WeakRef === "function",
 
 const LOCAL_SYMBOL_SENTINEL_REGISTRY =
   new WeakMap<SymbolObject, LocalSymbolSentinelRecord>();
-const LOCAL_SYMBOL_OBJECT_REGISTRY: Map<symbol, SymbolObject> = new Map();
+const LOCAL_SYMBOL_OBJECT_REGISTRY: Map<symbol, LocalSymbolRegistryEntry> =
+  new Map();
 const LOCAL_SYMBOL_HOLDER_REGISTRY: Map<symbol, LocalSymbolHolder> = new Map();
 const LOCAL_SYMBOL_IDENTIFIER_INDEX =
   HAS_WEAK_REFS && HAS_FINALIZATION_REGISTRY
@@ -108,11 +114,11 @@ function getOrCreateSymbolObject(symbol: symbol): SymbolObject {
 
   const existing = LOCAL_SYMBOL_OBJECT_REGISTRY.get(symbol);
   if (existing !== undefined) {
-    return existing;
+    return existing.target;
   }
 
   const created = Object(symbol) as SymbolObject;
-  LOCAL_SYMBOL_OBJECT_REGISTRY.set(symbol, created);
+  LOCAL_SYMBOL_OBJECT_REGISTRY.set(symbol, { target: created });
   return created;
 }
 
@@ -131,7 +137,7 @@ function getLocalSymbolHolder(symbol: symbol): LocalSymbolHolder {
   const target = getOrCreateSymbolObject(symbol);
   const holder: LocalSymbolHolder = { symbol, target };
   LOCAL_SYMBOL_HOLDER_REGISTRY.set(symbol, holder);
-  LOCAL_SYMBOL_OBJECT_REGISTRY.set(symbol, target);
+  LOCAL_SYMBOL_OBJECT_REGISTRY.set(symbol, { holder, target });
   return holder;
 }
 
@@ -917,7 +923,10 @@ export {
   peekLocalSymbolSentinelRecord as __peekLocalSymbolSentinelRecordForTest,
   getLocalSymbolRegistrySizeForTest as __getLocalSymbolRegistrySizeForTest,
 };
-export type { SymbolObject as __SymbolObjectForTest };
+export type {
+  LocalSymbolRegistryEntry as __LocalSymbolRegistryEntryForTest,
+  SymbolObject as __SymbolObjectForTest,
+};
 
 function getLocalSymbolRegistrySizeForTest(): number {
   return LOCAL_SYMBOL_OBJECT_REGISTRY.size;

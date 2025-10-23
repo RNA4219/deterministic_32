@@ -79,8 +79,11 @@ const assertNoLocalSymbolRegistryErrors = (stderr: string): void => {
 
   for (const diagnostic of [
     "TS2339: Property 'finalizerToken' does not exist on type",
+    "TS2339: Property 'target' does not exist on type",
     "TS2322: Type 'LocalSymbolRegistryEntry' is not assignable to type 'SymbolObject'",
     "TS2345: Argument of type 'SymbolObject' is not assignable to parameter of type 'LocalSymbolRegistryEntry'",
+    "TS2322: Type '__LocalSymbolRegistryEntryForTest' is not assignable to type '__SymbolObjectForTest'",
+    "TS2345: Argument of type '__SymbolObjectForTest' is not assignable to parameter of type '__LocalSymbolRegistryEntryForTest'",
     "TS2552: Cannot find name 'getExistingLocalSymbolHolder'",
     "TS2552: Cannot find name 'LOCAL_SYMBOL_HOLDER_REGISTRY'",
     "TS2552: Cannot find name 'LOCAL_SYMBOL_IDENTIFIER_INDEX'",
@@ -110,6 +113,87 @@ test(
           : "",
       );
       throw error;
+    }
+  },
+);
+
+const createLocalSymbolRegistryEntryFixture = async (): Promise<
+  () => Promise<void>
+> => {
+  const { fileURLToPath } = (await dynamicImport("node:url")) as {
+    fileURLToPath: (input: URL) => string;
+  };
+  const { join } = (await dynamicImport("node:path")) as {
+    join: (...segments: string[]) => string;
+  };
+  const { mkdir, rm, writeFile } = (await dynamicImport("node:fs/promises")) as {
+    mkdir: (path: string, options: { recursive: boolean }) => Promise<void>;
+    rm: (path: string, options: { force: boolean }) => Promise<void>;
+    writeFile: (path: string, data: string) => Promise<void>;
+  };
+
+  const repoRootPath = fileURLToPath(repoRootUrl);
+  const generatedDir = join(repoRootPath, "tests", "build", "__generated__");
+  await mkdir(generatedDir, { recursive: true });
+
+  const fixturePath = join(
+    generatedDir,
+    `local-symbol-registry-entry-${Date.now().toString(36)}-${Math.random()
+      .toString(36)
+      .slice(2)}.ts`,
+  );
+
+  const source = `import type {
+  __LocalSymbolRegistryEntryForTest,
+  __SymbolObjectForTest,
+} from "../../../src/serialize.js";
+
+type LocalSymbolRegistryEntry = __LocalSymbolRegistryEntryForTest;
+type SymbolObject = __SymbolObjectForTest;
+
+const registry: Map<symbol, LocalSymbolRegistryEntry> = new Map();
+
+export const getOrCreateSymbolObject = (symbol: symbol): SymbolObject => {
+  const existing = registry.get(symbol);
+  if (existing !== undefined) {
+    return existing.target;
+  }
+
+  const created = Object(symbol) as SymbolObject;
+  registry.set(symbol, { target: created });
+  return created;
+};
+`;
+
+  await writeFile(fixturePath, source);
+
+  return () => rm(fixturePath, { force: true });
+};
+
+test(
+  "getOrCreateSymbolObject の戻り値が LocalSymbolRegistryEntry と互換である",
+  async () => {
+    const disposeFixture = await createLocalSymbolRegistryEntryFixture();
+    let buildError: unknown;
+
+    try {
+      await runTsc("npm run build");
+    } catch (error) {
+      buildError = error;
+    }
+
+    await disposeFixture();
+
+    if (buildError !== undefined) {
+      const stderr =
+        typeof buildError === "object" &&
+        buildError !== null &&
+        "stderr" in buildError &&
+        typeof (buildError as { stderr?: unknown }).stderr === "string"
+          ? (buildError as { stderr: string }).stderr
+          : "";
+      assertNoLocalSymbolRegistryErrors(stderr);
+      throw buildError;
     }
   },
 );
