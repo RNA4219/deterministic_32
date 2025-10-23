@@ -1,7 +1,26 @@
 import assert from "node:assert";
 import test from "node:test";
 
-import type { ChildProcessWithoutNullStreams } from "child_process";
+type ReadableStream = {
+  setEncoding(encoding: "utf8"): void;
+  on(event: "data", listener: (chunk: unknown) => void): void;
+  on(event: "end" | "close", listener: () => void): void;
+  removeListener(event: "data", listener: (chunk: unknown) => void): void;
+  removeListener(event: "end" | "close", listener: () => void): void;
+};
+
+type NodeSignal = string;
+
+type ChildProcessWithoutNullStreams = {
+  stdout: ReadableStream;
+  stderr: ReadableStream;
+  stdin: { end(chunk: string): void };
+  on(event: "error", listener: (error: Error) => void): void;
+  on(
+    event: "close",
+    listener: (code: number | null, signal: NodeSignal | null) => void,
+  ): void;
+};
 
 type Spawn = (
   command: string,
@@ -44,7 +63,7 @@ async function runCat32(stderrIsTTY: boolean): Promise<RunResult> {
   return { stdout, stderr, exitCode };
 }
 
-function collectStream(stream: NodeJS.ReadableStream): Promise<string> {
+function collectStream(stream: ReadableStream): Promise<string> {
   return new Promise((resolve) => {
     const chunks: string[] = [];
     const onData = (chunk: unknown) => {
@@ -66,7 +85,7 @@ function collectStream(stream: NodeJS.ReadableStream): Promise<string> {
 function waitForExit(child: ChildProcessWithoutNullStreams): Promise<number> {
   return new Promise((resolve, reject) => {
     child.on("error", reject);
-    child.on("close", (code: number | null, signal: NodeJS.Signals | null) => {
+    child.on("close", (code: number | null, signal: NodeSignal | null) => {
       if (signal !== null) {
         reject(new Error(`terminated by signal ${signal}`));
         return;
