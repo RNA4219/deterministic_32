@@ -80,12 +80,10 @@ const LOCAL_SYMBOL_FINALIZER =
         ) {
           return;
         }
-
         const entry = LOCAL_SYMBOL_IDENTIFIER_INDEX.get(identifier);
         if (entry === undefined) {
           return;
         }
-
         LOCAL_SYMBOL_IDENTIFIER_INDEX.delete(identifier);
         LOCAL_SYMBOL_IDENTIFIER_BY_HOLDER.delete(entry.holder);
         entry.holder.finalizerToken = undefined;
