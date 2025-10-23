@@ -92,10 +92,6 @@ function getLocalSymbolHolder(symbol: symbol): LocalSymbolHolder {
   return holder;
 }
 
-function getOrCreateSymbolObject(symbol: symbol): SymbolObject {
-  return getLocalSymbolHolder(symbol).target;
-}
-
 function peekLocalSymbolSentinelRecordFromObject(
   symbolObject: SymbolObject,
 ): LocalSymbolSentinelRecord | undefined {
