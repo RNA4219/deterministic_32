@@ -32,9 +32,59 @@ const dynamicImport = new Function(
   "return import(specifier);",
 ) as (specifier: string) => Promise<unknown>;
 
-const CAT32_BIN = import.meta.url.includes("/dist/tests/")
-  ? new URL("../cli.js", import.meta.url).pathname
-  : new URL("../dist/cli.js", import.meta.url).pathname;
+const isDist = import.meta.url.includes("/dist/tests/");
+const distUrl = new URL(isDist ? "../" : "../dist/", import.meta.url);
+const CLI_BINARIES = [
+  { label: "dist/cli.js", path: new URL("./cli.js", distUrl).pathname },
+  { label: "dist/src/cli.js", path: new URL("./src/cli.js", distUrl).pathname },
+] as const;
+
+const CAT32_BIN = CLI_BINARIES[0].path;
+
+type RunResult = { exitCode: number; stdout: string; stderr: string };
+
+async function runCat32(binPath: string, args: string[]): Promise<RunResult> {
+  const { spawn } = (await dynamicImport("node:child_process")) as {
+    spawn: SpawnFunction;
+  };
+
+  const child = spawn(process.argv[0], [binPath, ...args], {
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+
+  const stdoutChunks: string[] = [];
+  const stderrChunks: string[] = [];
+
+  child.stdout.setEncoding("utf8");
+  child.stdout.on("data", (chunk) => {
+    stdoutChunks.push(chunk);
+  });
+
+  child.stderr.setEncoding("utf8");
+  child.stderr.on("data", (chunk) => {
+    stderrChunks.push(chunk);
+  });
+
+  const exitCode = await new Promise<number>((resolve, reject) => {
+    child.on("error", reject);
+    child.on("close", (code, signal) => {
+      if (signal !== null) {
+        reject(new Error(`terminated by signal ${signal}`));
+        return;
+      }
+      resolve(code ?? -1);
+    });
+  });
+
+  return { exitCode, stdout: stdoutChunks.join(""), stderr: stderrChunks.join("") };
+}
+
+function assertMultilineJson(output: string, label: string) {
+  assert.ok(output.endsWith("\n"), `${label} should end output with a newline`);
+  const trimmed = output.trimEnd();
+  const lines = trimmed.split("\n");
+  assert.ok(lines.length > 1, `${label} should emit multiple lines in pretty mode`);
+}
 
 test("cat32 --json=invalid reports an error", async () => {
   const { spawn } = (await dynamicImport("node:child_process")) as {
@@ -80,3 +130,25 @@ test("cat32 --json=invalid reports an error", async () => {
     "stderr should report unsupported --json value",
   );
 });
+
+for (const binary of CLI_BINARIES) {
+  test(`cat32 --json=pretty foo emits multi-line JSON (${binary.label})`, async () => {
+    const { exitCode, stdout, stderr } = await runCat32(binary.path, [
+      "--json=pretty",
+      "foo",
+    ]);
+    assert.equal(exitCode, 0);
+    assert.equal(stderr, "");
+    assertMultilineJson(stdout, binary.label);
+  });
+
+  test(`cat32 --pretty foo emits multi-line JSON (${binary.label})`, async () => {
+    const { exitCode, stdout, stderr } = await runCat32(binary.path, [
+      "--pretty",
+      "foo",
+    ]);
+    assert.equal(exitCode, 0);
+    assert.equal(stderr, "");
+    assertMultilineJson(stdout, binary.label);
+  });
+}
