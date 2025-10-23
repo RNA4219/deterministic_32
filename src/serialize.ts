@@ -34,7 +34,7 @@ function isBigIntObject(value: unknown): value is { valueOf(): bigint } {
 
 type ValueOfCapable = { valueOf(): unknown };
 
-type SymbolObject = Symbol & object;
+type SymbolObject = ValueOfCapable & { valueOf(): symbol };
 
 type LocalSymbolHolder = {
   symbol: symbol;
@@ -47,9 +47,7 @@ type LocalSymbolSentinelRecord = {
   sentinel: string;
 };
 
-type LocalSymbolFinalizerToken = {
-  holder: LocalSymbolHolder;
-};
+type LocalSymbolFinalizerToken = { holder: LocalSymbolHolder };
 
 type LocalSymbolIdentifierEntry = {
   holder: LocalSymbolHolder;
@@ -74,13 +72,7 @@ const LOCAL_SYMBOL_IDENTIFIER_BY_HOLDER =
 const LOCAL_SYMBOL_FINALIZER =
   HAS_WEAK_REFS && HAS_FINALIZATION_REGISTRY
     ? new FinalizationRegistry<string>((identifier) => {
-        if (
-          LOCAL_SYMBOL_IDENTIFIER_INDEX === undefined ||
-          LOCAL_SYMBOL_IDENTIFIER_BY_HOLDER === undefined
-        ) {
-          return;
-        }
-        const entry = LOCAL_SYMBOL_IDENTIFIER_INDEX.get(identifier);
+        const entry = LOCAL_SYMBOL_IDENTIFIER_INDEX?.get(identifier);
         if (entry === undefined) {
           return;
         }
