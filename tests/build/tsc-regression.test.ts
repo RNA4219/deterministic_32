@@ -70,6 +70,9 @@ const assertNoLocalSymbolRegistryErrors = (stderr: string): void => {
     "LOCAL_SYMBOL_IDENTIFIER_BY_HOLDER",
     "getOrCreateSymbolObject",
     "peekLocalSymbolSentinelRecordFromObject",
+    "createLocalSymbolRegistryEntry",
+    "storeLocalSymbolHolderEntry",
+    "reviveLocalSymbolHolderFromEntry",
   ] as const) {
     assert.ok(
       !stderr.includes(`TS2304: Cannot find name '${identifier}'`),
@@ -86,6 +89,7 @@ const assertNoLocalSymbolRegistryErrors = (stderr: string): void => {
     "TS2552: Cannot find name 'LOCAL_SYMBOL_IDENTIFIER_INDEX'",
     "TS2552: Cannot find name 'LOCAL_SYMBOL_IDENTIFIER_BY_HOLDER'",
     "TS2304: Cannot find name 'isWeakRegistryEntry'",
+    "TS2304: Cannot find name 'LocalSymbolRegistryEntry'",
   ]) {
     assert.ok(
       !stderr.includes(diagnostic),
