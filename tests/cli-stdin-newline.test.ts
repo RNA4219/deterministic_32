@@ -37,7 +37,13 @@ const CAT32_BIN = import.meta.url.includes("/dist/tests/")
   ? new URL("../cli.js", import.meta.url).pathname
   : new URL("../dist/cli.js", import.meta.url).pathname;
 
-test("cat32 trims trailing newline when reading stdin", async () => {
+type Cat32ExecutionResult = {
+  exitCode: number;
+  stdout: string;
+  stderr: string;
+};
+
+async function runCat32WithInput(input: string): Promise<Cat32ExecutionResult> {
   const { spawn } = (await dynamicImport("node:child_process")) as {
     spawn: SpawnFunction;
   };
@@ -59,7 +65,7 @@ test("cat32 trims trailing newline when reading stdin", async () => {
     stderrChunks.push(chunk);
   });
 
-  child.stdin?.end("foo\n");
+  child.stdin?.end(input);
 
   const exitCode = await new Promise<number>((resolve, reject) => {
     child.on("error", reject);
@@ -72,12 +78,39 @@ test("cat32 trims trailing newline when reading stdin", async () => {
     });
   });
 
-  assert.equal(exitCode, 0);
-  assert.equal(stderrChunks.join(""), "");
+  return {
+    exitCode,
+    stdout: stdoutChunks.join(""),
+    stderr: stderrChunks.join(""),
+  };
+}
 
-  const output = stdoutChunks.join("");
-  const [line] = output.split("\n");
+test("cat32 trims trailing newline when reading stdin", async () => {
+  const { exitCode, stdout, stderr } = await runCat32WithInput("foo\n");
+
+  assert.equal(exitCode, 0);
+  assert.equal(stderr, "");
+
+  const [line] = stdout.split("\n");
   const record = JSON.parse(line);
 
   assert.equal(record.key, JSON.stringify("foo"));
+});
+
+test("cat32 normalizes carriage returns when reading stdin", async () => {
+  const { exitCode, stdout, stderr } = await runCat32WithInput("foo\r\r\n");
+
+  assert.equal(exitCode, 0);
+  assert.equal(stderr, "");
+
+  const [line] = stdout.split("\n");
+  const record = JSON.parse(line);
+
+  assert.equal(record.key.startsWith("\""), true);
+  assert.equal(record.key.endsWith("\""), true);
+  const canonicalValue = record.key.slice(1, -1);
+
+  assert.equal(canonicalValue, "foo\r");
+  assert.equal(record.key.includes("\\\\r"), false);
+  assert.equal(record.key.includes("\r"), true);
 });
