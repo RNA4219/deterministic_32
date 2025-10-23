@@ -5,6 +5,9 @@ import { Cat32 } from "../src/index.js";
 import { fnv1a32, toHex32 } from "../src/hash.js";
 import { escapeSentinelString, stableStringify, typeSentinel } from "../src/serialize.js";
 
+type DistCategorizerModule = typeof import("../src/categorizer.js");
+type DistHashModule = typeof import("../src/hash.js");
+
 type SpawnOptions = {
   stdio?: ("pipe" | "inherit" | "ignore")[];
   env?: Record<string, string | undefined>;
@@ -1299,10 +1302,10 @@ test("dist Cat32 accepts nfkd normalization with saltns encoding", async () => {
   const [distCategorizer, distHash] = await Promise.all([
     import(
       new URL("../dist/categorizer.js", sourceImportMetaUrl) as unknown as string,
-    ) as Promise<typeof import("../dist/categorizer.js")>,
+    ) as Promise<DistCategorizerModule>,
     import(
       new URL("../dist/hash.js", sourceImportMetaUrl) as unknown as string,
-    ) as Promise<typeof import("../dist/hash.js")>,
+    ) as Promise<DistHashModule>,
   ]);
 
   const cat = new distCategorizer.Cat32({
