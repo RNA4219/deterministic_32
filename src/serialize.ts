@@ -47,9 +47,7 @@ type LocalSymbolSentinelRecord = {
   sentinel: string;
 };
 
-type LocalSymbolFinalizerToken = {
-  holder: LocalSymbolHolder;
-};
+type LocalSymbolFinalizerToken = { holder: LocalSymbolHolder };
 
 type LocalSymbolIdentifierEntry = {
   holder: LocalSymbolHolder;
@@ -74,18 +72,12 @@ const LOCAL_SYMBOL_IDENTIFIER_BY_HOLDER =
 const LOCAL_SYMBOL_FINALIZER =
   HAS_WEAK_REFS && HAS_FINALIZATION_REGISTRY
     ? new FinalizationRegistry<string>((identifier) => {
-        if (
-          LOCAL_SYMBOL_IDENTIFIER_INDEX === undefined ||
-          LOCAL_SYMBOL_IDENTIFIER_BY_HOLDER === undefined
-        ) {
-          return;
-        }
-        const entry = LOCAL_SYMBOL_IDENTIFIER_INDEX.get(identifier);
+        const entry = LOCAL_SYMBOL_IDENTIFIER_INDEX?.get(identifier);
         if (entry === undefined) {
           return;
         }
-        LOCAL_SYMBOL_IDENTIFIER_INDEX.delete(identifier);
-        LOCAL_SYMBOL_IDENTIFIER_BY_HOLDER.delete(entry.holder);
+        LOCAL_SYMBOL_IDENTIFIER_INDEX?.delete(identifier);
+        LOCAL_SYMBOL_IDENTIFIER_BY_HOLDER?.delete(entry.holder);
         entry.holder.finalizerToken = undefined;
         LOCAL_SYMBOL_HOLDER_REGISTRY.delete(entry.holder.symbol);
         LOCAL_SYMBOL_OBJECT_REGISTRY.delete(entry.holder.symbol);

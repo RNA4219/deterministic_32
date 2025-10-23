@@ -146,12 +146,7 @@ async function main() {
   const cat = new Cat32({ salt, namespace, normalize });
 
   const shouldReadFromStdin = key === undefined;
-  type StderrLike = { isTTY?: boolean };
-  const stderrStream = (process as { stderr?: StderrLike }).stderr;
-  const preserveTrailingNewline = stderrStream?.isTTY === false;
-  const input = shouldReadFromStdin
-    ? await readStdin({ preserveTrailingNewline })
-    : key;
+  const input = shouldReadFromStdin ? await readStdin() : key;
   const res = cat.assign(input);
   const normalizedKey = normalizeCanonicalKey(res.key);
   const outputRecord =
@@ -191,7 +186,8 @@ type ReadStdinOptions = {
 };
 
 function readStdin(options: ReadStdinOptions = {}): Promise<string> {
-  const { preserveTrailingNewline = false } = options;
+  const { preserveTrailingNewline } = options;
+  const shouldPreserveTrailingNewline = preserveTrailingNewline ?? true;
   return new Promise((resolve, reject) => {
     const stdin = process.stdin as ReadableStdin;
     let data = "";
@@ -211,7 +207,7 @@ function readStdin(options: ReadStdinOptions = {}): Promise<string> {
       }
       settled = true;
       cleanup();
-      if (preserveTrailingNewline) {
+      if (shouldPreserveTrailingNewline) {
         resolve(data);
         return;
       }
