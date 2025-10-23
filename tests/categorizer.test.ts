@@ -1243,7 +1243,7 @@ test("dist entry point exports Cat32", async () => {
   assert.equal(typeof distModule.Cat32, "function");
 });
 
-test("dist index and cli modules are importable", async () => {
+test("dist index module loads and cli help lists nfkd normalization", async () => {
   const sourceImportMetaUrl = import.meta.url.includes("/dist/tests/")
     ? new URL("../../tests/categorizer.test.ts", import.meta.url)
     : import.meta.url;
@@ -1263,7 +1263,7 @@ test("dist index and cli modules are importable", async () => {
 
   try {
     const distCliPath = new URL("../dist/cli.js", sourceImportMetaUrl).pathname;
-    process.argv = [originalArgv[0], distCliPath, "__cat32_test_key__"];
+    process.argv = [originalArgv[0], distCliPath, "--help"];
     stdin.isTTY = true;
     process.exit = (() => undefined) as typeof process.exit;
     process.stdout.write = ((chunk: string | Uint8Array) => {
@@ -1284,7 +1284,40 @@ test("dist index and cli modules are importable", async () => {
     process.stdout.write = originalStdoutWrite;
   }
 
-  assert.ok(captured.some((chunk) => chunk.includes("index")));
+  const helpOutput = captured.join("");
+  assert.ok(
+    helpOutput.includes("none|nfc|nfd|nfkc|nfkd"),
+    "dist CLI help should list nfkd normalization",
+  );
+});
+
+test("dist Cat32 accepts nfkd normalization with saltns encoding", async () => {
+  const sourceImportMetaUrl = import.meta.url.includes("/dist/tests/")
+    ? new URL("../../tests/categorizer.test.ts", import.meta.url)
+    : import.meta.url;
+
+  const [distCategorizer, distHash] = await Promise.all([
+    import(
+      new URL("../dist/categorizer.js", sourceImportMetaUrl) as unknown as string,
+    ) as Promise<typeof import("../dist/categorizer.js")>,
+    import(
+      new URL("../dist/hash.js", sourceImportMetaUrl) as unknown as string,
+    ) as Promise<typeof import("../dist/hash.js")>,
+  ]);
+
+  const cat = new distCategorizer.Cat32({
+    salt: "pepper",
+    namespace: "ns",
+    normalize: "nfkd",
+  });
+
+  const assignment = cat.assign("résumé");
+  const expectedKey = JSON.stringify("résumé").normalize("NFKD");
+  assert.equal(assignment.key, expectedKey);
+
+  const saltnsEncoding = `|saltns:${JSON.stringify(["pepper", "ns"])}`;
+  const expectedHash = distHash.toHex32(distHash.fnv1a32(`${expectedKey}${saltnsEncoding}`));
+  assert.equal(assignment.hash, expectedHash);
 });
 
 test("CLI treats values after double dash as literal key", async () => {
