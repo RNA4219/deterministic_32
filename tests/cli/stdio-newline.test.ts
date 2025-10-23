@@ -37,12 +37,14 @@ const dynamicImport = new Function(
   "return import(specifier);",
 ) as (specifier: string) => Promise<SpawnModule>;
 
+const CHILD_PROCESS_MODULE_SPECIFIER: string = "node:child_process";
+
 const CAT32_MODULE_SPECIFIER = import.meta.url.includes("/dist/tests/")
   ? new URL("../../cli.js", import.meta.url).href
   : new URL("../../dist/cli.js", import.meta.url).href;
 
 async function runCat32(stderrIsTTY: boolean): Promise<RunResult> {
-  const { spawn } = (await dynamicImport("node:child_process")) as SpawnModule;
+  const { spawn } = (await dynamicImport(CHILD_PROCESS_MODULE_SPECIFIER)) as SpawnModule;
   const inlineScript = `process.stderr.isTTY = ${stderrIsTTY ? "true" : "false"};\nawait import(${JSON.stringify(
     CAT32_MODULE_SPECIFIER,
   )});`;

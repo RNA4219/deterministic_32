@@ -76,8 +76,12 @@ const LOCAL_SYMBOL_FINALIZER =
   HAS_WEAK_REFS && HAS_FINALIZATION_REGISTRY
     ? new FinalizationRegistry<string>((identifier) => {
         const index = LOCAL_SYMBOL_IDENTIFIER_INDEX;
+        if (index === undefined) {
+          return;
+        }
+
         const identifiersByHolder = LOCAL_SYMBOL_IDENTIFIER_BY_HOLDER;
-        if (index === undefined || identifiersByHolder === undefined) {
+        if (identifiersByHolder === undefined) {
           return;
         }
 
@@ -158,29 +162,38 @@ function registerLocalSymbolSentinelRecord(
 ): void {
   LOCAL_SYMBOL_SENTINEL_REGISTRY.set(holder.target, record);
 
-  if (
-    LOCAL_SYMBOL_FINALIZER !== undefined &&
-    LOCAL_SYMBOL_IDENTIFIER_INDEX !== undefined &&
-    LOCAL_SYMBOL_IDENTIFIER_BY_HOLDER !== undefined
-  ) {
-    const previousIdentifier = LOCAL_SYMBOL_IDENTIFIER_BY_HOLDER.get(holder);
-    if (previousIdentifier !== undefined) {
-      LOCAL_SYMBOL_IDENTIFIER_INDEX.delete(previousIdentifier);
-    }
-
-    let token = holder.finalizerToken;
-    if (token === undefined) {
-      token = { holder };
-      holder.finalizerToken = token;
-    } else {
-      LOCAL_SYMBOL_FINALIZER.unregister(token);
-    }
-
-    const entry: LocalSymbolIdentifierEntry = { holder, token };
-    LOCAL_SYMBOL_IDENTIFIER_INDEX.set(record.identifier, entry);
-    LOCAL_SYMBOL_IDENTIFIER_BY_HOLDER.set(holder, record.identifier);
-    LOCAL_SYMBOL_FINALIZER.register(holder.target, record.identifier, token);
+  const finalizer = LOCAL_SYMBOL_FINALIZER;
+  if (finalizer === undefined) {
+    return;
   }
+
+  const identifierIndex = LOCAL_SYMBOL_IDENTIFIER_INDEX;
+  if (identifierIndex === undefined) {
+    return;
+  }
+
+  const identifiersByHolder = LOCAL_SYMBOL_IDENTIFIER_BY_HOLDER;
+  if (identifiersByHolder === undefined) {
+    return;
+  }
+
+  const previousIdentifier = identifiersByHolder.get(holder);
+  if (previousIdentifier !== undefined) {
+    identifierIndex.delete(previousIdentifier);
+  }
+
+  let token = holder.finalizerToken;
+  if (token === undefined) {
+    token = { holder };
+    holder.finalizerToken = token;
+  } else {
+    finalizer.unregister(token);
+  }
+
+  const entry: LocalSymbolIdentifierEntry = { holder, token };
+  identifierIndex.set(record.identifier, entry);
+  identifiersByHolder.set(holder, record.identifier);
+  finalizer.register(holder.target, record.identifier, token);
 }
 
 function createLocalSymbolSentinelRecord(
