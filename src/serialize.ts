@@ -95,6 +95,11 @@ const LOCAL_SYMBOL_FINALIZER =
 let nextLocalSymbolSentinelId = 0;
 
 function getOrCreateSymbolObject(symbol: symbol): SymbolObject {
+  const holder = LOCAL_SYMBOL_HOLDER_REGISTRY.get(symbol);
+  if (holder !== undefined) {
+    return holder.target;
+  }
+
   const existing = LOCAL_SYMBOL_OBJECT_REGISTRY.get(symbol);
   if (existing !== undefined) {
     return existing;
@@ -120,6 +125,7 @@ function getLocalSymbolHolder(symbol: symbol): LocalSymbolHolder {
   const target = getOrCreateSymbolObject(symbol);
   const holder: LocalSymbolHolder = { symbol, target };
   LOCAL_SYMBOL_HOLDER_REGISTRY.set(symbol, holder);
+  LOCAL_SYMBOL_OBJECT_REGISTRY.set(symbol, target);
   return holder;
 }
 

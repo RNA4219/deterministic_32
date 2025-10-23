@@ -73,6 +73,20 @@ const assertNoLocalSymbolRegistryErrors = (stderr: string): void => {
       `${identifier} が未定義として報告されている`,
     );
   }
+
+  for (const diagnostic of [
+    "TS2339: Property 'finalizerToken' does not exist on type",
+    "TS2322: Type 'LocalSymbolRegistryEntry' is not assignable to type 'SymbolObject'",
+    "TS2345: Argument of type 'SymbolObject' is not assignable to parameter of type 'LocalSymbolRegistryEntry'",
+    "TS2552: Cannot find name 'getExistingLocalSymbolHolder'",
+    "TS2552: Cannot find name 'LOCAL_SYMBOL_HOLDER_REGISTRY'",
+    "TS2304: Cannot find name 'isWeakRegistryEntry'",
+  ]) {
+    assert.ok(
+      !stderr.includes(diagnostic),
+      `${diagnostic} が出力されている`,
+    );
+  }
 };
 
 test(
