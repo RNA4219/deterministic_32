@@ -1,4 +1,4 @@
-export type NormalizeMode = "none" | "nfc" | "nfkc";
+export type NormalizeMode = "none" | "nfc" | "nfd" | "nfkc" | "nfkd";
 export interface CategorizerOptions {
     salt?: string;
     namespace?: string;
@@ -15,6 +15,7 @@ export interface Assignment {
 export declare class Cat32 {
     private labels;
     private salt;
+    private saltNamespaceEncoding?;
     private normalize;
     private overrides;
     constructor(opts?: CategorizerOptions);

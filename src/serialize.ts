@@ -62,6 +62,15 @@ type LocalSymbolSentinelRecord = {
   sentinel: string;
 };
 
+type LocalSymbolFinalizerToken = {
+  holder: LocalSymbolHolder;
+};
+
+type LocalSymbolIdentifierEntry = {
+  holder: LocalSymbolHolder;
+  token: LocalSymbolFinalizerToken;
+};
+
 const HAS_WEAK_REFS = typeof WeakRef === "function",
   HAS_FINALIZATION_REGISTRY = typeof FinalizationRegistry === "function";
 

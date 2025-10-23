@@ -7,6 +7,7 @@ const DEFAULT_LABELS = [
 export class Cat32 {
     labels;
     salt;
+    saltNamespaceEncoding;
     normalize;
     overrides;
     constructor(opts = {}) {
@@ -14,12 +15,25 @@ export class Cat32 {
         if (opts.labels && opts.labels.length !== 32) {
             throw new RangeError("labels length must be 32");
         }
-        const baseSalt = opts.salt ?? "";
-        const ns = opts.namespace ? `|ns:${opts.namespace}` : "";
-        this.salt = `${baseSalt}${ns}`;
+        this.salt = opts.salt ?? "";
+        const namespaceValue = opts.namespace;
+        if (!this.salt && namespaceValue === undefined) {
+            this.saltNamespaceEncoding = undefined;
+        }
+        else if (namespaceValue === undefined) {
+            this.saltNamespaceEncoding = `|salt:${this.salt}`;
+        }
+        else {
+            const encoded = JSON.stringify([this.salt, namespaceValue]);
+            this.saltNamespaceEncoding = `|saltns:${encoded}`;
+        }
         const normalize = opts.normalize ?? "nfkc";
-        if (normalize !== "none" && normalize !== "nfc" && normalize !== "nfkc") {
-            throw new RangeError("normalize must be one of \"none\", \"nfc\", or \"nfkc\"");
+        if (normalize !== "none" &&
+            normalize !== "nfc" &&
+            normalize !== "nfd" &&
+            normalize !== "nfkc" &&
+            normalize !== "nfkd") {
+            throw new RangeError("normalize must be one of \"none\", \"nfc\", \"nfd\", \"nfkc\", or \"nfkd\"");
         }
         this.normalize = normalize;
         this.overrides = new Map();
@@ -58,7 +72,10 @@ export class Cat32 {
         return this.assign(input).label;
     }
     salted(s) {
-        return this.salt ? `${s}|salt:${this.salt}` : s;
+        if (this.saltNamespaceEncoding === undefined) {
+            return s;
+        }
+        return `${s}${this.saltNamespaceEncoding}`;
     }
     canonicalKey(input) {
         const serialized = stableStringify(input);
@@ -68,8 +85,12 @@ export class Cat32 {
         switch (this.normalize) {
             case "nfc":
                 return key.normalize("NFC");
+            case "nfd":
+                return key.normalize("NFD");
             case "nfkc":
                 return key.normalize("NFKC");
+            case "nfkd":
+                return key.normalize("NFKD");
             default:
                 return key;
         }
