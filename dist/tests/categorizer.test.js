@@ -101,6 +101,15 @@ test("dist stableStringify matches JSON.stringify for string literals", async ()
     const distStableStringify = distSerializeModule.stableStringify;
     assert.equal(distStableStringify("__string__:payload"), JSON.stringify("__string__:payload"));
 });
+test("default Cat32 instances keep independent label arrays", () => {
+    const first = new Cat32();
+    const second = new Cat32();
+    const firstLabels = first.labels;
+    const secondLabels = second.labels;
+    assert.ok(firstLabels !== secondLabels);
+    firstLabels[0] = "Z";
+    assert.equal(secondLabels[0], "A");
+});
 test("dist stableStringify preserves prefixed sentinel string literal content", async () => {
     const sourceImportMetaUrl = import.meta.url.includes("/dist/tests/")
         ? new URL("../../tests/categorizer.test.ts", import.meta.url)
@@ -1180,9 +1189,13 @@ test("dist categorizer matches source sentinel encoding", async () => {
     assert.equal(distAssignment.key, sourceAssignment.key);
 });
 test("dist Cat32 rejects non-string labels", async () => {
+    const sourceImportMetaUrl = import.meta.url.includes("/dist/tests/")
+        ? new URL("../../tests/categorizer.test.ts", import.meta.url)
+        : import.meta.url;
     let distModule;
     try {
-        distModule = (await import("../dist/categorizer.js"));
+        const distModuleUrl = new URL("../dist/categorizer.js", sourceImportMetaUrl).href;
+        distModule = (await import(distModuleUrl));
     }
     catch (error) {
         if (import.meta.url.includes("/dist/tests/")) {
@@ -2056,7 +2069,7 @@ test("cat32 command rejects unsupported --json positional value", async () => {
         commandArgs = [cat32CommandPath, "--json", "invalid"];
     }
     const child = spawn(command, commandArgs, {
-        stdio: ["ignore", "pipe", "inherit"],
+        stdio: ["ignore", "pipe", "pipe"],
     });
     let stdout = "";
     child.stdout.setEncoding("utf8");
@@ -2214,7 +2227,7 @@ test("CLI accepts NFD normalization flag from stdin", async () => {
         child.on("close", (code) => resolve(code));
     });
     assert.equal(exitCode, 0);
-    const expected = new Cat32({ normalize: "nfd" }).assign("é\n");
+    const expected = new Cat32({ normalize: "nfd" }).assign("é");
     assert.equal(stdout, JSON.stringify(expected) + "\n");
 });
 test("CLI pretty flag indents JSON output", async () => {

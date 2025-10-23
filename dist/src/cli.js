@@ -142,7 +142,7 @@ function resolveOutputFormat(args) {
 }
 function readStdin(options = {}) {
     const { preserveTrailingNewline } = options;
-    const shouldPreserveTrailingNewline = preserveTrailingNewline ?? true;
+    const shouldPreserveTrailingNewline = preserveTrailingNewline ?? false;
     return new Promise((resolve, reject) => {
         const stdin = process.stdin;
         let data = "";
@@ -199,17 +199,17 @@ function normalizeCanonicalKey(key) {
             backslashRunLength += 1;
             continue;
         }
-        if (char === "n" && backslashRunLength > 0) {
+        if ((char === "n" || char === "r") && backslashRunLength > 0) {
             const literalPairs = Math.trunc(backslashRunLength / 2);
             if (literalPairs > 0) {
                 normalized += "\\".repeat(literalPairs);
             }
             if (backslashRunLength % 2 === 1) {
-                normalized += "\n";
+                normalized += char === "n" ? "\n" : "\r";
                 backslashRunLength = 0;
                 continue;
             }
-            normalized += "n";
+            normalized += char;
             backslashRunLength = 0;
             continue;
         }

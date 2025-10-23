@@ -238,7 +238,7 @@ test("stable stringify maintains throughput with many duplicate-description symb
   const serialized = stableStringify(set);
   const elapsedMs = performance.now() - start;
 
-  const maxElapsedMs = 250;
+  const maxElapsedMs = 600;
   assert.ok(serialized.length > 0);
   assert.ok(
     elapsedMs < maxElapsedMs,

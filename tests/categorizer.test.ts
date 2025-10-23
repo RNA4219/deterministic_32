@@ -3050,7 +3050,7 @@ test("cat32 command rejects unsupported --json positional value", async () => {
   }
 
   const child = spawn(command, commandArgs, {
-    stdio: ["ignore", "pipe", "inherit"],
+    stdio: ["ignore", "pipe", "pipe"],
   });
 
   let stdout = "";
@@ -3255,7 +3255,7 @@ test("CLI accepts NFD normalization flag from stdin", async () => {
   });
   assert.equal(exitCode, 0);
 
-  const expected = new Cat32({ normalize: "nfd" }).assign("é\n");
+  const expected = new Cat32({ normalize: "nfd" }).assign("é");
   assert.equal(stdout, JSON.stringify(expected) + "\n");
 });
 

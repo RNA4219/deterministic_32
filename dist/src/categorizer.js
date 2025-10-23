@@ -27,7 +27,7 @@ export class Cat32 {
             this.labels = providedLabels.slice(0, 32);
         }
         else {
-            this.labels = DEFAULT_LABELS;
+            this.labels = DEFAULT_LABELS.slice(0, 32);
         }
         this.salt = opts.salt ?? "";
         const namespaceValue = opts.namespace;
