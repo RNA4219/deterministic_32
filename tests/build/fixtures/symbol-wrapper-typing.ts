@@ -5,6 +5,7 @@ type SymbolObject = __SymbolObjectForTest;
 type AssertFalse<T extends false> = T;
 type SymbolObjectIsNever = [SymbolObject] extends [never] ? true : false;
 export type AssertSymbolObjectIsNotNever = AssertFalse<SymbolObjectIsNever>;
+export const assertSymbolObjectIsNotNever: AssertSymbolObjectIsNotNever = false;
 
 const localSymbolObjectRegistry = new Map<symbol, SymbolObject>();
 const localSymbolSentinelRegistry = new WeakMap<SymbolObject, { sentinel: string }>();
