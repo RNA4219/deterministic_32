@@ -28,4 +28,6 @@ const exampleSymbol = Symbol("symbol-wrapper-typing");
 const exampleObject = getOrCreateSymbolObject(exampleSymbol);
 const maybeRecord = localSymbolSentinelRegistry.get(exampleObject);
 
-export const sentinelLength = maybeRecord?.sentinel.length ?? 0;
+if (maybeRecord) {
+  void maybeRecord.sentinel.length;
+}
