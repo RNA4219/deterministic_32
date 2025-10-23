@@ -74,6 +74,8 @@ type LocalSymbolIdentifierEntry = {
 const HAS_WEAK_REFS = typeof WeakRef === "function",
   HAS_FINALIZATION_REGISTRY = typeof FinalizationRegistry === "function";
 
+const SHOULD_USE_WEAK_REGISTRY = HAS_WEAK_REFS && HAS_FINALIZATION_REGISTRY;
+
 const LOCAL_SYMBOL_SENTINEL_REGISTRY =
   new WeakMap<SymbolObject, LocalSymbolSentinelRecord>();
 const LOCAL_SYMBOL_OBJECT_REGISTRY = new Map<symbol, LocalSymbolRegistryEntry>();
@@ -88,20 +90,93 @@ const LOCAL_SYMBOL_FINALIZER =
           return;
         }
         LOCAL_SYMBOL_OBJECT_REGISTRY.delete(record.symbol);
+        LOCAL_SYMBOL_HOLDER_REGISTRY?.delete(record.symbol);
       })
     : undefined;
+
+const LOCAL_SYMBOL_HOLDER_REGISTRY: Map<symbol, LocalSymbolHolder> | undefined =
+  SHOULD_USE_WEAK_REGISTRY ? undefined : new Map<symbol, LocalSymbolHolder>();
+
+function isWeakRegistryEntry(
+  entry: LocalSymbolRegistryEntry,
+): entry is LocalSymbolWeakEntry {
+  return "ref" in entry;
+}
+
+function getHolderFromRegistryEntry(
+  entry: LocalSymbolRegistryEntry,
+): LocalSymbolHolder | undefined {
+  if (isWeakRegistryEntry(entry)) {
+    return entry.ref.deref();
+  }
+  return entry.holder;
+}
+
+function getExistingLocalSymbolHolder(
+  symbol: symbol,
+): LocalSymbolHolder | undefined {
+  if (LOCAL_SYMBOL_HOLDER_REGISTRY !== undefined) {
+    const holder = LOCAL_SYMBOL_HOLDER_REGISTRY.get(symbol);
+    if (holder !== undefined) {
+      return holder;
+    }
+  }
+
+  const entry = LOCAL_SYMBOL_OBJECT_REGISTRY.get(symbol);
+  if (entry === undefined) {
+    return undefined;
+  }
+
+  const holder = getHolderFromRegistryEntry(entry);
+  if (holder === undefined) {
+    LOCAL_SYMBOL_OBJECT_REGISTRY.delete(symbol);
+    return undefined;
+  }
+
+  if (LOCAL_SYMBOL_HOLDER_REGISTRY !== undefined) {
+    LOCAL_SYMBOL_HOLDER_REGISTRY.set(symbol, holder);
+  }
+
+  return holder;
+}
+
+function storeLocalSymbolHolder(holder: LocalSymbolHolder): void {
+  if (LOCAL_SYMBOL_HOLDER_REGISTRY !== undefined) {
+    LOCAL_SYMBOL_HOLDER_REGISTRY.set(holder.symbol, holder);
+    LOCAL_SYMBOL_OBJECT_REGISTRY.set(holder.symbol, { holder });
+    return;
+  }
+
+  if (HAS_WEAK_REFS && LOCAL_SYMBOL_FINALIZER !== undefined) {
+    const token: LocalSymbolFinalizerToken = { holder };
+    const entry: LocalSymbolWeakEntry = {
+      ref: new WeakRef(holder),
+      finalizerToken: token,
+    };
+    LOCAL_SYMBOL_OBJECT_REGISTRY.set(holder.symbol, entry);
+    LOCAL_SYMBOL_FINALIZER.register(
+      holder.target,
+      { symbol: holder.symbol, token },
+      token,
+    );
+    return;
+  }
+
+  LOCAL_SYMBOL_OBJECT_REGISTRY.set(holder.symbol, { holder });
+}
 
 let nextLocalSymbolSentinelId = 0;
 
 function getOrCreateSymbolObject(symbol: symbol): SymbolObject {
-  const existing = LOCAL_SYMBOL_OBJECT_REGISTRY.get(symbol);
+  const existing = getExistingLocalSymbolHolder(symbol);
   if (existing !== undefined) {
-    return existing;
+    return existing.target;
   }
 
-  const created = Object(symbol) as SymbolObject;
-  LOCAL_SYMBOL_OBJECT_REGISTRY.set(symbol, created);
-  return created;
+  const target = Object(symbol) as SymbolObject;
+  const holder: LocalSymbolHolder = { symbol, target };
+  storeLocalSymbolHolder(holder);
+  return target;
 }
 
 function getLocalSymbolHolder(symbol: symbol): LocalSymbolHolder {
@@ -110,9 +185,9 @@ function getLocalSymbolHolder(symbol: symbol): LocalSymbolHolder {
     return existing;
   }
 
-  const target = getOrCreateSymbolObject(symbol);
+  const target = Object(symbol) as SymbolObject;
   const holder: LocalSymbolHolder = { symbol, target };
-  LOCAL_SYMBOL_HOLDER_REGISTRY.set(symbol, holder);
+  storeLocalSymbolHolder(holder);
   return holder;
 }
 
