@@ -1962,12 +1962,38 @@ test("labels option rejects non-array inputs", () => {
 test("labels option rejects non-string entries", () => {
   const invalidLabels = Array.from({ length: 32 }, (_, i) => `L${i}` as unknown);
   invalidLabels[5] = 42;
+  invalidLabels[12] = Symbol("cat32-invalid");
 
   assert.throws(
     () => new Cat32({ labels: invalidLabels as string[] }),
     (error) =>
       error instanceof TypeError &&
       error.message === "labels must be an array of 32 strings",
+  );
+});
+
+test("labels option rejects array-like objects", () => {
+  const arrayLike = { length: 32, 0: "L0", 1: "L1" } as unknown as string[];
+
+  assert.throws(
+    () => new Cat32({ labels: arrayLike }),
+    (error) =>
+      error instanceof TypeError &&
+      error.message === "labels must be an array of 32 strings",
+  );
+});
+
+test("labels option rejects arrays with length other than 32", () => {
+  const tooShort = Array.from({ length: 31 }, (_, i) => `L${i}`);
+  const tooLong = Array.from({ length: 33 }, (_, i) => `L${i}`);
+
+  assert.throws(
+    () => new Cat32({ labels: tooShort }),
+    (error) => error instanceof RangeError && error.message === "labels length must be 32",
+  );
+  assert.throws(
+    () => new Cat32({ labels: tooLong }),
+    (error) => error instanceof RangeError && error.message === "labels length must be 32",
   );
 });
 
