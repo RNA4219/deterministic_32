@@ -68,6 +68,7 @@ const assertNoLocalSymbolRegistryErrors = (stderr: string): void => {
     "LOCAL_SYMBOL_HOLDER_REGISTRY",
     "LOCAL_SYMBOL_IDENTIFIER_INDEX",
     "LOCAL_SYMBOL_IDENTIFIER_BY_HOLDER",
+    "getExistingLocalSymbolHolder",
     "getOrCreateSymbolObject",
     "peekLocalSymbolSentinelRecordFromObject",
   ] as const) {
@@ -111,6 +112,45 @@ test(
       );
       throw error;
     }
+  },
+);
+
+test(
+  "npm run build の失敗時に Local Symbol Holder 未定義エラーを検出する",
+  async () => {
+    let capturedStderr = "";
+    try {
+      await runTsc("npm run build");
+      return;
+    } catch (error) {
+      if (
+        typeof error === "object" &&
+        error !== null &&
+        "stderr" in error &&
+        typeof (error as { stderr?: unknown }).stderr === "string"
+      ) {
+        capturedStderr = (error as { stderr: string }).stderr;
+      } else {
+        throw error;
+      }
+    }
+
+    let didThrow = false;
+    try {
+      assertNoLocalSymbolRegistryErrors(capturedStderr);
+    } catch {
+      didThrow = true;
+    }
+    assert.ok(didThrow, "Local Symbol Holder 未定義エラーを検出できませんでした");
+    assert.ok(
+      capturedStderr.includes(
+        "Cannot find name 'LOCAL_SYMBOL_HOLDER_REGISTRY'",
+      ) ||
+        capturedStderr.includes(
+          "Cannot find name 'getExistingLocalSymbolHolder'",
+        ),
+      "Local Symbol Holder に関する未定義エラーが stderr に含まれていません",
+    );
   },
 );
 
