@@ -49,20 +49,20 @@ function waitForExit(child) {
         });
     });
 }
-function assertKeyWithTrailingNewline(output) {
+function assertKeyWithoutTrailingNewline(output) {
     const [line] = output.split("\n");
     const record = JSON.parse(line);
-    assert.equal(record.key, "\"foo\n\"");
+    assert.equal(record.key, JSON.stringify("foo"));
 }
 test("cat32 preserves newline when stderr is a TTY", async () => {
     const result = await runCat32(true);
     assert.equal(result.exitCode, 0);
     assert.equal(result.stderr, "");
-    assertKeyWithTrailingNewline(result.stdout);
+    assertKeyWithoutTrailingNewline(result.stdout);
 });
 test("cat32 preserves newline when stderr is not a TTY", async () => {
     const result = await runCat32(false);
     assert.equal(result.exitCode, 0);
     assert.equal(result.stderr, "");
-    assertKeyWithTrailingNewline(result.stdout);
+    assertKeyWithoutTrailingNewline(result.stdout);
 });
