@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createRefreshQueueStore } from "../../src/sw/refreshQueueStore.js";
 import { retryQueueEntry } from "../../src/sw.js";
+const assertRejects = assert.rejects;
 const normalizeBody = (body) => {
     if (typeof body === "string") {
         return body;
@@ -35,42 +36,55 @@ const createFallbackHeaders = (headers) => {
         #map = new Map();
         constructor(init) {
             for (const [name, value] of toHeaderTuples(init)) {
-                this.set(name, value);
+                this.append(name, value);
             }
         }
         #normalize(name) {
             return name.toLowerCase();
         }
         append(name, value) {
-            this.set(name, value);
+            const normalized = this.#normalize(name);
+            const existing = this.#map.get(normalized);
+            const normalizedValue = String(value);
+            if (existing) {
+                existing.push(normalizedValue);
+                return;
+            }
+            this.#map.set(normalized, [normalizedValue]);
         }
         delete(name) {
             this.#map.delete(this.#normalize(name));
         }
         get(name) {
-            return this.#map.get(this.#normalize(name)) ?? null;
+            const values = this.#map.get(this.#normalize(name));
+            if (!values) {
+                return null;
+            }
+            return values.join(", ");
         }
         has(name) {
             return this.#map.has(this.#normalize(name));
         }
         set(name, value) {
-            this.#map.set(this.#normalize(name), String(value));
+            this.#map.set(this.#normalize(name), [String(value)]);
         }
         forEach(callback, thisArg) {
-            for (const [name, value] of this.#map.entries()) {
-                callback.call(thisArg, value, name, this);
+            for (const [name, values] of this.#map.entries()) {
+                callback.call(thisArg, values.join(", "), name, this);
             }
         }
         *entries() {
-            for (const [name, value] of this.#map.entries()) {
-                yield [name, value];
+            for (const [name, values] of this.#map.entries()) {
+                yield [name, values.join(", ")];
             }
         }
         *keys() {
             yield* this.#map.keys();
         }
         *values() {
-            yield* this.#map.values();
+            for (const values of this.#map.values()) {
+                yield values.join(", ");
+            }
         }
         [Symbol.iterator]() {
             return this.entries();
@@ -110,6 +124,47 @@ const createFallbackRequest = () => {
     return MinimalRequest;
 };
 const RequestCtor = typeof Request !== "undefined" ? Request : createFallbackRequest();
+test("retryQueueEntry throws when record is missing", async () => {
+    const recordId = "missing-record";
+    let attemptInvocations = 0;
+    let recordAttemptInvocations = 0;
+    let recordFailureInvocations = 0;
+    let recordSuccessInvocations = 0;
+    const store = {
+        enqueue(request) {
+            return createRefreshQueueStore().enqueue(request);
+        },
+        get(id) {
+            assert.equal(id, recordId, "retryQueueEntry should query the provided record identifier");
+            return undefined;
+        },
+        recordAttempt() {
+            recordAttemptInvocations += 1;
+        },
+        recordFailure() {
+            recordFailureInvocations += 1;
+        },
+        recordSuccess() {
+            recordSuccessInvocations += 1;
+        },
+    };
+    await assertRejects(async () => {
+        await retryQueueEntry(store, recordId, async () => {
+            attemptInvocations += 1;
+            return undefined;
+        });
+    }, (error) => {
+        if (!(error instanceof Error)) {
+            return false;
+        }
+        assert.equal(error.message, `Unknown refresh queue entry: ${recordId}`, "retryQueueEntry should throw when no queue entry exists");
+        return true;
+    });
+    assert.equal(attemptInvocations, 0, "attempt should not be executed when entry is missing");
+    assert.equal(recordAttemptInvocations, 0, "recordAttempt should not be called when entry lookup fails");
+    assert.equal(recordFailureInvocations, 0, "recordFailure should not be called when entry lookup fails");
+    assert.equal(recordSuccessInvocations, 0, "recordSuccess should not be called when entry lookup fails");
+});
 test("retryQueueEntry records failure metadata and preserves entry", async () => {
     const store = createRefreshQueueStore();
     const request = new RequestCtor("https://example.test/refresh", { method: "PUT" });
@@ -135,4 +190,23 @@ test("retryQueueEntry records failure metadata and preserves entry", async () =>
     assert.equal(record.attempts, 1, "recordAttempt should run before retry");
     assert.equal(record.lastError, error, "recordFailure should store the thrown error");
     assert.ok(record.failedAt instanceof Date, "failure timestamp should be saved");
+});
+test("retryQueueEntry resolves with attempt result and removes entry on success", async () => {
+    const store = createRefreshQueueStore();
+    const request = new RequestCtor("https://example.test/refresh", { method: "PATCH" });
+    const { id } = store.enqueue(request);
+    const attemptResult = { status: "ok" };
+    const result = await retryQueueEntry(store, id, async () => {
+        const recordDuringAttempt = store.get(id);
+        if (!recordDuringAttempt) {
+            throw new Error("record should exist during successful attempt");
+        }
+        assert.equal(recordDuringAttempt.attempts, 1, "recordAttempt should increment attempts before running attempt");
+        assert.ok(recordDuringAttempt.lastAttemptedAt instanceof Date, "recordAttempt should set lastAttemptedAt before attempt resolves");
+        assert.equal(recordDuringAttempt.lastError, undefined, "recordFailure metadata should not be set during successful attempt");
+        assert.equal(recordDuringAttempt.failedAt, undefined, "recordFailure timestamp should remain unset during successful attempt");
+        return attemptResult;
+    });
+    assert.equal(result, attemptResult, "retryQueueEntry should resolve with attempt result");
+    assert.equal(store.get(id), undefined, "recordSuccess should remove the successful record");
 });

@@ -1179,6 +1179,28 @@ test("dist categorizer matches source sentinel encoding", async () => {
     const distAssignment = dist.assign({ value: undefined });
     assert.equal(distAssignment.key, sourceAssignment.key);
 });
+test("dist Cat32 rejects non-string labels", async () => {
+    let distModule;
+    try {
+        distModule = (await import("../dist/categorizer.js"));
+    }
+    catch (error) {
+        if (import.meta.url.includes("/dist/tests/")) {
+            const fallbackUrl = new URL("../categorizer.js", import.meta.url).href;
+            distModule = (await import(fallbackUrl));
+        }
+        else {
+            throw error;
+        }
+    }
+    assert.equal(typeof distModule.Cat32, "function");
+    const DistCat32 = distModule.Cat32;
+    const invalidLabels = Array.from({ length: 32 }, (_, index) => index === 0 ? "L0" : index);
+    assert.throws(() => new DistCat32({
+        labels: invalidLabels,
+    }), (error) => error instanceof TypeError &&
+        error.message === "labels must be an array of 32 strings");
+});
 test("canonical key encodes date sentinel", () => {
     const c = new Cat32();
     const date = new Date("2024-01-02T03:04:05.000Z");
@@ -1279,6 +1301,28 @@ test("override accepts canonical key strings", () => {
     assert.equal(c.assign(123).index, 5);
     assert.equal(c.assign(undefined).index, 6);
     assert.equal(c.assign(true).index, 7);
+});
+test("labels option rejects non-array inputs", () => {
+    assert.throws(() => new Cat32({ labels: 123 }), (error) => error instanceof TypeError &&
+        error.message === "labels must be an array of 32 strings");
+});
+test("labels option rejects non-string entries", () => {
+    const invalidLabels = Array.from({ length: 32 }, (_, i) => `L${i}`);
+    invalidLabels[5] = 42;
+    invalidLabels[12] = Symbol("cat32-invalid");
+    assert.throws(() => new Cat32({ labels: invalidLabels }), (error) => error instanceof TypeError &&
+        error.message === "labels must be an array of 32 strings");
+});
+test("labels option rejects array-like objects", () => {
+    const arrayLike = { length: 32, 0: "L0", 1: "L1" };
+    assert.throws(() => new Cat32({ labels: arrayLike }), (error) => error instanceof TypeError &&
+        error.message === "labels must be an array of 32 strings");
+});
+test("labels option rejects arrays with length other than 32", () => {
+    const tooShort = Array.from({ length: 31 }, (_, i) => `L${i}`);
+    const tooLong = Array.from({ length: 33 }, (_, i) => `L${i}`);
+    assert.throws(() => new Cat32({ labels: tooShort }), (error) => error instanceof RangeError && error.message === "labels length must be 32");
+    assert.throws(() => new Cat32({ labels: tooLong }), (error) => error instanceof RangeError && error.message === "labels length must be 32");
 });
 test("range 0..31 and various types", () => {
     const c = new Cat32();

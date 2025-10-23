@@ -11,9 +11,23 @@ export class Cat32 {
     normalize;
     overrides;
     constructor(opts = {}) {
-        this.labels = (opts.labels && opts.labels.length === 32) ? opts.labels.slice(0, 32) : DEFAULT_LABELS;
-        if (opts.labels && opts.labels.length !== 32) {
-            throw new RangeError("labels length must be 32");
+        const providedLabels = opts.labels;
+        if (providedLabels !== undefined) {
+            if (!Array.isArray(providedLabels)) {
+                throw new TypeError("labels must be an array of 32 strings");
+            }
+            if (providedLabels.length !== 32) {
+                throw new RangeError("labels length must be 32");
+            }
+            for (const label of providedLabels) {
+                if (typeof label !== "string") {
+                    throw new TypeError("labels must be an array of 32 strings");
+                }
+            }
+            this.labels = providedLabels.slice(0, 32);
+        }
+        else {
+            this.labels = DEFAULT_LABELS;
         }
         this.salt = opts.salt ?? "";
         const namespaceValue = opts.namespace;
