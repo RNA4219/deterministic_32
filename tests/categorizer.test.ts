@@ -1822,11 +1822,17 @@ test("dist categorizer matches source sentinel encoding", async () => {
 });
 
 test("dist Cat32 rejects non-string labels", async () => {
+  const sourceImportMetaUrl = import.meta.url.includes("/dist/tests/")
+    ? new URL("../../tests/categorizer.test.ts", import.meta.url)
+    : import.meta.url;
+
   let distModule: { Cat32?: unknown };
   try {
-    distModule = (await import("../dist/categorizer.js")) as {
-      Cat32?: unknown;
-    };
+    const distModuleUrl = new URL(
+      "../dist/categorizer.js",
+      sourceImportMetaUrl,
+    ).href;
+    distModule = (await import(distModuleUrl)) as { Cat32?: unknown };
   } catch (error) {
     if (import.meta.url.includes("/dist/tests/")) {
       const fallbackUrl = new URL("../categorizer.js", import.meta.url).href;
