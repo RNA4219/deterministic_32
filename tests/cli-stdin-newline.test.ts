@@ -37,7 +37,7 @@ const CAT32_BIN = import.meta.url.includes("/dist/tests/")
   ? new URL("../cli.js", import.meta.url).pathname
   : new URL("../dist/cli.js", import.meta.url).pathname;
 
-test("cat32 preserves canonical key newline when reading stdin", async () => {
+test("cat32 trims trailing newline when reading stdin", async () => {
   const { spawn } = (await dynamicImport("node:child_process")) as {
     spawn: SpawnFunction;
   };
@@ -79,5 +79,5 @@ test("cat32 preserves canonical key newline when reading stdin", async () => {
   const [line] = output.split("\n");
   const record = JSON.parse(line);
 
-  assert.equal(record.key, "\"foo\n\"");
+  assert.equal(record.key, JSON.stringify("foo"));
 });
