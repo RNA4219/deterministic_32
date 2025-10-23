@@ -31,9 +31,22 @@ export class Cat32 {
   private overrides: Map<string, number>;
 
   constructor(opts: CategorizerOptions = {}) {
-    this.labels = (opts.labels && opts.labels.length === 32) ? opts.labels.slice(0, 32) : DEFAULT_LABELS;
-    if (opts.labels && opts.labels.length !== 32) {
-      throw new RangeError("labels length must be 32");
+    const { labels } = opts;
+    if (labels !== undefined) {
+      if (!Array.isArray(labels)) {
+        throw new TypeError("labels must be an array of 32 strings");
+      }
+      if (labels.length !== 32) {
+        throw new RangeError("labels length must be 32");
+      }
+      for (const label of labels) {
+        if (typeof label !== "string") {
+          throw new TypeError("labels must be an array of 32 strings");
+        }
+      }
+      this.labels = labels.slice(0, 32);
+    } else {
+      this.labels = DEFAULT_LABELS;
     }
     this.salt = opts.salt ?? "";
     const namespaceValue = opts.namespace;

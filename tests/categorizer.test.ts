@@ -1950,6 +1950,27 @@ test("override accepts canonical key strings", () => {
   assert.equal(c.assign(true).index, 7);
 });
 
+test("labels option rejects non-array inputs", () => {
+  assert.throws(
+    () => new Cat32({ labels: 123 as unknown as string[] }),
+    (error) =>
+      error instanceof TypeError &&
+      error.message === "labels must be an array of 32 strings",
+  );
+});
+
+test("labels option rejects non-string entries", () => {
+  const invalidLabels = Array.from({ length: 32 }, (_, i) => `L${i}` as unknown);
+  invalidLabels[5] = 42;
+
+  assert.throws(
+    () => new Cat32({ labels: invalidLabels as string[] }),
+    (error) =>
+      error instanceof TypeError &&
+      error.message === "labels must be an array of 32 strings",
+  );
+});
+
 test("range 0..31 and various types", () => {
   const c = new Cat32();
   for (const k of ["a", "b", "c", "日本語", "ＡＢＣ", 123, true, null]) {
