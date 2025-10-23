@@ -34,7 +34,7 @@ function isBigIntObject(value: unknown): value is { valueOf(): bigint } {
 
 type ValueOfCapable = { valueOf(): unknown };
 
-type SymbolObject = symbol & object;
+type SymbolObject = Symbol & object;
 
 type LocalSymbolHolder = {
   symbol: symbol;
@@ -93,28 +93,15 @@ const LOCAL_SYMBOL_FINALIZER =
 
 let nextLocalSymbolSentinelId = 0;
 
-function isWeakRegistryEntry(
-  entry: LocalSymbolRegistryEntry,
-): entry is LocalSymbolWeakEntry {
-  return "ref" in entry;
-}
+function getOrCreateSymbolObject(symbol: symbol): SymbolObject {
+  const existing = LOCAL_SYMBOL_OBJECT_REGISTRY.get(symbol);
+  if (existing !== undefined) {
+    return existing;
+  }
 
-function getExistingLocalSymbolHolder(
-  symbol: symbol,
-): LocalSymbolHolder | undefined {
-  const entry = LOCAL_SYMBOL_OBJECT_REGISTRY.get(symbol);
-  if (entry === undefined) {
-    return undefined;
-  }
-  if (isWeakRegistryEntry(entry)) {
-    const holder = entry.ref.deref();
-    if (holder === undefined) {
-      LOCAL_SYMBOL_OBJECT_REGISTRY.delete(symbol);
-      return undefined;
-    }
-    return holder;
-  }
-  return entry.holder;
+  const created = Object(symbol) as SymbolObject;
+  LOCAL_SYMBOL_OBJECT_REGISTRY.set(symbol, created);
+  return created;
 }
 
 function getLocalSymbolHolder(symbol: symbol): LocalSymbolHolder {
@@ -123,25 +110,9 @@ function getLocalSymbolHolder(symbol: symbol): LocalSymbolHolder {
     return existing;
   }
 
-  const target = Object(symbol) as SymbolObject;
+  const target = getOrCreateSymbolObject(symbol);
   const holder: LocalSymbolHolder = { symbol, target };
-
-  if (LOCAL_SYMBOL_FINALIZER !== undefined && HAS_WEAK_REFS) {
-    const finalizerToken: object = {};
-    const entry: LocalSymbolWeakEntry = {
-      ref: new WeakRef(holder),
-      finalizerToken,
-    };
-    LOCAL_SYMBOL_OBJECT_REGISTRY.set(symbol, entry);
-    LOCAL_SYMBOL_FINALIZER.register(
-      target,
-      { symbol, token: finalizerToken },
-      finalizerToken,
-    );
-  } else {
-    LOCAL_SYMBOL_OBJECT_REGISTRY.set(symbol, { holder });
-  }
-
+  LOCAL_SYMBOL_HOLDER_REGISTRY.set(symbol, holder);
   return holder;
 }
 
@@ -915,6 +886,7 @@ export {
   peekLocalSymbolSentinelRecord as __peekLocalSymbolSentinelRecordForTest,
   getLocalSymbolRegistrySizeForTest as __getLocalSymbolRegistrySizeForTest,
 };
+export type { SymbolObject as __SymbolObjectForTest };
 
 function getLocalSymbolRegistrySizeForTest(): number {
   return LOCAL_SYMBOL_OBJECT_REGISTRY.size;
