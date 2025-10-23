@@ -147,6 +147,61 @@ test(
 );
 
 test(
+  "FinalizationRegistry.register に渡されるターゲットに holder プロパティが無い",
+  async () => {
+    if (
+      typeof globalThis.WeakRef !== "function" ||
+      typeof globalThis.FinalizationRegistry !== "function"
+    ) {
+      return;
+    }
+
+    const originalFinalizationRegistry = globalThis.FinalizationRegistry;
+
+    class AssertFinalizationRegistry<T> {
+      #registry: FinalizationRegistry<T>;
+
+      constructor(cleanup: (value: T) => void) {
+        this.#registry = new originalFinalizationRegistry(cleanup);
+      }
+
+      register(target: object, heldValue: T, unregisterToken?: object): void {
+        assert.ok(
+          !Reflect.has(target, "holder"),
+          "FinalizationRegistry target must not expose holder property",
+        );
+        this.#registry.register(target, heldValue, unregisterToken);
+      }
+
+      unregister(unregisterToken: object): boolean {
+        return this.#registry.unregister(unregisterToken);
+      }
+    }
+
+    Object.defineProperty(globalThis, "FinalizationRegistry", {
+      value: AssertFinalizationRegistry as unknown as typeof FinalizationRegistry,
+      configurable: true,
+      writable: true,
+    });
+
+    try {
+      const moduleSpecifier = `../../src/serialize.js?finalizer-target-leak=${weakRefReloadSequence}`;
+      weakRefReloadSequence += 1;
+      const { stableStringify: strictStableStringify } = await import(moduleSpecifier);
+
+      strictStableStringify(Symbol("finalizer-target"));
+    } finally {
+      weakRefReloadSequence += 1;
+      Object.defineProperty(globalThis, "FinalizationRegistry", {
+        value: originalFinalizationRegistry,
+        configurable: true,
+        writable: true,
+      });
+    }
+  },
+);
+
+test(
   "WeakRef と FinalizationRegistry が存在する環境でローカルシンボルキャッシュがクリーンアップされる",
   async () => {
     if (
