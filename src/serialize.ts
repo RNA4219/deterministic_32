@@ -39,22 +39,7 @@ type SymbolObject = Symbol & object;
 type LocalSymbolHolder = {
   symbol: symbol;
   target: SymbolObject;
-};
-
-type LocalSymbolWeakEntry = {
-  ref: WeakRef<LocalSymbolHolder>;
-  finalizerToken: object;
-};
-
-type LocalSymbolRegistryEntry =
-  | LocalSymbolWeakEntry
-  | {
-      holder: LocalSymbolHolder;
-    };
-
-type LocalSymbolFinalizerRecord = {
-  symbol: symbol;
-  token: object;
+  finalizerToken?: LocalSymbolFinalizerToken;
 };
 
 type LocalSymbolSentinelRecord = {
@@ -62,9 +47,7 @@ type LocalSymbolSentinelRecord = {
   sentinel: string;
 };
 
-type LocalSymbolFinalizerToken = {
-  holder: LocalSymbolHolder;
-};
+type LocalSymbolFinalizerToken = { holder: LocalSymbolHolder };
 
 type LocalSymbolIdentifierEntry = {
   holder: LocalSymbolHolder;
@@ -76,18 +59,28 @@ const HAS_WEAK_REFS = typeof WeakRef === "function",
 
 const LOCAL_SYMBOL_SENTINEL_REGISTRY =
   new WeakMap<SymbolObject, LocalSymbolSentinelRecord>();
-const LOCAL_SYMBOL_OBJECT_REGISTRY = new Map<symbol, LocalSymbolRegistryEntry>();
+const LOCAL_SYMBOL_OBJECT_REGISTRY = new Map<symbol, SymbolObject>();
+const LOCAL_SYMBOL_HOLDER_REGISTRY = new Map<symbol, LocalSymbolHolder>();
+const LOCAL_SYMBOL_IDENTIFIER_INDEX =
+  HAS_WEAK_REFS && HAS_FINALIZATION_REGISTRY
+    ? new Map<string, LocalSymbolIdentifierEntry>()
+    : undefined;
+const LOCAL_SYMBOL_IDENTIFIER_BY_HOLDER =
+  HAS_WEAK_REFS && HAS_FINALIZATION_REGISTRY
+    ? new WeakMap<LocalSymbolHolder, string>()
+    : undefined;
 const LOCAL_SYMBOL_FINALIZER =
   HAS_WEAK_REFS && HAS_FINALIZATION_REGISTRY
-    ? new FinalizationRegistry<LocalSymbolFinalizerRecord>((record) => {
-        const entry = LOCAL_SYMBOL_OBJECT_REGISTRY.get(record.symbol);
-        if (entry === undefined || !isWeakRegistryEntry(entry)) {
+    ? new FinalizationRegistry<string>((identifier) => {
+        const entry = LOCAL_SYMBOL_IDENTIFIER_INDEX?.get(identifier);
+        if (entry === undefined) {
           return;
         }
-        if (entry.finalizerToken !== record.token) {
-          return;
-        }
-        LOCAL_SYMBOL_OBJECT_REGISTRY.delete(record.symbol);
+        LOCAL_SYMBOL_IDENTIFIER_INDEX?.delete(identifier);
+        LOCAL_SYMBOL_IDENTIFIER_BY_HOLDER?.delete(entry.holder);
+        entry.holder.finalizerToken = undefined;
+        LOCAL_SYMBOL_HOLDER_REGISTRY.delete(entry.holder.symbol);
+        LOCAL_SYMBOL_OBJECT_REGISTRY.delete(entry.holder.symbol);
       })
     : undefined;
 
@@ -102,6 +95,12 @@ function getOrCreateSymbolObject(symbol: symbol): SymbolObject {
   const created = Object(symbol) as SymbolObject;
   LOCAL_SYMBOL_OBJECT_REGISTRY.set(symbol, created);
   return created;
+}
+
+function getExistingLocalSymbolHolder(
+  symbol: symbol,
+): LocalSymbolHolder | undefined {
+  return LOCAL_SYMBOL_HOLDER_REGISTRY.get(symbol);
 }
 
 function getLocalSymbolHolder(symbol: symbol): LocalSymbolHolder {
@@ -139,16 +138,28 @@ function registerLocalSymbolSentinelRecord(
 ): void {
   LOCAL_SYMBOL_SENTINEL_REGISTRY.set(holder.target, record);
 
-  if (LOCAL_SYMBOL_FINALIZER !== undefined) {
-    const entry = LOCAL_SYMBOL_OBJECT_REGISTRY.get(holder.symbol);
-    if (entry !== undefined && isWeakRegistryEntry(entry)) {
-      LOCAL_SYMBOL_FINALIZER.unregister(entry.finalizerToken);
-      LOCAL_SYMBOL_FINALIZER.register(
-        holder.target,
-        { symbol: holder.symbol, token: entry.finalizerToken },
-        entry.finalizerToken,
-      );
+  if (
+    LOCAL_SYMBOL_FINALIZER !== undefined &&
+    LOCAL_SYMBOL_IDENTIFIER_INDEX !== undefined &&
+    LOCAL_SYMBOL_IDENTIFIER_BY_HOLDER !== undefined
+  ) {
+    const previousIdentifier = LOCAL_SYMBOL_IDENTIFIER_BY_HOLDER.get(holder);
+    if (previousIdentifier !== undefined) {
+      LOCAL_SYMBOL_IDENTIFIER_INDEX.delete(previousIdentifier);
     }
+
+    let token = holder.finalizerToken;
+    if (token === undefined) {
+      token = { holder };
+      holder.finalizerToken = token;
+    } else {
+      LOCAL_SYMBOL_FINALIZER.unregister(token);
+    }
+
+    const entry: LocalSymbolIdentifierEntry = { holder, token };
+    LOCAL_SYMBOL_IDENTIFIER_INDEX.set(record.identifier, entry);
+    LOCAL_SYMBOL_IDENTIFIER_BY_HOLDER.set(holder, record.identifier);
+    LOCAL_SYMBOL_FINALIZER.register(holder.target, record.identifier, token);
   }
 }
 
