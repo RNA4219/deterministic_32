@@ -61,8 +61,8 @@ const HAS_WEAK_REFS = typeof WeakRef === "function",
 
 const LOCAL_SYMBOL_SENTINEL_REGISTRY =
   new WeakMap<SymbolObject, LocalSymbolSentinelRecord>();
-const LOCAL_SYMBOL_OBJECT_REGISTRY = new Map<symbol, SymbolObject>();
-const LOCAL_SYMBOL_HOLDER_REGISTRY = new Map<symbol, LocalSymbolHolder>();
+const LOCAL_SYMBOL_OBJECT_REGISTRY: Map<symbol, SymbolObject> = new Map();
+const LOCAL_SYMBOL_HOLDER_REGISTRY: Map<symbol, LocalSymbolHolder> = new Map();
 const LOCAL_SYMBOL_IDENTIFIER_INDEX =
   HAS_WEAK_REFS && HAS_FINALIZATION_REGISTRY
     ? new Map<string, LocalSymbolIdentifierEntry>()
@@ -86,11 +86,15 @@ const LOCAL_SYMBOL_FINALIZER =
         }
         LOCAL_SYMBOL_IDENTIFIER_INDEX.delete(identifier);
         LOCAL_SYMBOL_IDENTIFIER_BY_HOLDER.delete(entry.holder);
-        entry.holder.finalizerToken = undefined;
-        LOCAL_SYMBOL_HOLDER_REGISTRY.delete(entry.holder.symbol);
-        LOCAL_SYMBOL_OBJECT_REGISTRY.delete(entry.holder.symbol);
+        resetLocalSymbolHolder(entry.holder);
       })
     : undefined;
+
+function resetLocalSymbolHolder(holder: LocalSymbolHolder): void {
+  holder.finalizerToken = undefined;
+  LOCAL_SYMBOL_HOLDER_REGISTRY.delete(holder.symbol);
+  LOCAL_SYMBOL_OBJECT_REGISTRY.delete(holder.symbol);
+}
 
 let nextLocalSymbolSentinelId = 0;
 

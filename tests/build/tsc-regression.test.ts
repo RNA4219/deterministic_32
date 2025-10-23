@@ -66,6 +66,8 @@ const assertNoLocalSymbolRegistryErrors = (stderr: string): void => {
   for (const identifier of [
     "LOCAL_SYMBOL_OBJECT_REGISTRY",
     "LOCAL_SYMBOL_HOLDER_REGISTRY",
+    "LOCAL_SYMBOL_IDENTIFIER_INDEX",
+    "LOCAL_SYMBOL_IDENTIFIER_BY_HOLDER",
     "getOrCreateSymbolObject",
     "peekLocalSymbolSentinelRecordFromObject",
   ] as const) {
@@ -81,6 +83,8 @@ const assertNoLocalSymbolRegistryErrors = (stderr: string): void => {
     "TS2345: Argument of type 'SymbolObject' is not assignable to parameter of type 'LocalSymbolRegistryEntry'",
     "TS2552: Cannot find name 'getExistingLocalSymbolHolder'",
     "TS2552: Cannot find name 'LOCAL_SYMBOL_HOLDER_REGISTRY'",
+    "TS2552: Cannot find name 'LOCAL_SYMBOL_IDENTIFIER_INDEX'",
+    "TS2552: Cannot find name 'LOCAL_SYMBOL_IDENTIFIER_BY_HOLDER'",
     "TS2304: Cannot find name 'isWeakRegistryEntry'",
   ]) {
     assert.ok(
