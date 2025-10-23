@@ -191,6 +191,20 @@ test("dist stableStringify matches JSON.stringify for string literals", async ()
   );
 });
 
+test("default Cat32 instances keep independent label arrays", () => {
+  const first = new Cat32();
+  const second = new Cat32();
+
+  const firstLabels = (first as unknown as { labels: string[] }).labels;
+  const secondLabels = (second as unknown as { labels: string[] }).labels;
+
+  assert.ok(firstLabels !== secondLabels);
+
+  firstLabels[0] = "Z";
+
+  assert.equal(secondLabels[0], "A");
+});
+
 test(
   "dist stableStringify preserves prefixed sentinel string literal content",
   async () => {
