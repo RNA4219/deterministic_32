@@ -1,16 +1,18 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
+import { Cat32, stableStringify } from "../../src/index.js";
 import {
-  Cat32,
-  stableStringify,
-} from "../../src/index.js";
-import {
+  __getLocalSymbolHolderRegistrySizeForTest,
   __getLocalSymbolSentinelRecordForTest,
   __peekLocalSymbolSentinelRecordForTest,
 } from "../../src/serialize.js";
 
 let weakRefReloadSequence = 0;
+const gcAvailable = typeof getExposedGc() === "function";
+const testWithGc: typeof test = gcAvailable
+  ? test
+  : (test as unknown as { skip: typeof test }).skip;
 
 test("stableStringify(Symbol('x')) が決定的キーを返す", () => {
   const symbol = Symbol("x");
@@ -264,6 +266,62 @@ test(
     }
   },
 );
+
+testWithGc(
+  "GC 実行後にローカルシンボルホルダーレジストリが縮小する",
+  async () => {
+    if (
+      typeof globalThis.WeakRef !== "function" ||
+      typeof globalThis.FinalizationRegistry !== "function"
+    ) {
+      return;
+    }
+
+    const moduleSpecifier = `../../src/serialize.js?gc-holder=${weakRefReloadSequence}`;
+    weakRefReloadSequence += 1;
+
+    const {
+      stableStringify: gcStableStringify,
+      __getLocalSymbolHolderRegistrySizeForTest: getHolderRegistrySize,
+    } = await import(moduleSpecifier);
+
+    const baseline = getHolderRegistrySize();
+
+    for (let index = 0; index < 2048; index += 1) {
+      gcStableStringify(Symbol(`gc-target-${index}`));
+    }
+
+    assert.ok(
+      getHolderRegistrySize() > baseline,
+      "センチネル生成後にレジストリ件数が増加すること",
+    );
+
+    const gc = getExposedGc();
+    if (typeof gc !== "function") {
+      assert.ok(false, "globalThis.gc が利用可能な状態であること");
+      return;
+    }
+
+    await runGcCycles(gc);
+
+    assert.equal(
+      getHolderRegistrySize(),
+      baseline,
+      "GC 後にレジストリ件数が元に戻ること",
+    );
+  },
+);
+
+function getExposedGc(): (() => void) | undefined {
+  return (globalThis as typeof globalThis & { gc?: () => void }).gc;
+}
+
+async function runGcCycles(gc: () => void): Promise<void> {
+  for (let iteration = 0; iteration < 8; iteration += 1) {
+    gc();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+}
 
 test("ローカルシンボルのセンチネルレコードがキャッシュされる", () => {
   const local = Symbol("local sentinel");
