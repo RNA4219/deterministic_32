@@ -6,6 +6,8 @@ const dynamicImport = new Function(
   "return import(specifier);",
 ) as (specifier: string) => Promise<unknown>;
 
+const repoRootUrl = new URL("../../..", import.meta.url);
+
 type ProcessLike = {
   env?: Record<string, string | undefined>;
   platform?: string;
@@ -30,7 +32,6 @@ const runTsc = async (
     fileURLToPath: (input: URL) => string;
   };
 
-  const repoRootUrl = new URL("../../..", import.meta.url);
   const repoRootPath = fileURLToPath(repoRootUrl);
   const env = { ...baseEnv, CI: "1" };
 
@@ -91,6 +92,47 @@ test(
           : "",
       );
       throw error;
+    }
+  },
+);
+
+const readFileFromRepoRoot = async (relativePath: string): Promise<string> => {
+  const { fileURLToPath } = (await dynamicImport("node:url")) as {
+    fileURLToPath: (input: URL) => string;
+  };
+  const { join } = (await dynamicImport("node:path")) as {
+    join: (...segments: string[]) => string;
+  };
+  const { readFile } = (await dynamicImport("node:fs/promises")) as {
+    readFile: (path: string, encoding: string) => Promise<string>;
+  };
+
+  const repoRootPath = fileURLToPath(repoRootUrl);
+  return readFile(join(repoRootPath, relativePath), "utf8");
+};
+
+test(
+  "npm run build 後の dist/categorizer.d.ts が NFD/NFKD を含む",
+  async () => {
+    let buildError: unknown;
+    try {
+      await runTsc("npm run build");
+    } catch (error) {
+      buildError = error;
+    }
+
+    const declaration = await readFileFromRepoRoot("dist/categorizer.d.ts");
+    assert.ok(
+      declaration.includes("| \"nfd\""),
+      'dist/categorizer.d.ts に "| \\"nfd\\"" が含まれていません',
+    );
+    assert.ok(
+      declaration.includes("| \"nfkd\""),
+      'dist/categorizer.d.ts に "| \\"nfkd\\"" が含まれていません',
+    );
+
+    if (buildError !== undefined) {
+      throw buildError;
     }
   },
 );
