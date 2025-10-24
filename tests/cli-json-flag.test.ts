@@ -127,6 +127,23 @@ test("cat32 --json foo falls back to default format", async () => {
   assert.equal(record.key, JSON.stringify("foo"));
 });
 
+test("cat32 --json foo emits NDJSON", async () => {
+  const { exitCode, stdout, stderr } = await runCat32(["--json", "foo"]);
+
+  assert.equal(exitCode, 0);
+  assert.equal(stderr, "");
+
+  assert.ok(stdout.endsWith("\n"), "stdout should end with a newline for NDJSON");
+
+  const lines = stdout.split("\n");
+  const trailing = lines.pop();
+  assert.equal(trailing, "", "stdout should terminate with a newline delimiter");
+
+  const records = lines.filter((line) => line.length > 0).map((line) => JSON.parse(line));
+  assert.equal(records.length, 1);
+  assert.equal(records[0].key, JSON.stringify("foo"));
+});
+
 test("dist/src/cli.js --json foo falls back to default format", async () => {
   const { exitCode, stdout, stderr } = await runCat32(["--json", "foo"], {
     bin: DIST_SRC_CLI_BIN,
