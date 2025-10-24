@@ -14,8 +14,8 @@ $ npx deterministic-32 <key?> [--salt=... --namespace=... --normalize=nfkc|nfkd|
 - `--normalize` には Unicode 正規化モードとして `nfkc`（既定）、`nfkd`、`nfd`、`nfc`、`none` の 5 種類を指定できる。
 - 終了コード:
 - `0` … 成功
+- `1` … その他の例外
 - `2` … 循環/labels長不正/override不正など仕様違反
-  - `1` … その他の例外
 
 ## 出力例
 
