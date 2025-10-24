@@ -1,7 +1,7 @@
 # CLI 仕様
 
 ```
-$ npx deterministic-32 <key?> [--salt=... --namespace=... --normalize=nfkc|nfkd|nfd|nfc|none --json[=compact|pretty] --pretty]
+$ npx deterministic-32 <key?> [--salt=... --namespace=... --normalize=nfkc|nfkd|nfd|nfc|none --json[=compact|pretty] --pretty --help]
 ```
 
 - `<key>` が無い場合は **stdin** を読み取る。
@@ -17,6 +17,7 @@ $ npx deterministic-32 <key?> [--salt=... --namespace=... --normalize=nfkc|nfkd|
   - `--json=pretty` / `--pretty` / `--json --pretty` は 2 スペースで整形した複数行の JSON を返す。
     各レコードが複数行になるため NDJSON ではない。
 - `--normalize` には Unicode 正規化モードとして `nfkc`（既定）、`nfkd`、`nfd`、`nfc`、`none` の 5 種類を指定できる。
+- `--help` を指定するとヘルプテキストを表示して終了する。
 - 終了コード:
 - `0` … 成功
 - `1` … その他の例外
