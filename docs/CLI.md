@@ -14,8 +14,7 @@ $ npx deterministic-32 <key?> \
   ```json
   {"index":7,"label":"H","hash":"1a2b3c4d","key":"...canonical..."}
   ```
-- `--json` を付けない場合と `--json` / `--json=compact` を指定した場合はいずれも compact JSON（1 行 1 JSON、末尾改行あり）の NDJSON を返す。
-  NDJSON (1 行 1 JSON オブジェクト) になるのは compact/既定モードのみです。
+- `--json` を付けない場合と `--json` / `--json=compact` を指定した場合はいずれも compact JSON（1 行 1 JSON、末尾改行あり）の NDJSON を返す。NDJSON (1 行 1 JSON オブジェクト) になるのは compact/既定モードのみです。
   - `--json=pretty` / `--pretty` / `--json --pretty` は 2 スペースで整形した複数行の JSON を返し、NDJSON ではない。
 - `--normalize` には Unicode 正規化モードとして `nfkc`（既定）、`nfkd`、`nfd`、`nfc`、`none` の 5 種類を指定できる。
 - `--help` を指定するとヘルプテキストを表示して終了する。
