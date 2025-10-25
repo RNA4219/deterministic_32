@@ -27,6 +27,9 @@ export class Cat32 {
   index(input: unknown): number;
   labelOf(input: unknown): string;
 }
+
+export function stableStringify(value: unknown): string;
+export type StableStringify = typeof stableStringify;
 ```
 
 `normalize` には Unicode 正規化モードとして `"none" | "nfc" | "nfd" | "nfkc" | "nfkd"` の 5 種類を指定できます（CLI の `--normalize` も同じ値を受け付けます）。既定値は `"nfkc"` です。
@@ -40,6 +43,11 @@ const a = cat.assign({ id: 1, tags: ["a", "b"] });
 // a = { index, label, hash, key }
 ```
 
+### stableStringify で canonical key を取得する
+
+`stableStringify(value)` は `Cat32.assign(value).key` と同じ canonical key を生成し、構造化データを事前に文字列化する用途に利用できます
+。`normalize` オプションはコンストラクター側で再適用されるため、`stableStringify` 単体で事前計算しても整合性が保たれます。
+
 ### overrides の canonical key 取得
 
-`overrides` のキーには `stableStringify(value)` で得た canonical key を渡してください。`Cat32.assign(value).key` でも同じ結果を得られますが、`overrides` 用に事前計算する場合は `stableStringify` のみで十分です（constructor 側で `normalize` が再適用されます）。
+`overrides` のキーには上記 `stableStringify(value)` で得た canonical key を渡してください。`Cat32.assign(value).key` でも同じ結果を得られます。
