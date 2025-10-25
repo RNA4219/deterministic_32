@@ -73,6 +73,7 @@ echo '{"id":1,"k":"v"}' | npx deterministic-32 --salt=proj
   - `--namespace <value>`: Namespace that scopes generated categories.
   - `--normalize <value>`: Unicode normalization form (`none`/`nfc`/`nfd`/`nfkc`/`nfkd`; default: `nfkc`).
   - `--json [format]`: Output JSON format: `compact` or `pretty` (default: `compact`).
+    フォーマット値が省略された場合や許可されていない値だった場合は `compact` を使用し、直後のトークン（存在する場合）を位置引数として扱います。
   - `--pretty`: Shorthand for `--json pretty`.
   - `--help`: Show this help message and exit.
 - 出力は既定で 1 行 1 JSON の **NDJSON**（末尾改行あり）。
@@ -80,6 +81,13 @@ echo '{"id":1,"k":"v"}' | npx deterministic-32 --salt=proj
   `--json` を付けない場合と `--json` / `--json=compact` を指定した場合はいずれもこの形式になります。
 - `--json=pretty` / `--pretty` / `--json --pretty` は複数行の整形 JSON（インデント 2）を返します。
   各レコードが複数行になるため NDJSON ではありません。
+
+例:
+
+```bash
+cat32 --json foo
+# -> {"key":"\"foo\"",...} を含む NDJSON 1 レコード。フォーマット指定が無効なので compact にフォールバックし、`foo` は位置引数として解釈される。
+```
 
 ## Determinism
 - Canonical key = **normalize(NFKC)** ∘ **stable stringify (key-sorted, cycle-check)**.
