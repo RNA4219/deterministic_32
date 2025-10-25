@@ -34,6 +34,11 @@ test("CLI documented exit codes match implementation", async () => {
     "docs should describe how RangeError is handled for CLI exit codes",
   );
 
+  assert.ok(
+    /cat32 -- --[\w-]+/.test(doc),
+    "docs should document using \"--\" to treat subsequent arguments as literal keys",
+  );
+
   const exitCodeMappingMatch = source.match(
     /const exitCode = isSpecificationViolation\(error\) \? (?<violation>\d+) : (?<general>\d+);/u,
   );
