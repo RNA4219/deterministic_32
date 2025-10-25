@@ -47,7 +47,7 @@ tests/
 - 入力: 引数 `<key>` がなければ **stdin** を読む。
 - 出力: 既定/`compact` モードは **NDJSON**（1 行 1 JSON）で `Assignment` を出力。
 - 整形モード（`--json=pretty`/`--pretty`/`--json --pretty`）は複数行の整形 JSON を返し、NDJSON とは異なる。
-- 失敗コード: `2`（循環/ラベル不正、未知フラグ/不正値など `RangeError` を投げる CLI エラーを含む。例: `--json=invalid`、存在しない正規化モード指定など）、`1`（その他）。
+- 失敗コード: `2`（仕様違反: 循環/ラベル不正/override不正、`RangeError` を投げる CLI 引数エラー。例: `--json=invalid`、存在しない正規化モード指定など）、`1`（その他）。CLI 利用時の補足は [CLI 仕様](./CLI.md) を参照。
 
 ## 7. 性能
 - 時間計算量: `O(len(utf8))`
