@@ -45,8 +45,7 @@ const a = cat.assign({ id: 1, tags: ["a", "b"] });
 
 ### stableStringify で canonical key を取得する
 
-`stableStringify(value)` は `Cat32.assign(value).key` と同じ canonical key を生成し、構造化データを事前に文字列化する用途に利用できます
-。`normalize` オプションはコンストラクター側で再適用されるため、`stableStringify` 単体で事前計算しても整合性が保たれます。
+`stableStringify(value)` は `Cat32.assign(value).key` と同じ canonical key を生成し、構造化データを事前に文字列化する用途に利用できます。`normalize` オプションはコンストラクター側で再適用されるため、`stableStringify` 単体で事前計算しても整合性が保たれます。型注釈が必要な場合は `StableStringify` を利用すると、API のシグネチャと揃えられます。
 
 ### overrides の canonical key 取得
 
