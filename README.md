@@ -61,6 +61,9 @@ const assignment = cat.assign("hello");
 3. Use those canonical keys inside the `overrides` map to pin indexes or labels.
 
 ## CLI
+
+`npx deterministic-32` の代わりに `npx cat32` も利用できます。ローカルインストール後は `node_modules/.bin/cat32`（例: `npx cat32` や npm-scripts から）を、`npm install -g deterministic-32` 後はグローバルに常駐した `cat32` コマンドをそのまま呼び出せます。
+
 ```bash
 npx deterministic-32 "user:123" --salt=proj --namespace=v1
 echo '{"id":1,"k":"v"}' | npx deterministic-32 --salt=proj
@@ -86,7 +89,7 @@ echo '{"id":1,"k":"v"}' | npx deterministic-32 --salt=proj
 - `--json=pretty` / `--pretty` / `--json --pretty` は複数行の整形 JSON（インデント 2）を返します。
   各レコードが複数行になるため NDJSON ではありません。
 
-例:
+例（`cat32` は `npx cat32` で即時実行するか、ローカル/グローバルインストールで取得したバイナリを PATH に通して利用します）:
 
 ```bash
 cat32 --json foo
