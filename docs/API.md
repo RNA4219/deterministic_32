@@ -32,7 +32,7 @@ export function stableStringify(value: unknown): string;
 export type StableStringify = typeof stableStringify;
 ```
 
-`normalize` には Unicode 正規化モードとして `"none" | "nfc" | "nfd" | "nfkc" | "nfkd"` の 5 種類を指定できます（CLI の `--normalize` も同じ値を受け付けます）。既定値は `"nfkc"` です。
+`normalize` には Unicode 正規化モードとして `"none" | "nfc" | "nfd" | "nfkc" | "nfkd"` の 5 種類を指定できます。CLI の `--normalize` も同じ値を受け付け、既定値は `"nfkc"` です。
 
 ### 例
 ```ts
