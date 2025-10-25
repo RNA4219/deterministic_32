@@ -1,6 +1,6 @@
 # CLI 仕様
 
-```
+```sh
 $ npx deterministic-32 <key?> [--salt=... --namespace=... --normalize=nfkc|nfkd|nfd|nfc|none --json[=compact|pretty] --pretty --help]
 ```
 
