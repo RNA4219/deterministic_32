@@ -56,7 +56,8 @@ const assignment = cat.assign("hello");
 ### Canonical override keys
 
 1. Instantiate a `Cat32` instance with the normalization/salt/namespace you plan to ship.
-2. Produce canonical keys with either `stableStringify(value)` (pure value transformation) or `cat.assign(value).key` (round-trips through normalization).
+2. Produce canonical keys with either `stableStringify(value)` (pure value transformation)
+   or `cat.assign(value).key` (round-trips through normalization).
 3. Use those canonical keys inside the `overrides` map to pin indexes or labels.
 
 ## CLI
@@ -68,7 +69,8 @@ echo '{"id":1,"k":"v"}' | npx deterministic-32 --salt=proj
 - フラグ解析を止めたい場合は `--`（ダブルダッシュ）を挟む。例えば `cat32 -- --literal-key` は `--literal-key` をそのままキーとして処理する。
   `--` より後ろのトークンは空白区切りのまま 1 つの入力として `parseArgs()` に渡され、フラグ再解釈は行われない。
   詳細は [docs/CLI.md](./docs/CLI.md) を参照してください。
-- `echo` などからの標準入力は、実装上 `readStdin()` が末尾の `\r?\n` を既定で取り除くため、CLI 引数で渡した場合と同じ canonical key に揃います。
+- `echo` などからの標準入力は、実装上 `readStdin()` が末尾の `\r?\n` を既定で取り除くため、
+  CLI 引数で渡した場合と同じ canonical key に揃います。
   現状 CLI からこの振る舞いを切り替える方法はなく、将来的に保持が必要になった場合は `readStdin` の `preserveTrailingNewline` オプションを公開するフラグ追加で対応予定です。
 - 利用可能なフラグ:
   - `--salt <value>`: Salt to apply when assigning a category.
@@ -101,7 +103,9 @@ Changing `labels/salt/namespace/normalize` changes results intentionally.
 - Not cryptographic. Do **not** use for secrecy or collision-critical workloads.
 - For compatibility flips, bump `namespace` (consumer side).
 - Overrides compare against **post-normalized keys**.
-- Birdseye map refresh: when touching `src/categorizer.ts` or `src/serialize.ts`, run `codemap.update --targets src/categorizer.ts src/serialize.ts --emit index+caps` before merge; if `generated_at` drifts, regenerate both `index.json` and the matching capsules and commit them together.
+- Birdseye map refresh: when touching `src/categorizer.ts` or `src/serialize.ts`, run
+  `codemap.update --targets src/categorizer.ts src/serialize.ts --emit index+caps` before merge;
+  if `generated_at` drifts, regenerate both `index.json` and the matching capsules and commit them together.
 
 ## Benchmark
 - `npm run bench` (build + `node dist/scripts/bench.js`).
