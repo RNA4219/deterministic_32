@@ -75,7 +75,7 @@ echo '{"id":1,"k":"v"}' | npx deterministic-32 --salt=proj
   - `--pretty`: Shorthand for `--json pretty`.
   - `--help`: Show this help message and exit.
 - 出力は既定で 1 行 1 JSON の **NDJSON**（末尾改行あり）。
-  NDJSON を選べるのはデフォルト/compact モードのみです。
+  NDJSON はデフォルト/compact モードのみで利用できます。
   `--json` を付けない場合と `--json` / `--json=compact` を指定した場合はいずれもこの形式になります。
 - `--json=pretty` / `--pretty` / `--json --pretty` は複数行の整形 JSON（インデント 2）を返します。
   各レコードが複数行になるため NDJSON ではありません。
