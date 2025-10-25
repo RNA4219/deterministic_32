@@ -67,6 +67,13 @@ echo '{"id":1,"k":"v"}' | npx deterministic-32 --salt=proj
 ```
 - `echo` などからの標準入力は、実装上 `readStdin()` が末尾の `\r?\n` を既定で取り除くため、CLI 引数で渡した場合と同じ canonical key に揃います。
   現状 CLI からこの振る舞いを切り替える方法はなく、将来的に保持が必要になった場合は `readStdin` の `preserveTrailingNewline` オプションを公開するフラグ追加で対応予定です。
+- 利用可能なフラグ:
+  - `--salt <value>`: Salt to apply when assigning a category.
+  - `--namespace <value>`: Namespace that scopes generated categories.
+  - `--normalize <value>`: Unicode normalization form (`none`/`nfc`/`nfd`/`nfkc`/`nfkd`; default: `nfkc`).
+  - `--json [format]`: Output JSON format: `compact` or `pretty` (default: `compact`).
+  - `--pretty`: Shorthand for `--json pretty`.
+  - `--help`: Show this help message and exit.
 - 出力は既定で 1 行 1 JSON の **NDJSON**（末尾改行あり）。
   NDJSON を選べるのはデフォルト/compact モードのみです。
   `--json` を付けない場合と `--json` / `--json=compact` を指定した場合はいずれもこの形式になります。
