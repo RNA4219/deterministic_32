@@ -15,6 +15,10 @@ $ npx deterministic-32 <key?> \
   {"index":7,"label":"H","hash":"1a2b3c4d","key":"...canonical..."}
   ```
 - `--json` を付けない場合と `--json` / `--json=compact` を指定した場合はいずれも compact JSON（1 行 1 JSON、末尾改行あり）の NDJSON を返す。NDJSON (1 行 1 JSON オブジェクト) になるのは compact/既定モードのみです。
+  - CLI の `--json` オプションは以下の順序で値を解決する。
+    1. `--json=pretty` のように `=` で指定された値を採用し、`compact` / `pretty` 以外なら `RangeError` を発生させる。
+    2. スペース区切りの次トークンが `compact` または `pretty` の場合はそれを値として消費し、`--json pretty` のように扱う。
+    3. 上記のどちらにも該当しなければ既定の `compact` へフォールバックし、そのトークンは位置引数として扱う。`cat32 --json foo` では `foo` が許可外のトークンなので、出力は compact のまま `foo` がキーとして受理される。
   - `--json=pretty` / `--pretty` / `--json --pretty` は 2 スペースで整形した複数行の JSON を返し、NDJSON ではない。
 - `--normalize` には Unicode 正規化モードとして `nfkc`（既定）、`nfkd`、`nfd`、`nfc`、`none` の 5 種類を指定できる。
 - `--help` を指定するとヘルプテキストを表示して終了する。

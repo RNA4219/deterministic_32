@@ -58,3 +58,18 @@ test("CLI documented exit codes match implementation", async () => {
     "docs must not advertise an exit code 3 for RangeError or other cases",
   );
 });
+
+test("CLI docs describe --json fallback for disallowed next token", async () => {
+  const { readFile } = (await dynamicImport("node:fs/promises")) as FsPromisesModule;
+  const doc = await readFile(cliDocPath, "utf8");
+
+  assert.ok(
+    /--json[\s\S]{0,160}フォールバック[\s\S]{0,160}位置引数/u.test(doc),
+    "docs should explain that --json falls back to the default format and treats the token as a positional argument when the next token is not allowed",
+  );
+
+  assert.ok(
+    /cat32 --json foo[\s\S]{0,200}foo[\s\S]{0,120}キー/u.test(doc),
+    "docs should explain why cat32 --json foo accepts foo as the key",
+  );
+});
