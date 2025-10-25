@@ -1,7 +1,10 @@
 # CLI 仕様
 
 ```sh
-$ npx deterministic-32 <key?> [--salt=... --namespace=... --normalize=nfkc|nfkd|nfd|nfc|none --json[=compact|pretty] --pretty --help]
+$ npx deterministic-32 <key?> \
+    [--salt=... --namespace=... \
+     --normalize=nfkc|nfkd|nfd|nfc|none \
+     --json[=compact|pretty] --pretty --help]
 ```
 
 - `<key>` が無い場合は **stdin** を読み取る。
