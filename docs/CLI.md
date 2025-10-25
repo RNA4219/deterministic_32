@@ -19,7 +19,7 @@ $ npx deterministic-32 <key?> [--salt=... --namespace=... --normalize=nfkc|nfkd|
 - 終了コード:
 - `0` … 成功
 - `1` … その他の例外
-- `2` … 循環/labels長不正/override不正など仕様違反
+- `2` … 仕様違反（循環/labels長不正/override不正など）および CLI 引数が `RangeError` を投げた場合（例: `--json=invalid`、存在しない正規化モード指定）。詳細は [DESIGN.md §6](./DESIGN.md#6-cli-cli-ts) を参照。
 
 ## 出力例
 
