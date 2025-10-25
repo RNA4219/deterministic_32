@@ -67,7 +67,7 @@ echo '{"id":1,"k":"v"}' | npx deterministic-32 --salt=proj
 # Output: one JSON per line (same shape as assign())
 ```
 - フラグ解析を止めたい場合は `--`（ダブルダッシュ）を挟む。例えば `cat32 -- --literal-key` は `--literal-key` をそのままキーとして処理する。
-  `--` より後ろのトークンは空白区切りのまま 1 つの入力として `parseArgs()` に渡され、フラグ再解釈は行われない。
+  `--` より後ろのトークンは空白区切りのまま 1 つの入力として結合され、`parseArgs()` はそれ以上フラグとして解釈しない。
   詳細は [docs/CLI.md](./docs/CLI.md) を参照してください。
 - `echo` などからの標準入力は、実装上 `readStdin()` が末尾の `\r?\n` を既定で取り除くため、
   CLI 引数で渡した場合と同じ canonical key に揃います。
