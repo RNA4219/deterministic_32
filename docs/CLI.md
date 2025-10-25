@@ -19,7 +19,7 @@ $ npx deterministic-32 <key?> [--salt=... --namespace=... --normalize=nfkc|nfkd|
 - 終了コード:
 - `0` … 成功
 - `1` … その他の例外
-- `2` … 循環/labels長不正/override不正など仕様違反
+- `2` … 循環/labels長不正/override不正など仕様違反。`RangeError`（未知フラグや許可外値など。例: `--json=invalid`）もこの終了コード。
 
 ## 出力例
 
