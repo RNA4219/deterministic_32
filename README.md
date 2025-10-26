@@ -80,8 +80,8 @@ echo '{"id":1,"k":"v"}' | npx deterministic-32 --salt=proj
   - `--namespace <value>`: Namespace that scopes generated categories.
   - `--normalize <value>`: Unicode normalization form (`none`/`nfc`/`nfd`/`nfkc`/`nfkd`; default: `nfkc`).
   - `--json [format]`: Output JSON format: `compact` or `pretty` (default: `compact`).
-    `--json=<value>` 形式で許可されていない値を指定すると `RangeError` で終了します。
-    スペース区切りで値を渡した場合に限り `compact` へフォールバックし、次のトークン（存在する場合）はキーとして解釈されます。
+    `--json=<value>` 形式で許可されていない値を指定した場合は `RangeError` で終了します。
+    スペース区切りで許可外の値を渡した場合に限り `compact` へフォールバックし、後続トークン（存在する場合）は位置引数としてキーに回されます。
   - `--pretty`: Shorthand for `--json pretty`.
   - `--help`: Show this help message and exit.
 - 出力は既定で 1 行 1 JSON の **NDJSON**（末尾改行あり）。
@@ -95,7 +95,8 @@ echo '{"id":1,"k":"v"}' | npx deterministic-32 --salt=proj
 ```bash
 cat32 --json foo
 # -> {"key":"\"foo\"",...} を含む NDJSON 1 レコードを出力し、成功終了します。
-#    スペース区切りで値を渡しているため `--json` は compact にフォールバックし、`foo` は次トークンとしてキーに扱われます。
+#    スペース区切りで許可外の値を渡しているため `--json` は compact にフォールバックし、`foo` は後続トークンとしてキーに扱われます。
+#    一方 `--json=foo` のように `=` 付きで許可外の値を渡すと `RangeError` で終了します。
 ```
 
 ## Determinism
