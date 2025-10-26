@@ -7,7 +7,7 @@ $ npx deterministic-32 <key?> \
      --json[=compact|pretty] --pretty --help]
 ```
 
-以降の例で利用する `cat32` は `deterministic-32` パッケージに同梱された CLI バイナリアイアスで、`npx cat32`、ローカルインストール後の `node_modules/.bin/cat32`、`npm install -g deterministic-32` 後のグローバル `cat32` から呼び出せます。[^cat32-alias]
+以降の例で利用する `cat32` は `deterministic-32` パッケージに同梱された CLI バイナリアイアスで、ローカルインストール後の `node_modules/.bin/cat32`、`npm install -g deterministic-32` 後のグローバル `cat32` に加えて、未導入環境では `npx --package deterministic-32 cat32` のように一時取得して呼び出せます。[^cat32-alias]
 
 - `<key>` が無い場合は **stdin** を読み取る。
   - 標準入力から取得した文字列の末尾にある `\r?\n` は既定で除去され、CLI 引数として同じ内容を渡した場合と同一のキーが得られる。
@@ -71,4 +71,4 @@ $ cat32 -- --literal-key
 {"index":12,"label":"M","hash":"b9f6cbe3","key":"\"--literal-key\""}
 ```
 
-[^cat32-alias]: `cat32` は `deterministic-32` に同梱された CLI エイリアスです。`npx cat32`、ローカルインストール後の `node_modules/.bin/cat32`、`npm install -g deterministic-32` 後のグローバル `cat32` いずれからも起動できます。
+[^cat32-alias]: `cat32` は `deterministic-32` に同梱された CLI エイリアスです。ローカルインストール後の `node_modules/.bin/cat32`、`npm install -g deterministic-32` 後のグローバル `cat32` に加え、未導入環境では `npx --package deterministic-32 cat32` のような一時取得コマンドからも起動できます。
