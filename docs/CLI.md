@@ -7,11 +7,13 @@ $ npx deterministic-32 <key?> \
      --json[=compact|pretty] --pretty --help]
 ```
 
+以降の例で利用する `cat32` は `deterministic-32` パッケージに同梱された CLI バイナリアイアスで、`npx cat32`、ローカルインストール後の `node_modules/.bin/cat32`、`npm install -g deterministic-32` 後のグローバル `cat32` から呼び出せます。[^cat32-alias]
+
 - `<key>` が無い場合は **stdin** を読み取る。
   - 標準入力から取得した文字列の末尾にある `\r?\n` は既定で除去され、CLI 引数として同じ内容を渡した場合と同一のキーが得られる。
   - 末尾改行を保持したままキーを生成する設定は現状提供していない。改行の有無で差分を扱いたい場合は、入力段階で明示的にエスケープ文字やプレースホルダーを用いるなどして区別する運用を検討してほしい。
 - キーが `-` から始まるなど、フラグとして解釈されたくない引数を渡すときは `--`（ダブルダッシュ）を使って CLI のフラグ解析を終了させる。
-  例えば `cat32 -- --literal-key` は `--literal-key` をそのままキーとして扱う。
+  例えば `cat32 -- --literal-key`[^cat32-alias] は `--literal-key` をそのままキーとして扱う。
   `--` 以降のトークンは空白区切りのまま 1 つの文字列へ結合され、`parseArgs()` でフラグ再解釈されずにリテラル引数として処理される。
 - 出力は既定で **1行1JSON (NDJSON)**：
   ```json
@@ -68,3 +70,5 @@ $ cat32 --json --pretty foo
 $ cat32 -- --literal-key
 {"index":12,"label":"M","hash":"b9f6cbe3","key":"\"--literal-key\""}
 ```
+
+[^cat32-alias]: `cat32` は `deterministic-32` に同梱された CLI エイリアスです。`npx cat32`、ローカルインストール後の `node_modules/.bin/cat32`、`npm install -g deterministic-32` 後のグローバル `cat32` いずれからも起動できます。
