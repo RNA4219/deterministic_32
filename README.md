@@ -62,12 +62,16 @@ const assignment = cat.assign("hello");
 
 ## CLI
 
-`cat32` は `deterministic-32` パッケージに同梱された CLI バイナリアイアスです。利用方法の詳細は脚注を参照してください。[^cat32-alias] 併せて [CLI ドキュメント](docs/CLI.md) も確認してください。
+`cat32` は `deterministic-32` パッケージに同梱された CLI バイナリアイアスです。パッケージを事前に導入していない環境では `npx --package deterministic-32 cat32`（もしくは `npm exec --package deterministic-32 cat32`）で一時取得して即時に実行できます。
+プロジェクトへローカルインストール済みであれば `cat32` を直接呼び出せ、`npx cat32` や `node_modules/.bin/cat32` からも同じバイナリを解決します。
+`npm install -g deterministic-32` でグローバル導入した後も PATH 上の `cat32` をそのまま利用できます。
+同梱エイリアス `deterministic-32`（`npx deterministic-32` など）も同一エントリポイントを指します。
+詳しくは [CLI ドキュメント](docs/CLI.md) を参照してください。[^cat32-alias]
 
 
 ```bash
-npx deterministic-32 "user:123" --salt=proj --namespace=v1
-echo '{"id":1,"k":"v"}' | npx deterministic-32 --salt=proj
+cat32 "user:123" --salt=proj --namespace=v1
+echo '{"id":1,"k":"v"}' | cat32 --salt=proj
 # Output: one JSON per line (same shape as assign())
 ```
 - フラグ解析を止めたい場合は `--`（ダブルダッシュ）を挟む。例えば `cat32 -- --literal-key`[^cat32-alias] は `--literal-key` をそのままキーとして処理する。
