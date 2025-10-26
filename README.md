@@ -104,7 +104,7 @@ cat32 --json foo
 #    一方 `--json=foo` のように `=` 付きで許可外の値を渡すと `RangeError` で終了します。
 ```
 
-[^cat32-alias]: `cat32` は `deterministic-32` に同梱された CLI エイリアスです。`npx cat32`、ローカルインストール後の `node_modules/.bin/cat32`、`npm install -g deterministic-32` 後のグローバル `cat32` いずれからも起動できます。未導入環境では `npx --package deterministic-32 cat32` などの一時取得コマンドからも実行可能です。
+[^cat32-alias]: `cat32` は `deterministic-32` に同梱された CLI エイリアスです。パッケージをローカルに追加した場合は `node_modules/.bin/cat32`（または `npx cat32` がローカルバイナリを解決します）、グローバルインストール後は PATH 上の `cat32` から直接呼び出せます。未導入環境で即時に実行する場合は `npx --package deterministic-32 cat32`（あるいは同等の明示的なパッケージ指定）で一時取得してください。
 
 
 ## Determinism
