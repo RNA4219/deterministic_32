@@ -62,14 +62,14 @@ const assignment = cat.assign("hello");
 
 ## CLI
 
-`npx deterministic-32` の代わりに `npx cat32` も利用できます。ローカルインストール後は `node_modules/.bin/cat32`（例: `npx cat32` や npm-scripts から）を、`npm install -g deterministic-32` 後はグローバルに常駐した `cat32` コマンドをそのまま呼び出せます。
+`cat32` は `deterministic-32` パッケージに同梱された CLI バイナリアイアスで、`npx deterministic-32` と同等に利用できます。`npx cat32` で即時実行でき、ローカルインストール後は `node_modules/.bin/cat32`（例: npm-scripts からの呼び出し）を、`npm install -g deterministic-32` 後はグローバルに常駐した `cat32` コマンドをそのまま使えます。[^cat32-alias]
 
 ```bash
 npx deterministic-32 "user:123" --salt=proj --namespace=v1
 echo '{"id":1,"k":"v"}' | npx deterministic-32 --salt=proj
 # Output: one JSON per line (same shape as assign())
 ```
-- フラグ解析を止めたい場合は `--`（ダブルダッシュ）を挟む。例えば `cat32 -- --literal-key` は `--literal-key` をそのままキーとして処理する。
+- フラグ解析を止めたい場合は `--`（ダブルダッシュ）を挟む。例えば `cat32 -- --literal-key`[^cat32-alias] は `--literal-key` をそのままキーとして処理する。
   `--` より後ろのトークンは空白区切りのまま 1 つの入力として結合され、`parseArgs()` はそれ以上フラグとして解釈しない。
   詳細は [docs/CLI.md](./docs/CLI.md) を参照してください。
 - `echo` などからの標準入力は、実装上 `readStdin()` が末尾の `\r?\n` を既定で取り除くため、
@@ -90,7 +90,7 @@ echo '{"id":1,"k":"v"}' | npx deterministic-32 --salt=proj
 - `--json=pretty` / `--pretty` / `--json --pretty` は複数行の整形 JSON（インデント 2）を返します。
   各レコードが複数行になるため NDJSON ではありません。
 
-例（`cat32` は `npx cat32` で即時実行するか、ローカル/グローバルインストールで取得したバイナリを PATH に通して利用します）:
+例（`cat32`[^cat32-alias] は `npx cat32` で即時実行するか、ローカル/グローバルインストールで取得したバイナリを PATH に通して利用します）:
 
 ```bash
 cat32 --json foo
@@ -98,6 +98,8 @@ cat32 --json foo
 #    スペース区切りで許可外の値を渡しているため `--json` は compact にフォールバックし、`foo` は後続トークンとしてキーに扱われます。
 #    一方 `--json=foo` のように `=` 付きで許可外の値を渡すと `RangeError` で終了します。
 ```
+
+[^cat32-alias]: `cat32` は `deterministic-32` に同梱された CLI エイリアスです。`npx cat32`、ローカルインストール後の `node_modules/.bin/cat32`、`npm install -g deterministic-32` 後のグローバル `cat32` いずれからも起動できます。
 
 ## Determinism
 - Canonical key = **normalize(NFKC)** ∘ **stable stringify (key-sorted, cycle-check)**.
