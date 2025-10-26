@@ -62,7 +62,8 @@ const assignment = cat.assign("hello");
 
 ## CLI
 
-`cat32` は `deterministic-32` パッケージに同梱された CLI バイナリアイアスです。パッケージを事前に導入していない環境では `npx --package deterministic-32 cat32`（もしくは `npm exec --package deterministic-32 cat32`）で一時取得して即時に実行できます。
+`cat32` は `deterministic-32` パッケージに同梱された CLI バイナリアイアスです。
+パッケージを事前に導入していない環境では `npx --package deterministic-32 cat32`（もしくは `npm exec --package deterministic-32 cat32`）で一時取得して即時に実行できます。
 プロジェクトへローカルインストール済みであれば `cat32` を直接呼び出せ、`npx cat32` や `node_modules/.bin/cat32` からも同じバイナリを解決します。
 `npm install -g deterministic-32` でグローバル導入した後も PATH 上の `cat32` をそのまま利用できます。
 同梱エイリアス `deterministic-32`（`npx deterministic-32` など）も同一エントリポイントを指します。
@@ -74,11 +75,11 @@ cat32 "user:123" --salt=proj --namespace=v1
 echo '{"id":1,"k":"v"}' | cat32 --salt=proj
 # Output: one JSON per line (same shape as assign())
 ```
-- フラグ解析を止めたい場合は `--`（ダブルダッシュ）を挟む。例えば `cat32 -- --literal-key`[^cat32-alias] は `--literal-key` をそのままキーとして処理する。
+- フラグ解析を止めたい場合は `--`（ダブルダッシュ）を挟む。
+  例えば `cat32 -- --literal-key`[^cat32-alias] は `--literal-key` をそのままキーとして処理する。
   `--` より後ろのトークンは空白区切りのまま 1 つの入力として結合され、`parseArgs()` はそれ以上フラグとして解釈しない。
   詳細は [docs/CLI.md](./docs/CLI.md) を参照してください。
-- `echo` などからの標準入力は、実装上 `readStdin()` が末尾の `\r?\n` を既定で取り除くため、
-  CLI 引数で渡した場合と同じ canonical key に揃います。
+- `echo` などからの標準入力は、実装上 `readStdin()` が末尾の `\r?\n` を既定で取り除くため、CLI 引数で渡した場合と同じ canonical key に揃います。
   現状 CLI からこの振る舞いを切り替える方法はなく、将来的に保持が必要になった場合は `readStdin` の `preserveTrailingNewline` オプションを公開するフラグ追加で対応予定です。
 - 利用可能なフラグ:
   - `--salt <value>`: Salt to apply when assigning a category.
@@ -104,7 +105,11 @@ cat32 --json foo
 #    一方 `--json=foo` のように `=` 付きで許可外の値を渡すと `RangeError` で終了します。
 ```
 
-[^cat32-alias]: `cat32` は `deterministic-32` に同梱された CLI エイリアスです。未導入環境で即時に実行する場合は `npx --package deterministic-32 cat32` のようにパッケージを明示指定してください。ローカル依存として導入済みであれば `npx cat32` や `node_modules/.bin/cat32` を直接呼び出せます。`npm install -g deterministic-32` 等でグローバルインストールしている場合は PATH 上の `cat32` をそのまま利用できます。`npx deterministic-32` も同一バイナリへのショートカットです。
+[^cat32-alias]: `cat32` は `deterministic-32` に同梱された CLI エイリアスです。未導入環境で即時に実行する場合は
+  `npx --package deterministic-32 cat32` のようにパッケージを明示指定してください。
+  ローカル依存として導入済みであれば `npx cat32` や `node_modules/.bin/cat32` を直接呼び出せます。
+  `npm install -g deterministic-32` 等でグローバルインストールしている場合は PATH 上の `cat32` をそのまま利用できます。
+  `npx deterministic-32` も同一バイナリへのショートカットです。
 
 
 ## Determinism
