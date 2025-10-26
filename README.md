@@ -62,7 +62,9 @@ const assignment = cat.assign("hello");
 
 ## CLI
 
-`cat32` は `deterministic-32` パッケージに同梱された CLI バイナリアイアスで、`npx deterministic-32` と同等に利用できます。`npx cat32` で即時実行でき、ローカルインストール後は `node_modules/.bin/cat32`（例: npm-scripts からの呼び出し）を、`npm install -g deterministic-32` 後はグローバルに常駐した `cat32` コマンドをそのまま使えます。[^cat32-alias]
+`cat32` は `deterministic-32` パッケージに同梱された CLI バイナリアイアスで、`npx deterministic-32` と同等に利用できます。`npx cat32`
+で即時実行でき、ローカルインストール後は `node_modules/.bin/cat32`（例: npm-scripts からの呼び出し）を、`npm install -g deterministic-32`
+後はグローバルに常駐した `cat32` コマンドをそのまま使えます。[^cat32-alias]
 
 ```bash
 npx deterministic-32 "user:123" --salt=proj --namespace=v1
