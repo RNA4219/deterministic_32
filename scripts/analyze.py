@@ -73,11 +73,14 @@ def _clear_issue_report(issue_path: pathlib.Path) -> None:
         issue_path.unlink()
     except FileNotFoundError:
         return
-    except OSError:
+    except OSError as unlink_error:
         try:
             issue_path.write_text("", encoding="utf-8")
-        except OSError:
-            pass
+        except OSError as write_error:
+            message = (
+                f"Failed to clear issue report at {issue_path}: {write_error}"
+            )
+            raise RuntimeError(message) from unlink_error
 
 def extract_duration(entry: dict[str, object]) -> int:
     duration = entry.get("duration_ms")
