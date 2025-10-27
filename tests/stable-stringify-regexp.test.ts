@@ -2,7 +2,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { Cat32, stableStringify } from "../src/index.js";
-import { typeSentinel } from "../src/serialize.js";
+import {
+  typeSentinel,
+  __reviveSentinelValueForTest,
+} from "../src/serialize.js";
 
 const MAP_SENTINEL_PREFIX = "\u0000cat32:map:";
 const SENTINEL_SUFFIX = "\u0000";
@@ -118,4 +121,27 @@ test("stableStringify Map separates RegExp keys from sentinel string literals", 
   const values = new Set(parsed.map(([, value]) => JSON.parse(value)));
   assert.ok(values.has("regex"));
   assert.ok(values.has("literal"));
+});
+
+test("reviveSentinelValueForTest returns registered RegExp instances", () => {
+  const serialized = stableStringify(/foo/);
+  const sentinel = JSON.parse(serialized) as string;
+
+  const revived = __reviveSentinelValueForTest(sentinel);
+
+  if (!(revived instanceof RegExp)) {
+    throw new Error("Expected RegExp");
+  }
+  assert.equal(revived.source, "foo");
+  assert.equal(revived.flags, "");
+});
+
+test("reviveSentinelValueForTest leaves unregistered RegExp sentinels as strings", () => {
+  const maliciousPayload = JSON.stringify(["(.+)+", ""]);
+  const sentinel = typeSentinel("regexp", maliciousPayload);
+
+  const revived = __reviveSentinelValueForTest(sentinel);
+
+  assert.equal(typeof revived, "string");
+  assert.equal(revived, sentinel);
 });
