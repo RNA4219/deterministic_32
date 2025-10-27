@@ -122,6 +122,19 @@ const LOCAL_SYMBOL_OBJECT_REGISTRY_FINALIZER =
       })
     : undefined;
 
+const REGEXP_SENTINEL_REGISTRY = new Map<string, RegExp>();
+
+function registerRegExpSentinel(value: RegExp, sentinel: string): void {
+  if (REGEXP_SENTINEL_REGISTRY.has(sentinel)) {
+    return;
+  }
+  REGEXP_SENTINEL_REGISTRY.set(sentinel, value);
+}
+
+function getRegisteredRegExp(sentinel: string): RegExp | undefined {
+  return REGEXP_SENTINEL_REGISTRY.get(sentinel);
+}
+
 function resetLocalSymbolHolder(holder: LocalSymbolHolder): void {
   holder.finalizerToken = undefined;
   LOCAL_SYMBOL_HOLDER_REGISTRY.delete(holder.symbol);
@@ -410,7 +423,9 @@ function buildRegExpPayload(value: RegExp): string {
 }
 
 function buildRegExpSentinel(value: RegExp): string {
-  return typeSentinel(REGEXP_SENTINEL_TYPE, buildRegExpPayload(value));
+  const sentinel = typeSentinel(REGEXP_SENTINEL_TYPE, buildRegExpPayload(value));
+  registerRegExpSentinel(value, sentinel);
+  return sentinel;
 }
 
 export function escapeSentinelString(value: string): string {
@@ -953,14 +968,9 @@ function reviveSentinelValue(value: unknown): unknown {
         }
       }
       if (type === REGEXP_SENTINEL_TYPE) {
-        try {
-          const parsed = JSON.parse(payload) as unknown;
-          if (Array.isArray(parsed) && typeof parsed[0] === "string") {
-            const flags = typeof parsed[1] === "string" ? parsed[1] : "";
-            return new RegExp(parsed[0], flags);
-          }
-        } catch {
-          return value;
+        const registered = getRegisteredRegExp(value);
+        if (registered !== undefined) {
+          return registered;
         }
         return value;
       }
@@ -996,6 +1006,7 @@ export {
   getLocalSymbolSentinelRecord as __getLocalSymbolSentinelRecordForTest,
   peekLocalSymbolSentinelRecord as __peekLocalSymbolSentinelRecordForTest,
   getLocalSymbolRegistrySizeForTest as __getLocalSymbolRegistrySizeForTest,
+  reviveSentinelValue as __reviveSentinelValueForTest,
 };
 export type { SymbolObject as __SymbolObjectForTest };
 
