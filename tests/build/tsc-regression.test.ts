@@ -48,7 +48,7 @@ const runTsc = async (
       args,
       { cwd: repoRootPath, env },
       (error, stdout, stderr) => {
-        if (error) {
+        if (error !== null && error !== undefined) {
           reject(Object.assign(error ?? {}, { stdout, stderr }));
           return;
         }
