@@ -46,8 +46,10 @@ const runBuild = async (
       ["run", "build", ...args],
       { cwd: repoRootPath, env },
       (error, stdout, stderr) => {
-        if (error) {
-          reject(Object.assign(error ?? {}, { stdout, stderr }));
+        if (error != null) {
+          const rejectionError =
+            typeof error === "object" && error !== null ? error : { error };
+          reject(Object.assign(rejectionError as Record<string, unknown>, { stdout, stderr }));
           return;
         }
         resolve();
