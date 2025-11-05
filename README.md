@@ -1,3 +1,5 @@
+This repository is an R&D artifact and is not used in my current workflow. Keeping it as an archive.
+
 # deterministic-32
 
 <!-- guardrails:yaml
