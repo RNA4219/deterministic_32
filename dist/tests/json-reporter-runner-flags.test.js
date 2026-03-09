@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 const createMockChildProcess = () => {
     const onceListeners = new Map();
     const child = {
@@ -67,7 +68,7 @@ test("JSON reporter runner forwards CLI flags to spawned process", async () => {
     };
     const nodeProcess = process;
     const runnerUrl = new URL("./--test-reporter=json", repoRootUrl);
-    const runnerPath = decodeURIComponent(runnerUrl.pathname);
+    const runnerPath = fileURLToPath(runnerUrl);
     const originalArgv = nodeProcess.argv;
     const trackedSignals = ["SIGINT", "SIGTERM", "SIGQUIT"];
     const previousListeners = new Map();
@@ -121,7 +122,7 @@ test("JSON reporter runner forwards flag values that require separate tokens", a
     };
     const nodeProcess = process;
     const runnerUrl = new URL("./--test-reporter=json", repoRootUrl);
-    const runnerPath = decodeURIComponent(runnerUrl.pathname);
+    const runnerPath = fileURLToPath(runnerUrl);
     const originalArgv = nodeProcess.argv;
     const trackedSignals = ["SIGINT", "SIGTERM", "SIGQUIT"];
     const previousListeners = new Map();
@@ -175,7 +176,7 @@ test("JSON reporter runner does not treat CLI flag values as targets", async () 
     };
     const nodeProcess = process;
     const runnerUrl = new URL("./--test-reporter=json", repoRootUrl);
-    const runnerPath = decodeURIComponent(runnerUrl.pathname);
+    const runnerPath = fileURLToPath(runnerUrl);
     const originalArgv = nodeProcess.argv;
     const trackedSignals = ["SIGINT", "SIGTERM", "SIGQUIT"];
     const previousListeners = new Map();
@@ -232,7 +233,7 @@ test("JSON reporter runner does not treat skip pattern values as targets", async
     };
     const nodeProcess = process;
     const runnerUrl = new URL("./--test-reporter=json", repoRootUrl);
-    const runnerPath = decodeURIComponent(runnerUrl.pathname);
+    const runnerPath = fileURLToPath(runnerUrl);
     const originalArgv = nodeProcess.argv;
     const trackedSignals = ["SIGINT", "SIGTERM", "SIGQUIT"];
     const previousListeners = new Map();

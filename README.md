@@ -1,4 +1,4 @@
-This repository is an R&D artifact and is not used in my current workflow. Keeping it as an archive.
+This repository is an archived R&D artifact as of 2026-03-09. It is kept as a reference snapshot, the package metadata remains at `0.1.0`, and no further releases are currently planned.
 
 # deterministic-32
 
@@ -27,6 +27,12 @@ slo:
 Deterministic **32-way** categorizer for JS/TS.
 Stable hashing (FNV-1a 32-bit), NFKC/NFC normalization, salt/namespace, label set, and rule overrides.  
 Runs in Node (>=18) and browsers, **no dependencies**.
+
+## Project Status
+- リポジトリは archive 扱いです。
+- `package.json` のバージョンは `0.1.0` のまま維持しています。
+- docs/CI/CLI の改善はこのリポジトリ内には反映されていますが、新しい公開リリースは予定していません。
+- 現在の作業方針は「保守・検証は可能、機能拡張は原則停止」です。
 
 ## Install
 ```bash

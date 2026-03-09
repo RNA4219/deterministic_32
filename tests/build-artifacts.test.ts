@@ -30,9 +30,8 @@ const runTest = test as unknown as (
   fn: () => Promise<void>,
 ) => void;
 
-const { env: baseEnv = {}, platform = "linux" } = (process as unknown as ProcessLike) ?? {};
-
-const getNpmExecutable = (): string => (platform === "win32" ? "npm.cmd" : "npm");
+const { env: baseEnv = {} } = (process as unknown as ProcessLike) ?? {};
+const nodeExecutable = ((process as { execPath?: string }).execPath) ?? "node";
 
 const runBuild = async (
   execFile: ExecFile,
@@ -42,8 +41,8 @@ const runBuild = async (
 ): Promise<void> =>
   await new Promise<void>((resolve, reject) => {
     execFile(
-      getNpmExecutable(),
-      ["run", "build", ...args],
+      nodeExecutable,
+      ["scripts/build.js", ...args],
       { cwd: repoRootPath, env },
       (error, stdout, stderr) => {
         if (error != null) {
@@ -86,7 +85,7 @@ runTest("build copies nested source files", { timeout: 60_000 }, async () => {
   await mkdir(tempSourceDirUrl, { recursive: true });
   await writeFile(nestedSourceFileUrl, "export const nestedValue: number = 42;\n");
 
-  const env = { ...baseEnv, CI: "1" };
+  const env = { ...baseEnv, CI: "1", CAT32_SKIP_DIST_CLEAN: "1" };
 
   try {
     await runBuild(execFile, repoRootPath, env);
@@ -123,9 +122,9 @@ runTest("build forwards additional CLI arguments to TypeScript", {}, async () =>
 
   const repoRootUrl = new URL("../..", import.meta.url);
   const repoRootPath = fileURLToPath(repoRootUrl);
-  const env = { ...baseEnv, CI: "1" };
+  const env = { ...baseEnv, CI: "1", CAT32_SKIP_DIST_CLEAN: "1" };
 
-  await runBuild(execFile, repoRootPath, env, ["--", "--pretty", "false"]);
+  await runBuild(execFile, repoRootPath, env, ["--pretty", "false"]);
 });
 
 runTest("build respects CLI overrides when npm metadata is unavailable", {}, async () => {
@@ -157,7 +156,7 @@ runTest("build respects CLI overrides when npm metadata is unavailable", {}, asy
     )}\n`,
   );
 
-  const env = { ...baseEnv, CI: "1", npm_config_argv: "{}" };
+  const env = { ...baseEnv, CI: "1", CAT32_SKIP_DIST_CLEAN: "1", npm_config_argv: "{}" };
 
   try {
     let failure: unknown;

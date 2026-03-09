@@ -65,6 +65,16 @@ const LOCAL_SYMBOL_OBJECT_REGISTRY_FINALIZER = HAS_WEAK_REFS && HAS_FINALIZATION
         }
     })
     : undefined;
+const REGEXP_SENTINEL_REGISTRY = new Map();
+function registerRegExpSentinel(value, sentinel) {
+    if (REGEXP_SENTINEL_REGISTRY.has(sentinel)) {
+        return;
+    }
+    REGEXP_SENTINEL_REGISTRY.set(sentinel, value);
+}
+function getRegisteredRegExp(sentinel) {
+    return REGEXP_SENTINEL_REGISTRY.get(sentinel);
+}
 function resetLocalSymbolHolder(holder) {
     holder.finalizerToken = undefined;
     LOCAL_SYMBOL_HOLDER_REGISTRY.delete(holder.symbol);
@@ -271,7 +281,9 @@ function buildRegExpPayload(value) {
     return JSON.stringify([value.source, value.flags]);
 }
 function buildRegExpSentinel(value) {
-    return typeSentinel(REGEXP_SENTINEL_TYPE, buildRegExpPayload(value));
+    const sentinel = typeSentinel(REGEXP_SENTINEL_TYPE, buildRegExpPayload(value));
+    registerRegExpSentinel(value, sentinel);
+    return sentinel;
 }
 export function escapeSentinelString(value) {
     return normalizeStringLiteral(value);
@@ -727,15 +739,9 @@ function reviveSentinelValue(value) {
                 }
             }
             if (type === REGEXP_SENTINEL_TYPE) {
-                try {
-                    const parsed = JSON.parse(payload);
-                    if (Array.isArray(parsed) && typeof parsed[0] === "string") {
-                        const flags = typeof parsed[1] === "string" ? parsed[1] : "";
-                        return new RegExp(parsed[0], flags);
-                    }
-                }
-                catch {
-                    return value;
+                const registered = getRegisteredRegExp(value);
+                if (registered !== undefined) {
+                    return registered;
                 }
                 return value;
             }
@@ -761,7 +767,7 @@ function getSymbolSortKey(symbol) {
         getLocalSymbolSentinelRecord(symbol);
     return `local:${record.identifier}`;
 }
-export { getLocalSymbolSentinelRecord as __getLocalSymbolSentinelRecordForTest, peekLocalSymbolSentinelRecord as __peekLocalSymbolSentinelRecordForTest, getLocalSymbolRegistrySizeForTest as __getLocalSymbolRegistrySizeForTest, };
+export { getLocalSymbolSentinelRecord as __getLocalSymbolSentinelRecordForTest, peekLocalSymbolSentinelRecord as __peekLocalSymbolSentinelRecordForTest, getLocalSymbolRegistrySizeForTest as __getLocalSymbolRegistrySizeForTest, reviveSentinelValue as __reviveSentinelValueForTest, };
 function getLocalSymbolRegistrySizeForTest() {
     return LOCAL_SYMBOL_OBJECT_REGISTRY.size;
 }

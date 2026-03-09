@@ -49,7 +49,7 @@ test("runCheckSize reports an error when gzip size exceeds the limit", async () 
         setExitCode: (code) => {
             exitCode = code;
         },
-        targetPath: new URL("file:///tmp/dist/index.js"),
+        targetPath: new URL("https://example.test/dist/index.js"),
     });
     assert.equal(result.gzipSize, expectedGzipSize);
     assert.equal(result.limit, MAX_GZIP_SIZE_BYTES);
@@ -78,7 +78,7 @@ test("runCheckSize logs success when gzip size is within the limit", async () =>
         setExitCode: (code) => {
             exitCode = code;
         },
-        targetPath: new URL("file:///tmp/dist/index.js"),
+        targetPath: new URL("https://example.test/dist/index.js"),
     });
     assert.equal(result.gzipSize, expectedGzipSize);
     assert.equal(result.limit, MAX_GZIP_SIZE_BYTES);

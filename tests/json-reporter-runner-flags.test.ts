@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 
 type Signal = "SIGINT" | "SIGTERM" | "SIGQUIT";
 
@@ -129,7 +130,7 @@ test("JSON reporter runner forwards CLI flags to spawned process", async () => {
   };
 
   const runnerUrl = new URL("./--test-reporter=json", repoRootUrl);
-  const runnerPath = decodeURIComponent(runnerUrl.pathname);
+  const runnerPath = fileURLToPath(runnerUrl);
   const originalArgv = nodeProcess.argv;
   const trackedSignals: Signal[] = ["SIGINT", "SIGTERM", "SIGQUIT"];
   const previousListeners = new Map<Signal, Set<Listener>>();
@@ -219,7 +220,7 @@ test("JSON reporter runner forwards flag values that require separate tokens", a
   };
 
   const runnerUrl = new URL("./--test-reporter=json", repoRootUrl);
-  const runnerPath = decodeURIComponent(runnerUrl.pathname);
+  const runnerPath = fileURLToPath(runnerUrl);
   const originalArgv = nodeProcess.argv;
   const trackedSignals: Signal[] = ["SIGINT", "SIGTERM", "SIGQUIT"];
   const previousListeners = new Map<Signal, Set<Listener>>();
@@ -310,7 +311,7 @@ test("JSON reporter runner does not treat CLI flag values as targets", async () 
   };
 
   const runnerUrl = new URL("./--test-reporter=json", repoRootUrl);
-  const runnerPath = decodeURIComponent(runnerUrl.pathname);
+  const runnerPath = fileURLToPath(runnerUrl);
   const originalArgv = nodeProcess.argv;
   const trackedSignals: Signal[] = ["SIGINT", "SIGTERM", "SIGQUIT"];
   const previousListeners = new Map<Signal, Set<Listener>>();
@@ -404,7 +405,7 @@ test("JSON reporter runner does not treat skip pattern values as targets", async
   };
 
   const runnerUrl = new URL("./--test-reporter=json", repoRootUrl);
-  const runnerPath = decodeURIComponent(runnerUrl.pathname);
+  const runnerPath = fileURLToPath(runnerUrl);
   const originalArgv = nodeProcess.argv;
   const trackedSignals: Signal[] = ["SIGINT", "SIGTERM", "SIGQUIT"];
   const previousListeners = new Map<Signal, Set<Listener>>();

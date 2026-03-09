@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 
 type FakeChildProcess = {
   on: (event: string, listener: (...args: unknown[]) => void) => FakeChildProcess;
@@ -17,6 +18,16 @@ type SpawnInvocation = {
 type PathModule = {
   join: (...segments: string[]) => string;
   resolve: (...segments: string[]) => string;
+};
+
+type DirentLike = {
+  name: string;
+  isDirectory(): boolean;
+  isFile(): boolean;
+};
+
+type FsModule = {
+  readdirSync(path: string, options: { withFileTypes: true }): DirentLike[];
 };
 
 type RunScriptEnvironment = {
@@ -54,6 +65,52 @@ const loadEnvironment = async (): Promise<RunScriptEnvironment> => {
   const pathModule = (await dynamicImport("node:path")) as PathModule;
   const repoRootPath = pathModule.resolve(fileURLToPath(repoRootUrl));
   return { pathModule, repoRootPath };
+};
+
+const compiledTestFilePattern = /(?:\.spec|\.test)\.(?:[cm]?js)$/u;
+
+const collectCompiledTestFiles = (
+  fsModule: FsModule,
+  pathModule: PathModule,
+  directory: string,
+): string[] => {
+  const entries = fsModule
+    .readdirSync(directory, { withFileTypes: true })
+    .sort((left, right) => left.name.localeCompare(right.name));
+  const files: string[] = [];
+
+  for (const entry of entries) {
+    const fullPath = pathModule.join(directory, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...collectCompiledTestFiles(fsModule, pathModule, fullPath));
+      continue;
+    }
+
+    if (entry.isFile() && compiledTestFilePattern.test(entry.name)) {
+      files.push(fullPath);
+    }
+  }
+
+  return files;
+};
+
+const getExpandedTargetsForDirectory = async (
+  env: RunScriptEnvironment,
+  ...segments: string[]
+): Promise<string[]> => {
+  const fsModule = (await dynamicImport("node:fs")) as FsModule;
+  return collectCompiledTestFiles(
+    fsModule,
+    env.pathModule,
+    env.pathModule.join(env.repoRootPath, ...segments),
+  );
+};
+
+const getExpandedDefaultTargets = async (env: RunScriptEnvironment): Promise<string[]> => {
+  return [
+    ...(await getExpandedTargetsForDirectory(env, "dist", "tests")),
+    ...(await getExpandedTargetsForDirectory(env, "dist", "frontend", "tests")),
+  ];
 };
 
 const runScriptWithEnvironment = async (
@@ -133,7 +190,7 @@ const runScriptWithEnvironment = async (
   });
 
   const originalArgv = process.argv;
-  process.argv = [process.argv[0]!, scriptUrl.pathname, ...options.argv];
+  process.argv = [process.argv[0]!, fileURLToPath(scriptUrl), ...options.argv];
   cleanups.push(() => {
     process.argv = originalArgv;
   });
@@ -271,10 +328,7 @@ test(
     assert.ok(Array.isArray(invocation.args));
     const args = invocation.args as string[];
 
-    const expectedTargets = [
-      env.pathModule.join(env.repoRootPath, "dist", "tests"),
-      env.pathModule.join(env.repoRootPath, "dist", "frontend", "tests"),
-    ];
+    const expectedTargets = await getExpandedDefaultTargets(env);
 
     for (const expectedTarget of expectedTargets) {
       assert.ok(
@@ -306,18 +360,17 @@ test(
     assert.ok(Array.isArray(invocation.args));
     const args = invocation.args as string[];
 
-    const expectedArgs = [
-      "--test",
-      "--test-runner",
-      "tests/custom-runner.js",
-      env.pathModule.join(env.repoRootPath, "dist", "tests"),
-      env.pathModule.join(env.repoRootPath, "dist", "frontend", "tests"),
-    ];
+    const defaultTargets = await getExpandedDefaultTargets(env);
 
     assert.deepEqual(
-      args,
-      expectedArgs,
-      `expected spawn args to equal ${expectedArgs.join(", ")}, received: ${args.join(", ")}`,
+      args.slice(0, 3),
+      ["--test", "--test-runner", "tests/custom-runner.js"],
+      `expected spawn args to begin with --test, --test-runner, tests/custom-runner.js, received: ${args.join(", ")}`,
+    );
+    assert.deepEqual(
+      args.slice(3),
+      defaultTargets,
+      `expected expanded default targets after --test-runner, received: ${args.join(", ")}`,
     );
 
     assert.deepEqual(result.exitCodes, [0]);
@@ -340,18 +393,17 @@ test(
     assert.ok(Array.isArray(invocation.args));
     const args = invocation.args as string[];
 
-    const expectedArgs = [
-      "--test",
-      "--test-skip-pattern",
-      "tests/example.test.js",
-      env.pathModule.join(env.repoRootPath, "dist", "tests"),
-      env.pathModule.join(env.repoRootPath, "dist", "frontend", "tests"),
-    ];
+    const defaultTargets = await getExpandedDefaultTargets(env);
 
     assert.deepEqual(
-      args,
-      expectedArgs,
-      `expected spawn args to equal ${expectedArgs.join(", ")}, received: ${args.join(", ")}`,
+      args.slice(0, 3),
+      ["--test", "--test-skip-pattern", "tests/example.test.js"],
+      `expected spawn args to begin with --test, --test-skip-pattern, tests/example.test.js, received: ${args.join(", ")}`,
+    );
+    assert.deepEqual(
+      args.slice(3),
+      defaultTargets,
+      `expected expanded default targets after --test-skip-pattern, received: ${args.join(", ")}`,
     );
 
     assert.deepEqual(result.exitCodes, [0]);
@@ -371,11 +423,13 @@ test("run-tests script maps CLI directory arguments to dist targets", async () =
   const invocation = result.spawnCalls[0]!;
   assert.ok(Array.isArray(invocation.args));
   const args = invocation.args as string[];
-  const expectedTarget = env.pathModule.join(env.repoRootPath, "dist", "tests");
-  assert.ok(
-    args.includes(expectedTarget),
-    `expected spawn args to include ${expectedTarget}, received: ${args.join(", ")}`,
-  );
+  const expectedTargets = await getExpandedTargetsForDirectory(env, "dist", "tests");
+  for (const expectedTarget of expectedTargets) {
+    assert.ok(
+      args.includes(expectedTarget),
+      `expected spawn args to include ${expectedTarget}, received: ${args.join(", ")}`,
+    );
+  }
 
   assert.deepEqual(result.exitCodes, [0]);
 });
@@ -396,15 +450,13 @@ test(
     const invocation = result.spawnCalls[0]!;
     assert.ok(Array.isArray(invocation.args));
     const args = invocation.args as string[];
-    const expectedTarget = env.pathModule.join(
-      env.repoRootPath,
-      "dist",
-      "tests",
-    );
-    assert.ok(
-      args.includes(expectedTarget),
-      `expected spawn args to include ${expectedTarget}, received: ${args.join(", ")}`,
-    );
+    const expectedTargets = await getExpandedTargetsForDirectory(env, "dist", "tests");
+    for (const expectedTarget of expectedTargets) {
+      assert.ok(
+        args.includes(expectedTarget),
+        `expected spawn args to include ${expectedTarget}, received: ${args.join(", ")}`,
+      );
+    }
 
     assert.deepEqual(result.exitCodes, [0]);
   },
@@ -661,18 +713,17 @@ test(
     assert.ok(Array.isArray(invocation.args));
     const args = invocation.args as string[];
 
-    const expectedArgs = [
-      "--test",
-      "--require",
-      "tests/register.js",
-      env.pathModule.join(env.repoRootPath, "dist", "tests"),
-      env.pathModule.join(env.repoRootPath, "dist", "frontend", "tests"),
-    ];
+    const defaultTargets = await getExpandedDefaultTargets(env);
 
     assert.deepEqual(
-      args,
-      expectedArgs,
-      `expected spawn args to equal ${expectedArgs.join(", ")}, received: ${args.join(", ")}`,
+      args.slice(0, 3),
+      ["--test", "--require", "tests/register.js"],
+      `expected spawn args to begin with --test, --require, tests/register.js, received: ${args.join(", ")}`,
+    );
+    assert.deepEqual(
+      args.slice(3),
+      defaultTargets,
+      `expected expanded default targets after --require, received: ${args.join(", ")}`,
     );
 
     assert.deepEqual(result.exitCodes, [0]);
@@ -702,10 +753,7 @@ test(
     );
     assert.equal(args[flagIndex + 1], "frontend/tests");
 
-    const defaultTargets = [
-      env.pathModule.join(env.repoRootPath, "dist", "tests"),
-      env.pathModule.join(env.repoRootPath, "dist", "frontend", "tests"),
-    ];
+    const defaultTargets = await getExpandedDefaultTargets(env);
     for (const defaultTarget of defaultTargets) {
       assert.ok(
         args.includes(defaultTarget),
@@ -733,18 +781,17 @@ test(
     assert.ok(Array.isArray(invocation.args));
     const args = invocation.args as string[];
 
-    const expectedArgs = [
-      "--test",
-      "--test-match",
-      "**/*.test.js",
-      env.pathModule.join(env.repoRootPath, "dist", "tests"),
-      env.pathModule.join(env.repoRootPath, "dist", "frontend", "tests"),
-    ];
+    const defaultTargets = await getExpandedDefaultTargets(env);
 
     assert.deepEqual(
-      args,
-      expectedArgs,
-      `expected spawn args to equal ${expectedArgs.join(", ")}, received: ${args.join(", ")}`,
+      args.slice(0, 3),
+      ["--test", "--test-match", "**/*.test.js"],
+      `expected spawn args to begin with --test, --test-match, **/*.test.js, received: ${args.join(", ")}`,
+    );
+    assert.deepEqual(
+      args.slice(3),
+      defaultTargets,
+      `expected expanded default targets after --test-match, received: ${args.join(", ")}`,
     );
 
     assert.deepEqual(result.exitCodes, [0]);
@@ -774,10 +821,7 @@ test(
     );
     assert.equal(args[flagIndex + 1], "tests/register.js");
 
-    const defaultTargets = [
-      env.pathModule.join(env.repoRootPath, "dist", "tests"),
-      env.pathModule.join(env.repoRootPath, "dist", "frontend", "tests"),
-    ];
+    const defaultTargets = await getExpandedDefaultTargets(env);
     for (const defaultTarget of defaultTargets) {
       const targetIndex = args.indexOf(defaultTarget);
       assert.ok(
@@ -824,10 +868,7 @@ for (const { flag, description } of moduleRegistrationFlagCases) {
     );
     assert.equal(args[flagIndex + 1], "tests/register.js");
 
-    const defaultTargets = [
-      env.pathModule.join(env.repoRootPath, "dist", "tests"),
-      env.pathModule.join(env.repoRootPath, "dist", "frontend", "tests"),
-    ];
+    const defaultTargets = await getExpandedDefaultTargets(env);
     for (const defaultTarget of defaultTargets) {
       assert.ok(
         args.includes(defaultTarget),
@@ -865,10 +906,7 @@ test(
       `expected spawn args to include ${expectedTarget}, received: ${args.join(", ")}`,
     );
 
-    const defaultTargets = [
-      env.pathModule.join(env.repoRootPath, "dist", "tests"),
-      env.pathModule.join(env.repoRootPath, "dist", "frontend", "tests"),
-    ];
+    const defaultTargets = await getExpandedDefaultTargets(env);
     for (const defaultTarget of defaultTargets) {
       assert.ok(
         !args.includes(defaultTarget),
@@ -896,10 +934,7 @@ test(
     assert.ok(Array.isArray(invocation.args));
     const args = invocation.args as string[];
 
-    const defaultTargets = [
-      env.pathModule.join(env.repoRootPath, "dist", "tests"),
-      env.pathModule.join(env.repoRootPath, "dist", "frontend", "tests"),
-    ];
+    const defaultTargets = await getExpandedDefaultTargets(env);
     for (const defaultTarget of defaultTargets) {
       assert.ok(
         args.includes(defaultTarget),
@@ -936,10 +971,7 @@ test(
     assert.ok(Array.isArray(invocation.args));
     const args = invocation.args as string[];
 
-    const defaultTargets = [
-      env.pathModule.join(env.repoRootPath, "dist", "tests"),
-      env.pathModule.join(env.repoRootPath, "dist", "frontend", "tests"),
-    ];
+    const defaultTargets = await getExpandedDefaultTargets(env);
     for (const defaultTarget of defaultTargets) {
       assert.ok(
         args.includes(defaultTarget),
@@ -974,10 +1006,7 @@ test(
     assert.ok(Array.isArray(invocation.args));
     const args = invocation.args as string[];
 
-    const defaultTargets = [
-      env.pathModule.join(env.repoRootPath, "dist", "tests"),
-      env.pathModule.join(env.repoRootPath, "dist", "frontend", "tests"),
-    ];
+    const defaultTargets = await getExpandedDefaultTargets(env);
 
     for (const defaultTarget of defaultTargets) {
       assert.ok(
@@ -1046,10 +1075,7 @@ test(
       );
       assert.equal(args[flagIndex + 1], value);
 
-      const defaultTargets = [
-        env.pathModule.join(env.repoRootPath, "dist", "tests"),
-        env.pathModule.join(env.repoRootPath, "dist", "frontend", "tests"),
-      ];
+      const defaultTargets = await getExpandedDefaultTargets(env);
       const firstTargetIndex = args.indexOf(defaultTargets[0]);
       assert.ok(
         firstTargetIndex !== -1,
@@ -1081,10 +1107,7 @@ test(
     assert.ok(Array.isArray(invocation.args));
     const args = invocation.args as string[];
 
-    const defaultTargets = [
-      env.pathModule.join(env.repoRootPath, "dist", "tests"),
-      env.pathModule.join(env.repoRootPath, "dist", "frontend", "tests"),
-    ];
+    const defaultTargets = await getExpandedDefaultTargets(env);
 
     const watchIndex = args.indexOf("--watch");
     assert.equal(
@@ -1187,7 +1210,7 @@ for (const directoryName of ["frontend", "dist"]) {
       });
 
       const originalArgv = process.argv;
-      process.argv = [process.argv[0]!, scriptUrl.pathname];
+      process.argv = [process.argv[0]!, fileURLToPath(scriptUrl)];
       cleanups.push(() => {
         process.argv = originalArgv;
       });
@@ -1237,22 +1260,14 @@ for (const directoryName of ["frontend", "dist"]) {
 
       assert.ok(Array.isArray(invocation.args));
       const args = invocation.args as string[];
-      const defaultTarget = pathModule.join(repoRootPath, "dist", "tests");
-      const frontendTarget = pathModule.join(
-        repoRootPath,
-        "dist",
-        "frontend",
-        "tests",
-      );
+      const defaultTargets = await getExpandedDefaultTargets({ pathModule, repoRootPath });
 
-      assert.ok(
-        args.includes(defaultTarget),
-        `expected spawn args to include ${defaultTarget}, received: ${args.join(", ")}`,
-      );
-      assert.ok(
-        args.includes(frontendTarget),
-        `expected spawn args to include ${frontendTarget}, received: ${args.join(", ")}`,
-      );
+      for (const defaultTarget of defaultTargets) {
+        assert.ok(
+          args.includes(defaultTarget),
+          `expected spawn args to include ${defaultTarget}, received: ${args.join(", ")}`,
+        );
+      }
 
       assert.deepEqual(exitCodes, [0]);
     },

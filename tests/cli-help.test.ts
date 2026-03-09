@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert";
+import { fileURLToPath } from "node:url";
 
 type SpawnOptions = {
   stdio?: ("pipe" | "inherit" | "ignore")[];
@@ -33,8 +34,8 @@ const dynamicImport = new Function(
 ) as (specifier: string) => Promise<unknown>;
 
 const CAT32_BIN = import.meta.url.includes("/dist/tests/")
-  ? new URL("../cli.js", import.meta.url).pathname
-  : new URL("../dist/cli.js", import.meta.url).pathname;
+  ? fileURLToPath(new URL("../cli.js", import.meta.url))
+  : fileURLToPath(new URL("../dist/cli.js", import.meta.url));
 
 test("cat32 --json=invalid reports an error", async () => {
   const { spawn } = (await dynamicImport("node:child_process")) as {

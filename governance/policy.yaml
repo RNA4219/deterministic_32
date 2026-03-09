@@ -11,7 +11,6 @@ permissions:
   allow:
     - open_issue
     - open_pr
-    - generate_report
   deny:
     - merge
     - tag_release
@@ -26,8 +25,6 @@ code_ownership:
   safe_paths:
     - "docs/**"
     - "tests/**"
-    - "reports/**"
-    - "logs/**"
 
 rate_limits:
   api_rpm_max: 30

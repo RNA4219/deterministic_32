@@ -1,13 +1,13 @@
 import { spawnSync } from 'node:child_process';
 import {
   copyFileSync,
-  cpSync,
   existsSync,
   mkdirSync,
+  readdirSync,
   rmSync,
   statSync,
 } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 
 class BuildError extends Error {
   exitCode;
@@ -68,6 +68,18 @@ function getForwardedArgs() {
   return process.argv.slice(2);
 }
 
+function shouldCleanDist() {
+  return process.env.CAT32_SKIP_DIST_CLEAN !== '1';
+}
+
+function cleanDist() {
+  if (!shouldCleanDist()) {
+    return;
+  }
+
+  rmSync(resolve('dist'), { recursive: true, force: true });
+}
+
 function runTypeScriptBuild() {
   const tscPath = resolve('node_modules', 'typescript', 'bin', 'tsc');
   const forwardedArgs = getForwardedArgs();
@@ -101,17 +113,40 @@ function runTypeScriptBuild() {
   throw new BuildError(reason, { exitCode: 1 });
 }
 
-function shouldCopy(source, srcRoot) {
-  if (source === srcRoot) {
-    return true;
-  }
-
-  const stats = statSync(source);
-  if (stats.isDirectory()) {
-    return true;
-  }
-
+function shouldCopyFile(source) {
   return source.endsWith('.js') || source.endsWith('.d.ts');
+}
+
+function copyEntry(source, destination) {
+  let stats;
+  try {
+    stats = statSync(source);
+  } catch {
+    return;
+  }
+
+  if (stats.isDirectory()) {
+    mkdirSync(destination, { recursive: true });
+
+    let entries;
+    try {
+      entries = readdirSync(source);
+    } catch {
+      return;
+    }
+
+    for (const entry of entries) {
+      copyEntry(join(source, entry), join(destination, entry));
+    }
+    return;
+  }
+
+  if (!shouldCopyFile(source)) {
+    return;
+  }
+
+  mkdirSync(dirname(destination), { recursive: true });
+  copyFileSync(source, destination);
 }
 
 function copyCompiledSources() {
@@ -122,10 +157,9 @@ function copyCompiledSources() {
     return;
   }
 
-  cpSync(srcRoot, dist, {
-    recursive: true,
-    filter: (source) => shouldCopy(source, srcRoot),
-  });
+  for (const entry of readdirSync(srcRoot)) {
+    copyEntry(join(srcRoot, entry), join(dist, entry));
+  }
 }
 
 function installJsonReporter() {
@@ -142,6 +176,7 @@ function installJsonReporter() {
 
 function main() {
   try {
+    cleanDist();
     runTypeScriptBuild();
     copyCompiledSources();
     installJsonReporter();

@@ -1,462 +1,346 @@
-import fs from 'node:fs';
-import path from 'node:path';
-import { spawn } from 'node:child_process';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import fs from "node:fs";
+import path from "node:path";
+import process from "node:process";
+import { spawn } from "node:child_process";
+import { fileURLToPath } from "node:url";
 
-const DESTINATION_PREFIX = '--test-reporter-destination=';
-const DEFAULT_DESTINATION = 'logs/test.jsonl';
-const DEFAULT_TARGETS = ['dist/tests', 'dist/frontend/tests'];
-const OPTIONS_EXPECTING_VALUE = new Set([
-  '--import',
-  '--loader',
-  '--require',
-  '--test-ignore',
-  '--test-name-pattern',
-  '--test-match',
-  '--test-skip-pattern', // ensure value is consumed via pendingOption
-  '--test-reporter',
-  '--test-reporter-destination',
+const scriptPath = fileURLToPath(import.meta.url);
+const projectRoot = path.dirname(scriptPath);
+const defaultTargets = ["dist/tests", "dist/frontend/tests"];
+const defaultDestination = "logs/test.jsonl";
+const testSkipPatternFlag = "--test-skip-pattern";
+const compiledTestFilePattern = /(?:\.spec|\.test)\.(?:[cm]?js)$/u;
+const testSegmentPattern = /^(?:tests|__tests__)$|(?:\.spec(?:\.[^.]+)?$)|(?:\.test(?:\.[^.]+)?$)/u;
+const flagsWithValues = new Set([
+  "--conditions",
+  "--env-file",
+  "--eval",
+  "--experimental-loader",
+  "--experimental-specifier-resolution",
+  "--import",
+  "--input-type",
+  "--loader",
+  "--print",
+  "--require",
+  "--test-concurrency",
+  "--test-name-pattern",
+  "--test-ignore",
+  "--test-match",
+  "--test-runner",
+  "--test-reporter",
+  "--test-reporter-destination",
+  testSkipPatternFlag,
+  "--test-timeout",
+  "--watch-path",
+  "-i",
+  "-r",
 ]);
 
-const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
+const sourceDirectories = defaultTargets.map((target) => {
+  const relativeFromDist = path.relative("dist", target);
+  return path.join(projectRoot, relativeFromDist);
+});
 
-const projectRoot = (() => {
-  let current = scriptDirectory;
-
-  while (true) {
-    if (path.basename(current) === 'dist') {
-      const parent = path.dirname(current);
-
-      if (parent !== current) {
-        return parent;
-      }
-
-      return current;
+const unique = (values) => {
+  const seen = new Set();
+  const result = [];
+  for (const value of values) {
+    if (seen.has(value)) {
+      continue;
     }
-
-    const parent = path.dirname(current);
-
-    if (parent === current) {
-      return scriptDirectory;
-    }
-
-    current = parent;
+    seen.add(value);
+    result.push(value);
   }
-})();
-
-const EXTENSION_MAPPING = new Map([
-  [".ts", ".js"],
-  [".mts", ".mjs"],
-  [".cts", ".cjs"],
-]);
-
-const mapTargetArgument = (
-  target,
-  { existsSync = fs.existsSync, mapDirectoriesToDist = false } = {},
-) => {
-  if (!target || typeof target !== 'string') {
-    return target;
-  }
-
-  const normalizedTarget = path.normalize(target);
-  const preferProjectAbsolute =
-    !path.isAbsolute(target) &&
-    (normalizedTarget === 'dist' || normalizedTarget.startsWith(`dist${path.sep}`));
-
-  const absoluteFromCwd = path.isAbsolute(target)
-    ? path.normalize(target)
-    : path.normalize(path.resolve(target));
-  const absoluteFromProject = path.isAbsolute(target)
-    ? path.normalize(target)
-    : path.normalize(path.resolve(projectRoot, target));
-
-  const absolute = (() => {
-    if (path.isAbsolute(target)) {
-      return absoluteFromProject;
-    }
-
-    const existsFromCwd = existsSync(absoluteFromCwd);
-    const existsFromProject = existsSync(absoluteFromProject);
-    const currentDirectory = path.normalize(process.cwd());
-    const cwdContainsCandidate =
-      absoluteFromCwd === currentDirectory ||
-      absoluteFromCwd.startsWith(`${currentDirectory}${path.sep}`);
-
-    if (existsFromProject && !existsFromCwd) {
-      return absoluteFromProject;
-    }
-
-    if (existsFromCwd && !existsFromProject) {
-      return absoluteFromCwd;
-    }
-
-    if (existsFromProject && existsFromCwd) {
-      return cwdContainsCandidate ? absoluteFromCwd : absoluteFromProject;
-    }
-
-    if (preferProjectAbsolute) {
-      return absoluteFromProject;
-    }
-
-    if (cwdContainsCandidate) {
-      return absoluteFromCwd;
-    }
-
-    return absoluteFromProject;
-  })();
-
-  const relativePathFromProject = path.relative(projectRoot, absolute);
-  const normalizedRelative = path.normalize(relativePathFromProject);
-  const extension = path.extname(normalizedRelative).toLowerCase();
-  const upwardPrefix = `..${path.sep}`;
-
-  if (
-    normalizedRelative === '..' ||
-    normalizedRelative.startsWith(upwardPrefix)
-  ) {
-    return target;
-  }
-
-  const mappedExtension = EXTENSION_MAPPING.get(extension);
-
-  if (mappedExtension) {
-    const withoutExtension = extension.length > 0
-      ? normalizedRelative.slice(0, -extension.length)
-      : normalizedRelative;
-
-    const normalizedSegments = withoutExtension
-      .split(path.sep)
-      .filter((segment) => segment && segment !== '.' && segment !== '..');
-    const distPath = path.join('dist', ...normalizedSegments);
-
-    return `${distPath}${mappedExtension}`;
-  }
-
-  const inDistAlready =
-    normalizedRelative === 'dist' ||
-    normalizedRelative.startsWith(`dist${path.sep}`);
-
-  if (inDistAlready) {
-    return target;
-  }
-
-  const distCandidate = path.join('dist', normalizedRelative);
-  const distCandidateAbsolute = path.resolve(projectRoot, distCandidate);
-
-  if (mapDirectoriesToDist && extension.length === 0) {
-    return distCandidate;
-  }
-
-  if (existsSync(distCandidate) || existsSync(distCandidateAbsolute)) {
-    return distCandidate;
-  }
-
-  return target;
+  return result;
 };
 
-const prepareRunnerOptions = (
-  argv = process.argv,
-  {
-    existsSync = fs.existsSync,
-    defaultTargets = DEFAULT_TARGETS,
-  } = {},
-) => {
-  const passthroughArgs = [];
-  const explicitTargets = [];
-  const resolvedDefaults = [];
-  const seenTargets = new Set();
-  let destinationOverride = null;
-  let pendingOption = null;
-
-  const addResolvedTarget = (candidate, bucket) => {
-    if (!candidate) {
-      return;
-    }
-
-    if (seenTargets.has(candidate)) {
-      return;
-    }
-
-    seenTargets.add(candidate);
-    bucket.push(candidate);
-  };
-
-  const resolveTargetCandidate = (candidate) => {
-    if (!candidate || typeof candidate !== 'string') {
-      return null;
-    }
-
-    const candidateExists = (value) => {
-      if (!value || typeof value !== 'string') {
-        return false;
-      }
-
-      const normalizedValue = path.normalize(value);
-      const candidates = new Set();
-
-      const projectAbsolute = path.normalize(
-        path.isAbsolute(normalizedValue)
-          ? normalizedValue
-          : path.resolve(projectRoot, normalizedValue),
-      );
-      candidates.add(projectAbsolute);
-
-      if (path.isAbsolute(normalizedValue)) {
-        candidates.add(normalizedValue);
-      } else {
-        candidates.add(normalizedValue);
-        candidates.add(path.normalize(path.resolve(normalizedValue)));
-      }
-
-      for (const entry of candidates) {
-        if (entry && existsSync(entry)) {
-          return true;
-        }
-      }
-
-      return false;
-    };
-
-    const normalized = mapTargetArgument(candidate, {
-      existsSync,
-      mapDirectoriesToDist: true,
-    });
-
-    const toAbsoluteFromProject = (value) => {
-      if (!value) {
-        return null;
-      }
-
-      return path.isAbsolute(value)
-        ? value
-        : path.resolve(projectRoot, value);
-    };
-
-    const toAbsoluteFromCwd = (value) => {
-      if (!value) {
-        return null;
-      }
-
-      return path.isAbsolute(value) ? value : path.resolve(value);
-    };
-
-    const candidatesToCheck = (values) =>
-      values.filter((value) => typeof value === 'string');
-
-    const existsInAnyLocation = (...values) =>
-      candidatesToCheck(values).some((value) => existsSync(value));
-
-    if (normalized && normalized !== candidate) {
-      if (
-        existsInAnyLocation(
-          normalized,
-          toAbsoluteFromProject(normalized),
-          toAbsoluteFromCwd(normalized),
-          candidate,
-          toAbsoluteFromProject(candidate),
-          toAbsoluteFromCwd(candidate),
-        )
-      ) {
-        return normalized;
-      }
-    }
-
-    if (
-      existsInAnyLocation(
-        candidate,
-        toAbsoluteFromProject(candidate),
-        toAbsoluteFromCwd(candidate),
-      )
-    ) {
-      return candidate;
-    }
-
+const resolveProjectRelative = (value) => {
+  const relative = path.relative(projectRoot, value);
+  if (relative === "" || relative.startsWith("..") || path.isAbsolute(relative)) {
     return null;
+  }
+  return relative.replace(/\\+/g, "/");
+};
+
+export const resolveDestination = (override = null) => {
+  if (override === null || override === "") {
+    return path.resolve(projectRoot, defaultDestination);
+  }
+  return path.isAbsolute(override)
+    ? override
+    : path.resolve(projectRoot, override);
+};
+
+const ensureDefaultTargets = (existsSync, fallbackTargets) => {
+  const effectiveDefaults = fallbackTargets ?? defaultTargets;
+  return effectiveDefaults.filter((target) => {
+    const absolute = path.resolve(projectRoot, target);
+    return existsSync(target) || existsSync(absolute);
+  });
+};
+
+const mapTsTarget = (projectRelativePath) => {
+  if (projectRelativePath.endsWith(".cts")) {
+    return `dist/${projectRelativePath.slice(0, -4)}.cjs`;
+  }
+  if (projectRelativePath.endsWith(".mts")) {
+    return `dist/${projectRelativePath.slice(0, -4)}.mjs`;
+  }
+  if (projectRelativePath.endsWith(".ts")) {
+    return `dist/${projectRelativePath.slice(0, -3)}.js`;
+  }
+  return null;
+};
+
+const mapArgument = (argument, existsSync, forceTarget = false) => {
+  const argumentSegments = argument
+    .split(/[\\/]/u)
+    .filter((segment) => segment !== "" && segment !== ".");
+  const looksLikeTestTarget = argumentSegments.some((segment) => testSegmentPattern.test(segment));
+
+  if (!forceTarget && argument.startsWith("--") && !looksLikeTestTarget) {
+    return { value: argument, isTarget: false };
+  }
+
+  const bases = path.isAbsolute(argument)
+    ? [""]
+    : unique([process.cwd(), ...sourceDirectories, projectRoot]);
+
+  let matchedAbsolutePath = null;
+  let matchedRelativePath = null;
+  let matchedPathExists = false;
+
+  for (const base of bases) {
+    const candidate = path.isAbsolute(argument)
+      ? argument
+      : path.resolve(base, argument);
+    const relative = resolveProjectRelative(candidate);
+    if (relative === null) {
+      continue;
+    }
+
+    if (existsSync(candidate) || existsSync(relative)) {
+      matchedAbsolutePath = candidate;
+      matchedRelativePath = relative;
+      matchedPathExists = true;
+      break;
+    }
+
+    if (matchedAbsolutePath === null) {
+      matchedAbsolutePath = candidate;
+      matchedRelativePath = relative;
+    }
+  }
+
+  if (matchedRelativePath === null) {
+    return { value: argument, isTarget: forceTarget };
+  }
+
+  const pathSegments = matchedRelativePath.split("/");
+  const hasTestSegment = pathSegments.some((segment) => testSegmentPattern.test(segment));
+  if (!hasTestSegment) {
+    return { value: argument, isTarget: forceTarget };
+  }
+
+  const mappedTsTarget = mapTsTarget(matchedRelativePath);
+  if (mappedTsTarget !== null) {
+    return { value: mappedTsTarget, isTarget: true };
+  }
+
+  const mappedDirectoryCandidate =
+    matchedRelativePath === "dist" || matchedRelativePath.startsWith("dist/")
+      ? matchedRelativePath
+      : `dist/${matchedRelativePath}`;
+  const mappedDirectoryAbsolute = path.resolve(projectRoot, mappedDirectoryCandidate);
+
+  if (matchedPathExists || existsSync(mappedDirectoryCandidate) || existsSync(mappedDirectoryAbsolute)) {
+    try {
+      const statCandidates = unique([
+        matchedAbsolutePath,
+        path.resolve(projectRoot, matchedRelativePath),
+        mappedDirectoryAbsolute,
+      ].filter((value) => typeof value === "string"));
+
+      for (const candidate of statCandidates) {
+        if (!fs.existsSync(candidate)) {
+          continue;
+        }
+        if (fs.statSync(candidate).isDirectory()) {
+          return { value: mappedDirectoryCandidate, isTarget: true };
+        }
+      }
+    } catch {
+      // ignore and fall through
+    }
+  }
+
+  return { value: matchedRelativePath, isTarget: true };
+};
+
+export const prepareRunnerOptions = (argv, overrides = {}) => {
+  const existsSync = overrides.existsSync ?? ((candidate) => fs.existsSync(candidate));
+  const fallbackTargets = overrides.defaultTargets ?? defaultTargets;
+  const cliArguments = argv.slice(2);
+  const passthroughArgs = [];
+  const targets = [];
+  let destinationOverride = null;
+  let pendingFlag = null;
+  let forceTargetMode = false;
+
+  const consumePendingFlag = (value) => {
+    if (pendingFlag === null) {
+      return false;
+    }
+
+    if (pendingFlag === "--test-reporter-destination") {
+      destinationOverride = value;
+    } else {
+      passthroughArgs.push(pendingFlag, value);
+    }
+    pendingFlag = null;
+    return true;
   };
 
-  for (const argument of argv.slice(2)) {
-    if (!argument) {
-      continue;
-    }
-
-    if (pendingOption) {
-      if (pendingOption === '--test-reporter-destination') {
-        destinationOverride = argument || null;
-      } else {
-        passthroughArgs.push(argument);
+  for (const argument of cliArguments) {
+    if (argument === "--") {
+      if (pendingFlag !== null) {
+        throw new RangeError(`Missing value for ${pendingFlag}`);
       }
-      pendingOption = null;
+      forceTargetMode = true;
       continue;
     }
 
-    if (argument.startsWith(DESTINATION_PREFIX)) {
-      const candidateDestination = argument.slice(DESTINATION_PREFIX.length);
-      destinationOverride = candidateDestination || null;
+    if (consumePendingFlag(argument)) {
       continue;
     }
 
-    if (argument.startsWith('--')) {
-      const assignmentIndex = argument.indexOf('=');
-      const optionName = assignmentIndex === -1
-        ? argument
-        : argument.slice(0, assignmentIndex);
-      const isDestinationOption =
-        optionName === '--test-reporter-destination';
+    if (flagsWithValues.has(argument)) {
+      pendingFlag = argument;
+      continue;
+    }
 
-      if (!isDestinationOption) {
-        passthroughArgs.push(argument);
+    const mapped = mapArgument(argument, existsSync, forceTargetMode);
+    if (mapped.isTarget) {
+      targets.push(mapped.value);
+    } else {
+      passthroughArgs.push(mapped.value);
+      if (flagsWithValues.has(mapped.value)) {
+        pendingFlag = mapped.value;
       }
-
-      if (assignmentIndex === -1) {
-        if (OPTIONS_EXPECTING_VALUE.has(optionName)) {
-          pendingOption = optionName;
-        }
-      } else if (isDestinationOption) {
-        const value = argument.slice(assignmentIndex + 1);
-        destinationOverride = value || null;
-      }
-      continue;
-    }
-
-    const resolvedTarget = resolveTargetCandidate(argument);
-
-    if (resolvedTarget) {
-      addResolvedTarget(resolvedTarget, explicitTargets);
-      continue;
-    }
-
-    passthroughArgs.push(argument);
-  }
-
-  for (const candidate of defaultTargets) {
-    if (!candidate) {
-      continue;
-    }
-
-    const resolvedTarget = resolveTargetCandidate(candidate);
-
-    if (!resolvedTarget) {
-      continue;
-    }
-
-    addResolvedTarget(resolvedTarget, resolvedDefaults);
-  }
-
-  if (pendingOption) {
-    if (pendingOption === '--test-reporter-destination') {
-      throw new RangeError(`Missing value for ${pendingOption}`);
     }
   }
 
-  const targets = explicitTargets.length > 0 ? explicitTargets : resolvedDefaults;
-
-  if (targets.length === 0 && defaultTargets.length > 0) {
-    const fallbackCandidate = resolveTargetCandidate(defaultTargets[0]);
-    addResolvedTarget(fallbackCandidate, targets);
+  if (pendingFlag !== null) {
+    throw new RangeError(`Missing value for ${pendingFlag}`);
   }
 
-  return { passthroughArgs, targets, destinationOverride };
+  return {
+    passthroughArgs,
+    targets: unique(targets.length > 0 ? targets : ensureDefaultTargets(existsSync, fallbackTargets)),
+    destinationOverride,
+  };
 };
 
-const ensureAbsoluteDestination = (candidate) => {
-  if (!candidate) {
-    return path.resolve(projectRoot, DEFAULT_DESTINATION);
-  }
+const collectCompiledTestFiles = (directory) => {
+  const entries = fs
+    .readdirSync(path.resolve(projectRoot, directory), { withFileTypes: true })
+    .sort((left, right) => left.name.localeCompare(right.name));
+  const files = [];
 
-  if (path.isAbsolute(candidate)) {
-    return candidate;
-  }
-
-  return path.resolve(projectRoot, candidate);
-};
-
-const resolveDestination = (override) => {
-  if (override) {
-    return ensureAbsoluteDestination(override);
-  }
-
-  for (const entry of fs.readdirSync(projectRoot, { withFileTypes: true })) {
-    if (!entry.name.startsWith(DESTINATION_PREFIX)) {
+  for (const entry of entries) {
+    const relativePath = path.posix.join(directory.replace(/\\+/g, "/"), entry.name);
+    if (entry.isDirectory()) {
+      files.push(...collectCompiledTestFiles(relativePath));
       continue;
     }
-
-    const entrySuffix = entry.name.slice(DESTINATION_PREFIX.length);
-    let suffix = entrySuffix;
-    let current = entry.isDirectory()
-      ? path.resolve(projectRoot, entry.name)
-      : null;
-
-    while (current) {
-      const contents = fs.readdirSync(current, { withFileTypes: true });
-      const next = contents.find((item) => item.isDirectory());
-
-      if (!next) {
-        break;
-      }
-
-      suffix = path.join(suffix, next.name);
-      current = path.join(current, next.name);
+    if (entry.isFile() && compiledTestFilePattern.test(entry.name)) {
+      files.push(relativePath);
     }
-
-    return ensureAbsoluteDestination(suffix || DEFAULT_DESTINATION);
   }
 
-  return ensureAbsoluteDestination(DEFAULT_DESTINATION);
+  return files;
 };
 
-export { prepareRunnerOptions, resolveDestination };
+const expandTargets = (targets) => {
+  const expanded = [];
+  for (const target of targets) {
+    const absolute = path.resolve(projectRoot, target);
+    if (!fs.existsSync(absolute)) {
+      expanded.push(target);
+      continue;
+    }
+    try {
+      if (fs.statSync(absolute).isDirectory()) {
+        const files = collectCompiledTestFiles(target);
+        expanded.push(...(files.length > 0 ? files : [target]));
+        continue;
+      }
+    } catch {
+      // ignore and fall through
+    }
+    expanded.push(target);
+  }
+  return unique(expanded);
+};
 
-const runJsonReporter = async () => {
-  const { passthroughArgs, targets, destinationOverride } = prepareRunnerOptions();
+export const runJsonReporter = ({ argv = process.argv, spawnImpl } = {}) => {
+  const { passthroughArgs, targets, destinationOverride } = prepareRunnerOptions(argv);
   const destination = resolveDestination(destinationOverride);
   fs.mkdirSync(path.dirname(destination), { recursive: true });
 
-  const reporterSpecifier = pathToFileURL(
-    path.resolve(projectRoot, 'reporters/json/index.js'),
-  ).href;
   const args = [
-    '--test',
-    `--test-reporter=${reporterSpecifier}`,
+    "--test",
+    "--test-reporter",
+    "json",
     `--test-reporter-destination=${destination}`,
-    ...targets,
-    ...passthroughArgs
+    ...expandTargets(targets),
+    ...passthroughArgs,
   ];
 
-  const childEnv = { ...process.env };
-  delete childEnv.NODE_TEST_CONTEXT;
-  const spawnOverride = globalThis.__CAT32_TEST_SPAWN__;
-  const spawnFunction = typeof spawnOverride === 'function' ? spawnOverride : spawn;
-  const spawnOptions = {
-    stdio: 'inherit',
-    env: childEnv,
-    cwd: projectRoot,
+  const child = (spawnImpl ?? globalThis.__CAT32_TEST_SPAWN__ ?? spawn)(
+    process.execPath,
+    args,
+    { cwd: projectRoot, stdio: "inherit" },
+  );
+
+  const signalHandlers = new Map();
+  const cleanup = () => {
+    for (const [signal, handler] of signalHandlers) {
+      process.removeListener(signal, handler);
+    }
   };
-  const child = spawnFunction(process.execPath, args, spawnOptions);
-  for (const signal of ['SIGINT', 'SIGTERM', 'SIGQUIT']) {
-    process.on(signal, () => {
-      if (!child.killed) {
+
+  for (const signal of ["SIGINT", "SIGTERM", "SIGQUIT"]) {
+    const handler = () => {
+      if (typeof child.kill === "function") {
         child.kill(signal);
       }
-    });
+    };
+    signalHandlers.set(signal, handler);
+    process.on(signal, handler);
   }
 
-  const exitResult = await new Promise((resolve) => {
-    child.once('error', (error) => {
-      console.error(error);
-      resolve({ code: 1, signal: null });
-    });
-    child.once('exit', (code, signal) => {
-      resolve({ code, signal });
-    });
+  child.once("exit", (code, signal) => {
+    cleanup();
+    if (signal) {
+      process.kill(process.pid, signal);
+      return;
+    }
+    process.exit(code ?? 0);
   });
 
-  if (exitResult.signal) {
-    process.kill(process.pid, exitResult.signal);
-  } else {
-    process.exit(exitResult.code ?? 1);
-  }
+  child.once("error", (error) => {
+    cleanup();
+    throw error;
+  });
+
+  return child;
 };
 
-if (process.env.__CAT32_SKIP_JSON_REPORTER_RUN__ !== '1') {
-  await runJsonReporter();
+if (process.env.__CAT32_SKIP_JSON_REPORTER_RUN__ !== "1") {
+  const entryScriptPath = path.resolve(process.argv[1] ?? "");
+  const entryScriptName = path.basename(process.argv[1] ?? "");
+  if (entryScriptPath === scriptPath || entryScriptName === path.basename(scriptPath)) {
+    runJsonReporter();
+  }
 }

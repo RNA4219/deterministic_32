@@ -38,6 +38,7 @@ const defaultSourceDirectories = Array.from(
 );
 
 const testSegmentPattern = /^(?:tests|__tests__)$|(?:\.spec(?:\.[^.]+)?$)|(?:\.test(?:\.[^.]+)?$)/u;
+const compiledTestFilePattern = /(?:\.spec|\.test)\.(?:[cm]?js)$/u;
 
 const testSkipPatternFlag = "--test-skip-pattern";
 
@@ -205,6 +206,72 @@ const ensurePendingFlagConsumed = (
   handleMissingFlagValue(pendingFlag);
 };
 
+function collectCompiledTestFiles(directory) {
+  const entries = fs
+    .readdirSync(directory, { withFileTypes: true })
+    .sort((left, right) => left.name.localeCompare(right.name));
+  const files = [];
+
+  for (const entry of entries) {
+    const fullPath = path.join(directory, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...collectCompiledTestFiles(fullPath));
+      continue;
+    }
+
+    if (entry.isFile() && compiledTestFilePattern.test(entry.name)) {
+      files.push(fullPath);
+    }
+  }
+
+  return files;
+}
+
+function expandNodeTestTargets(targets) {
+  const expandedTargets = [];
+  const seenTargets = new Set();
+
+  const addTarget = (target) => {
+    if (seenTargets.has(target)) {
+      return;
+    }
+
+    seenTargets.add(target);
+    expandedTargets.push(target);
+  };
+
+  for (const target of targets) {
+    if (typeof target !== "string" || !fs.existsSync(target)) {
+      addTarget(target);
+      continue;
+    }
+
+    let stats;
+    try {
+      stats = fs.statSync(target);
+    } catch {
+      addTarget(target);
+      continue;
+    }
+
+    if (!stats.isDirectory()) {
+      addTarget(target);
+      continue;
+    }
+
+    const files = collectCompiledTestFiles(target);
+    if (files.length === 0) {
+      addTarget(target);
+      continue;
+    }
+
+    for (const file of files) {
+      addTarget(file);
+    }
+  }
+
+  return expandedTargets;
+}
 export const createNodeTestInvocation = ({
   argv = process.argv.slice(2),
   setExitCode = (value) => {
@@ -270,6 +337,7 @@ export const createNodeTestInvocation = ({
 
   const effectiveTargets =
     targetArguments.length > 0 ? targetArguments : [...defaultTargets];
+  const expandedTargets = expandNodeTestTargets(effectiveTargets);
 
   const nodeTestArgs = ["--test", ...flagArguments];
 
@@ -277,7 +345,7 @@ export const createNodeTestInvocation = ({
     nodeTestArgs.push("--");
   }
 
-  nodeTestArgs.push(...effectiveTargets);
+  nodeTestArgs.push(...expandedTargets);
 
   return {
     command: process.execPath,

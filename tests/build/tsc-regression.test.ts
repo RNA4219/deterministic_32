@@ -20,9 +20,8 @@ type ExecFile = (
   callback: (error: unknown, stdout: string, stderr: string) => void,
 ) => void;
 
-const { env: baseEnv = {}, platform = "linux" } = (process as unknown as ProcessLike) ?? {};
-
-const getNpmExecutable = (): string => (platform === "win32" ? "npm.cmd" : "npm");
+const { env: baseEnv = {} } = (process as unknown as ProcessLike) ?? {};
+const nodeExecutable = ((process as { execPath?: string }).execPath) ?? "node";
 
 const runTsc = async (
   command: "npm run build",
@@ -33,12 +32,12 @@ const runTsc = async (
   };
 
   const repoRootPath = fileURLToPath(repoRootUrl);
-  const env = { ...baseEnv, CI: "1" };
+  const env = { ...baseEnv, CI: "1", CAT32_SKIP_DIST_CLEAN: "1" };
 
   const [file, ...args] = (() => {
     switch (command) {
       case "npm run build":
-        return [getNpmExecutable(), "run", "build"] as const;
+        return [nodeExecutable, "scripts/build.js"] as const;
     }
   })();
 

@@ -3,5 +3,10 @@ npm-debug.log*
 .DS_Store
 
 # stray from test runner
---test-reporter=json
---test-reporter-destination=logs
+--test-reporter-destination=logs/
+
+# temporary artifacts from local test/build runs
+.tmp-cat32-tsc-*/
+dist/tmp-build-artifacts-*/
+dist/src/tmp-build-artifacts-*/
+scripts/__pycache__/

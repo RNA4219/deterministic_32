@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert";
+import { fileURLToPath } from "node:url";
 
 import { Cat32, type CategorizerOptions } from "../src/index.js";
 
@@ -28,7 +29,7 @@ const TEST_VECTOR_DOC_PATH = import.meta.url.includes("/dist/tests/")
 
 const testVectorsPromise: Promise<ParsedTables> = (async () => {
   const { readFile } = (await dynamicImport("node:fs/promises")) as FsPromisesModule;
-  const markdown = await readFile(TEST_VECTOR_DOC_PATH.pathname, { encoding: "utf8" });
+  const markdown = await readFile(fileURLToPath(TEST_VECTOR_DOC_PATH), { encoding: "utf8" });
   return parseTables(markdown);
 })();
 

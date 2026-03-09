@@ -148,7 +148,7 @@ test("stable stringify maintains throughput with many duplicate-description symb
     const elapsedMs = performance.now() - start;
     const processEnv = globalThis.process?.env;
     const maxElapsedEnvValue = Number(processEnv?.STABLE_STRINGIFY_SYMBOL_COLLISION_MAX_MS ?? "");
-    const maxElapsedMs = Number.isFinite(maxElapsedEnvValue)
+    const maxElapsedMs = Number.isFinite(maxElapsedEnvValue) && maxElapsedEnvValue > 0
         ? maxElapsedEnvValue
         : 600;
     assert.ok(serialized.length > 0);

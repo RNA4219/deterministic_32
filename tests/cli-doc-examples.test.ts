@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { fileURLToPath } from "node:url";
 
 type SpawnOptions = { stdio?: ("pipe" | "inherit" | "ignore")[] };
 type SpawnedProcess = {
@@ -16,7 +17,7 @@ const dynamicImport = new Function("specifier", "return import(specifier);") as 
 const isDist = import.meta.url.includes("/dist/tests/");
 const distUrl = new URL(isDist ? "../" : "../dist/", import.meta.url);
 const projectUrl = new URL("../", distUrl);
-const cliDocPath = new URL("./docs/CLI.md", projectUrl).pathname;
+const cliDocPath = fileURLToPath(new URL("./docs/CLI.md", projectUrl));
 
 const compact = '{"index":15,"label":"P","hash":"c6aac00f","key":"\\"foo\\""}';
 const pretty = '{\n  "index": 15,\n  "label": "P",\n  "hash": "c6aac00f",\n  "key": "\\"foo\\""\n}';
@@ -30,8 +31,8 @@ const cases: CliCase[] = [
 ];
 
 const bins = [
-  { label: "dist/cli.js", path: new URL("./cli.js", distUrl).pathname },
-  { label: "dist/src/cli.js", path: new URL("./src/cli.js", distUrl).pathname },
+  { label: "dist/cli.js", path: fileURLToPath(new URL("./cli.js", distUrl)) },
+  { label: "dist/src/cli.js", path: fileURLToPath(new URL("./src/cli.js", distUrl)) },
 ];
 
 async function runCat32(binPath: string, args: string[]) {
@@ -63,9 +64,10 @@ async function runCat32(binPath: string, args: string[]) {
 test("CLI examples in docs stay in sync", async () => {
   const { readFile } = (await dynamicImport("node:fs/promises")) as FsPromisesModule;
   const doc = await readFile(cliDocPath, "utf8");
+  const normalizedDoc = doc.replace(/\r\n/g, "\n");
   for (const cliCase of cases) {
-    assert.ok(doc.includes(cliCase.docCommand), `docs should contain command: ${cliCase.docCommand}`);
-    assert.ok(doc.includes(cliCase.docOutput), `docs should contain output for ${cliCase.name}`);
+    assert.ok(normalizedDoc.includes(cliCase.docCommand), `docs should contain command: ${cliCase.docCommand}`);
+    assert.ok(normalizedDoc.includes(cliCase.docOutput), `docs should contain output for ${cliCase.name}`);
     for (const bin of bins) {
       const { exitCode, stdout, stderr } = await runCat32(bin.path, cliCase.args);
       assert.equal(exitCode, 0);
@@ -74,3 +76,4 @@ test("CLI examples in docs stay in sync", async () => {
     }
   }
 });
+

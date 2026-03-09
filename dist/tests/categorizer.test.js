@@ -1,16 +1,20 @@
 // Node >=18 built-in test runner
 import test from "node:test";
 import assert from "node:assert";
+import { fileURLToPath } from "node:url";
 import { Cat32 } from "../src/index.js";
 import { fnv1a32, toHex32 } from "../src/hash.js";
 import { escapeSentinelString, stableStringify, typeSentinel } from "../src/serialize.js";
 const dynamicImport = new Function("specifier", "return import(specifier);");
-const CLI_PATH = new URL("../src/cli.js", import.meta.url).pathname;
-const CLI_BIN_PATH = new URL("../cli.js", import.meta.url).pathname;
+const CLI_URL = new URL("../src/cli.js", import.meta.url);
+const CLI_PATH = fileURLToPath(CLI_URL);
+const CLI_HREF = CLI_URL.href;
+const CLI_BIN_PATH = fileURLToPath(new URL("../cli.js", import.meta.url));
 const CLI_LITERAL_KEY_EVAL_SCRIPT = [
-    "const cliPath = process.argv.at(-1);",
+    "const cliPath = process.argv.at(-2);",
+    "const cliHref = process.argv.at(-1);",
     "process.argv = [process.argv[0], cliPath, '--', '--literal-key'];",
-    "import(cliPath).catch((error) => { console.error(error); process.exit(1); });",
+    "import(cliHref).catch((error) => { console.error(error); process.exit(1); });",
 ].join(" ");
 const SYMBOL_SENTINEL_PREFIX = "__symbol__:";
 const MAP_SENTINEL_PREFIX = "\u0000cat32:map:";
@@ -50,7 +54,7 @@ test("package.json bin exposes deterministic-32 entry", async () => {
     const packageJsonUrl = import.meta.url.includes("/dist/tests/")
         ? new URL("../../package.json", import.meta.url)
         : new URL("../package.json", import.meta.url);
-    const packageJsonContent = await readFile(packageJsonUrl.pathname, "utf8");
+    const packageJsonContent = await readFile(fileURLToPath(packageJsonUrl), "utf8");
     const packageJson = JSON.parse(packageJsonContent);
     assert.ok(packageJson.bin &&
         typeof packageJson.bin === "object" &&
@@ -59,14 +63,15 @@ test("package.json bin exposes deterministic-32 entry", async () => {
 });
 const CLI_STDIN_ERROR_SCRIPT = [
     "(async () => {",
-    "  const cliPath = process.argv.at(-1);",
+    "  const cliPath = process.argv.at(-2);",
+    "  const cliHref = process.argv.at(-1);",
     "  process.stdin.isTTY = false;",
     "  process.argv = [process.argv[0], cliPath];",
     "  setTimeout(() => {",
     "    process.stdin.emit('error', new Error('boom'));",
     "  }, 0);",
     "  try {",
-    "    await import(cliPath);",
+    "    await import(cliHref);",
     "  } catch (error) {",
     "    console.error(error);",
     "    process.exit(1);",
@@ -617,7 +622,7 @@ test("tsc succeeds without duplicate identifier errors", async () => {
     const sourceImportMetaUrl = import.meta.url.includes("/dist/tests/")
         ? new URL("../../tests/categorizer.test.ts", import.meta.url)
         : import.meta.url;
-    const repoRoot = new URL("../", sourceImportMetaUrl).pathname;
+    const repoRoot = fileURLToPath(new URL("../", sourceImportMetaUrl));
     const { mkdtemp, writeFile, rm } = (await dynamicImport("node:fs/promises"));
     const { join } = (await dynamicImport("node:path"));
     const { spawn } = (await dynamicImport("node:child_process"));
@@ -639,7 +644,8 @@ test("tsc succeeds without duplicate identifier errors", async () => {
             },
             include: ["./entry.ts"],
         }, null, 2), "utf8");
-        const child = spawn("tsc", ["-p", "tsconfig.json", "--pretty", "false"], { cwd: tempDir, stdio: ["ignore", "pipe", "pipe"] });
+        const tscCliPath = join(repoRoot, "node_modules", "typescript", "bin", "tsc");
+        const child = spawn(process.argv[0], [tscCliPath, "-p", "tsconfig.json", "--pretty", "false"], { cwd: tempDir, stdio: ["ignore", "pipe", "pipe"] });
         let stdout = "";
         child.stdout.setEncoding("utf8");
         child.stdout.on("data", (chunk) => {
@@ -663,9 +669,11 @@ test("repository tsc build succeeds", async () => {
     const sourceImportMetaUrl = import.meta.url.includes("/dist/tests/")
         ? new URL("../../tests/categorizer.test.ts", import.meta.url)
         : import.meta.url;
-    const repoRoot = new URL("../", sourceImportMetaUrl).pathname;
+    const repoRoot = fileURLToPath(new URL("../", sourceImportMetaUrl));
     const { spawn } = (await dynamicImport("node:child_process"));
-    const child = spawn("tsc", ["-p", "tsconfig.json", "--pretty", "false"], { cwd: repoRoot, stdio: ["ignore", "pipe", "pipe"] });
+    const { join } = (await dynamicImport("node:path"));
+    const tscCliPath = join(repoRoot, "node_modules", "typescript", "bin", "tsc");
+    const child = spawn(process.argv[0], [tscCliPath, "-p", "tsconfig.json", "--pretty", "false"], { cwd: repoRoot, stdio: ["ignore", "pipe", "pipe"] });
     let stdout = "";
     child.stdout.setEncoding("utf8");
     child.stdout.on("data", (chunk) => {
@@ -797,14 +805,14 @@ test("dist entry point exports Cat32", async () => {
     const sourceImportMetaUrl = import.meta.url.includes("/dist/tests/")
         ? new URL("../../tests/categorizer.test.ts", import.meta.url)
         : import.meta.url;
-    const distModule = (await import(new URL("../dist/index.js", sourceImportMetaUrl)));
+    const distModule = (await import(new URL("../dist/index.js", sourceImportMetaUrl).href));
     assert.equal(typeof distModule.Cat32, "function");
 });
 test("dist index module loads and cli help lists nfkd normalization", async () => {
     const sourceImportMetaUrl = import.meta.url.includes("/dist/tests/")
         ? new URL("../../tests/categorizer.test.ts", import.meta.url)
         : import.meta.url;
-    await import(new URL("../dist/index.js", sourceImportMetaUrl)).catch((error) => {
+    await import(new URL("../dist/index.js", sourceImportMetaUrl).href).catch((error) => {
         throw new Error(`Failed to import dist/index.js: ${String(error)}`);
     });
     const originalArgv = process.argv.slice();
@@ -814,7 +822,7 @@ test("dist index module loads and cli help lists nfkd normalization", async () =
     const originalIsTTY = stdin.isTTY;
     const captured = [];
     try {
-        const distCliPath = new URL("../dist/cli.js", sourceImportMetaUrl).pathname;
+        const distCliPath = fileURLToPath(new URL("../dist/cli.js", sourceImportMetaUrl));
         process.argv = [originalArgv[0], distCliPath, "--help"];
         stdin.isTTY = true;
         process.exit = (() => undefined);
@@ -823,7 +831,7 @@ test("dist index module loads and cli help lists nfkd normalization", async () =
             captured.push(text);
             return true;
         });
-        await import(new URL("../dist/cli.js", sourceImportMetaUrl));
+        await import(new URL("../dist/cli.js", sourceImportMetaUrl).href);
     }
     catch (error) {
         throw new Error(`Failed to import dist/cli.js: ${String(error)}`);
@@ -842,8 +850,8 @@ test("dist Cat32 accepts nfkd normalization with saltns encoding", async () => {
         ? new URL("../../tests/categorizer.test.ts", import.meta.url)
         : import.meta.url;
     const [distCategorizer, distHash] = await Promise.all([
-        import(new URL("../dist/categorizer.js", sourceImportMetaUrl)),
-        import(new URL("../dist/hash.js", sourceImportMetaUrl)),
+        import(new URL("../dist/categorizer.js", sourceImportMetaUrl).href),
+        import(new URL("../dist/hash.js", sourceImportMetaUrl).href),
     ]);
     const cat = new distCategorizer.Cat32({
         salt: "pepper",
@@ -859,7 +867,7 @@ test("dist Cat32 accepts nfkd normalization with saltns encoding", async () => {
 });
 test("CLI treats values after double dash as literal key", async () => {
     const { spawn } = (await dynamicImport("node:child_process"));
-    const child = spawn(process.argv[0], ["-e", CLI_LITERAL_KEY_EVAL_SCRIPT, CLI_PATH], {
+    const child = spawn(process.argv[0], ["-e", CLI_LITERAL_KEY_EVAL_SCRIPT, CLI_PATH, CLI_HREF], {
         stdio: ["pipe", "pipe", "pipe"],
     });
     child.stdin.end();
@@ -928,7 +936,7 @@ test("CLI exits with code 2 when --salt is missing a value", async () => {
 });
 test("CLI exits with code 1 when stdin emits an error", async () => {
     const { spawn } = (await dynamicImport("node:child_process"));
-    const child = spawn(process.argv[0], ["-e", CLI_STDIN_ERROR_SCRIPT, CLI_PATH], {
+    const child = spawn(process.argv[0], ["-e", CLI_STDIN_ERROR_SCRIPT, CLI_PATH, CLI_HREF], {
         stdio: ["pipe", "pipe", "pipe"],
     });
     let stdout = "";
@@ -1100,7 +1108,8 @@ test("cat32 binary exits with code 2 when --namespace is missing a value", async
 });
 const CLI_SET_ASSIGN_SCRIPT = [
     "(async () => {",
-    "  const cliPath = process.argv.at(-1);",
+    "  const cliPath = process.argv.at(-2);",
+    "  const cliHref = process.argv.at(-1);",
     "  const { pathToFileURL } = await import('node:url');",
     "  const { Cat32 } = await import(new URL('../src/categorizer.js', pathToFileURL(cliPath)));",
     "  const magic = process.env.CAT32_MAGIC;",
@@ -1117,7 +1126,7 @@ const CLI_SET_ASSIGN_SCRIPT = [
     "  process.stdin.isTTY = true;",
     "  process.argv = [process.argv[0], cliPath, magic];",
     "  try {",
-    "    await import(cliPath);",
+    "    await import(cliHref);",
     "  } catch (error) {",
     "    console.error(error);",
     "    process.exit(1);",
@@ -1127,7 +1136,7 @@ const CLI_SET_ASSIGN_SCRIPT = [
 async function runCliAssignWithSet(values) {
     const { spawn } = (await dynamicImport("node:child_process"));
     const baseEnv = process.env ?? {};
-    const child = spawn(process.argv[0], ["-e", CLI_SET_ASSIGN_SCRIPT, CLI_PATH], {
+    const child = spawn(process.argv[0], ["-e", CLI_SET_ASSIGN_SCRIPT, CLI_PATH, CLI_HREF], {
         stdio: ["pipe", "pipe", "inherit"],
         env: {
             ...baseEnv,
@@ -1196,7 +1205,7 @@ test("dist categorizer matches source sentinel encoding", async () => {
         : import.meta.url;
     const [{ Cat32: SourceCat32 }, { Cat32: DistCat32 }] = await Promise.all([
         import("../src/categorizer.js"),
-        import(new URL("../dist/src/categorizer.js", sourceImportMetaUrl)),
+        import(new URL("../dist/src/categorizer.js", sourceImportMetaUrl).href),
     ]);
     const source = new SourceCat32();
     const dist = new DistCat32();
@@ -1892,7 +1901,7 @@ test("dist bundle canonical keys match source for Set/Date/undefined", async () 
     const distModuleUrl = new URL("../dist/src/categorizer.js", import.meta.url);
     let distModule;
     try {
-        distModule = (await import(new URL("../dist/src/categorizer.js", import.meta.url)));
+        distModule = (await import(new URL("../dist/src/categorizer.js", import.meta.url).href));
     }
     catch (error) {
         const maybeModuleNotFound = error;
@@ -1934,15 +1943,17 @@ test("CLI preserves leading whitespace from stdin", async () => {
 });
 test("CLI spawn reads piped stdin when TTY without argv key", async () => {
     const { spawn } = (await dynamicImport("node:child_process"));
-    const distCliPath = new URL("../cli.js", import.meta.url).pathname;
+    const distCliUrl = new URL("../cli.js", import.meta.url);
+    const distCliPath = fileURLToPath(distCliUrl);
     const script = [
-        "const path = process.argv.at(-1);",
+        "const path = process.argv.at(-2);",
+        "const href = process.argv.at(-1);",
         "Object.defineProperty(process.stdin, 'isTTY', { configurable: true, writable: true, value: true });",
         "process.stdin.isTTY = true;",
         "process.argv = [process.argv[0], path];",
-        "import(path).catch((err) => { console.error(err); process.exit(1); });",
+        "import(href).catch((err) => { console.error(err); process.exit(1); });",
     ].join(" ");
-    const child = spawn(process.argv[0], ["-e", script, distCliPath], {
+    const child = spawn(process.argv[0], ["-e", script, distCliPath, distCliUrl.href], {
         stdio: ["pipe", "pipe", "inherit"],
     });
     child.stdin.write("tty-spawn\n");
@@ -1964,12 +1975,13 @@ test("CLI spawn reads piped stdin when TTY without argv key", async () => {
 test("CLI reads stdin even when TTY without argv key", async () => {
     const { spawn } = (await dynamicImport("node:child_process"));
     const script = [
-        "const path = process.argv.at(-1);",
+        "const path = process.argv.at(-2);",
+        "const href = process.argv.at(-1);",
         "process.stdin.isTTY = true;",
         "process.argv = [process.argv[0], path];",
-        "import(path).catch((err) => { console.error(err); process.exit(1); });",
+        "import(href).catch((err) => { console.error(err); process.exit(1); });",
     ].join(" ");
-    const child = spawn(process.argv[0], ["-e", script, CLI_PATH], {
+    const child = spawn(process.argv[0], ["-e", script, CLI_PATH, CLI_HREF], {
         stdio: ["pipe", "pipe", "inherit"],
     });
     child.stdin.write("tty-stdin\n");
@@ -1991,12 +2003,13 @@ test("CLI reads stdin even when TTY without argv key", async () => {
 test("CLI handles empty string key from argv", async () => {
     const { spawn } = (await dynamicImport("node:child_process"));
     const script = [
-        "const path = process.argv.at(-1);",
+        "const path = process.argv.at(-2);",
+        "const href = process.argv.at(-1);",
         "process.stdin.isTTY = true;",
         'process.argv = [process.argv[0], path, ""];',
-        "import(path).catch((err) => { console.error(err); process.exit(1); });",
+        "import(href).catch((err) => { console.error(err); process.exit(1); });",
     ].join(" ");
-    const child = spawn(process.argv[0], ["-e", script, CLI_PATH], {
+    const child = spawn(process.argv[0], ["-e", script, CLI_PATH, CLI_HREF], {
         stdio: ["pipe", "pipe", "inherit"],
     });
     child.stdin.end();
@@ -2071,18 +2084,23 @@ test("CLI outputs compact JSON by default", async () => {
 test("cat32 command treats --json positional value as compact input", async () => {
     const { spawn } = (await dynamicImport("node:child_process"));
     const cat32CommandPath = import.meta.url.includes("/dist/tests/")
-        ? new URL("../cli.js", import.meta.url).pathname
-        : new URL("../dist/cli.js", import.meta.url).pathname;
-    let command = cat32CommandPath;
-    let commandArgs = ["--json", "invalid"];
-    try {
-        const { access } = (await dynamicImport("node:fs/promises"));
-        const { constants } = (await dynamicImport("node:fs"));
-        await access(cat32CommandPath, constants.X_OK);
-    }
-    catch {
-        command = process.argv[0];
-        commandArgs = [cat32CommandPath, "--json", "invalid"];
+        ? fileURLToPath(new URL("../cli.js", import.meta.url))
+        : fileURLToPath(new URL("../dist/cli.js", import.meta.url));
+    const isWindows = (process.platform === "win32");
+    let command = isWindows ? process.argv[0] : cat32CommandPath;
+    let commandArgs = isWindows
+        ? [cat32CommandPath, "--json", "invalid"]
+        : ["--json", "invalid"];
+    if (!isWindows) {
+        try {
+            const { access } = (await dynamicImport("node:fs/promises"));
+            const { constants } = (await dynamicImport("node:fs"));
+            await access(cat32CommandPath, constants.X_OK);
+        }
+        catch {
+            command = process.argv[0];
+            commandArgs = [cat32CommandPath, "--json", "invalid"];
+        }
     }
     const child = spawn(command, commandArgs, {
         stdio: ["ignore", "pipe", "pipe"],
@@ -2290,7 +2308,8 @@ test("CLI exits with code 2 when override label error is thrown", async () => {
     const { spawn } = (await dynamicImport("node:child_process"));
     const script = [
         "(async () => {",
-        "  const cliPath = process.argv.at(-1);",
+        "  const cliPath = process.argv.at(-2);",
+        "  const cliHref = process.argv.at(-1);",
         "  const { pathToFileURL } = await import('node:url');",
         "  const { Cat32 } = await import(new URL('../src/categorizer.js', pathToFileURL(cliPath)));",
         "  const originalAssign = Cat32.prototype.assign;",
@@ -2301,14 +2320,14 @@ test("CLI exits with code 2 when override label error is thrown", async () => {
         "  process.stdin.isTTY = true;",
         "  process.argv = [process.argv[0], cliPath, 'payload'];",
         "  try {",
-        "    await import(cliPath);",
+        "    await import(cliHref);",
         "  } catch (error) {",
         "    console.error(error);",
         "    process.exit(1);",
         "  }",
         "})();",
     ].join("\n");
-    const child = spawn(process.argv[0], ["-e", script, CLI_PATH], {
+    const child = spawn(process.argv[0], ["-e", script, CLI_PATH, CLI_HREF], {
         stdio: ["pipe", "ignore", "pipe"],
     });
     child.stdin.end();
@@ -2321,7 +2340,8 @@ test("CLI exits with code 2 when override label is missing", async () => {
     const { spawn } = (await dynamicImport("node:child_process"));
     const script = [
         "(async () => {",
-        "  const cliPath = process.argv.at(-1);",
+        "  const cliPath = process.argv.at(-2);",
+        "  const cliHref = process.argv.at(-1);",
         "  const { pathToFileURL } = await import('node:url');",
         "  const { Cat32 } = await import(new URL('../src/categorizer.js', pathToFileURL(cliPath)));",
         "  Cat32.prototype.assign = function assign() {",
@@ -2330,14 +2350,14 @@ test("CLI exits with code 2 when override label is missing", async () => {
         "  process.stdin.isTTY = true;",
         "  process.argv = [process.argv[0], cliPath, 'payload'];",
         "  try {",
-        "    await import(cliPath);",
+        "    await import(cliHref);",
         "  } catch (error) {",
         "    console.error(error);",
         "    process.exit(1);",
         "  }",
         "})();",
     ].join("\n");
-    const child = spawn(process.argv[0], ["-e", script, CLI_PATH], {
+    const child = spawn(process.argv[0], ["-e", script, CLI_PATH, CLI_HREF], {
         stdio: ["pipe", "ignore", "pipe"],
     });
     child.stdin.end();

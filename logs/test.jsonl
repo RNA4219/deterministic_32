@@ -1,2 +1,0 @@
-{"name":"sample::ok","status":"pass","duration_ms":120}
-{"name":"sample::fail","status":"fail","duration_ms":900}

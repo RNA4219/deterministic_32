@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert";
+import { fileURLToPath } from "node:url";
 
 type SpawnOptions = {
   stdio?: ("pipe" | "inherit" | "ignore")[];
@@ -39,11 +40,11 @@ const distDirectoryUrl = new URL(
   import.meta.url,
 );
 
-const DIST_CLI_BIN = new URL("./cli.js", distDirectoryUrl).pathname;
+const DIST_CLI_BIN = fileURLToPath(new URL("./cli.js", distDirectoryUrl));
 
 const CAT32_BIN = DIST_CLI_BIN;
 
-const DIST_SRC_CLI_BIN = new URL("./src/cli.js", distDirectoryUrl).pathname;
+const DIST_SRC_CLI_BIN = fileURLToPath(new URL("./src/cli.js", distDirectoryUrl));
 
 type Cat32ExecutionResult = {
   exitCode: number;

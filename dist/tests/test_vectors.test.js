@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert";
+import { fileURLToPath } from "node:url";
 import { Cat32 } from "../src/index.js";
 const dynamicImport = new Function("specifier", "return import(specifier);");
 const TEST_VECTOR_DOC_PATH = import.meta.url.includes("/dist/tests/")
@@ -7,7 +8,7 @@ const TEST_VECTOR_DOC_PATH = import.meta.url.includes("/dist/tests/")
     : new URL("../docs/TEST_VECTORS.md", import.meta.url);
 const testVectorsPromise = (async () => {
     const { readFile } = (await dynamicImport("node:fs/promises"));
-    const markdown = await readFile(TEST_VECTOR_DOC_PATH.pathname, { encoding: "utf8" });
+    const markdown = await readFile(fileURLToPath(TEST_VECTOR_DOC_PATH), { encoding: "utf8" });
     return parseTables(markdown);
 })();
 const VECTOR_SUITES = [

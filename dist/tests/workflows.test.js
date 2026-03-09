@@ -33,7 +33,8 @@ test("test workflow runs lint", async () => {
 test("typecheck job runs lint before building", async () => {
     const readFile = await loadReadFile();
     const workflowContent = await readFile(testWorkflowUrl, "utf8");
-    const typecheckJobMatch = workflowContent.match(/  typecheck:\n((?: {4}.+\n)+)/);
+    const normalizedWorkflowContent = workflowContent.replace(/\r\n/g, "\n");
+    const typecheckJobMatch = normalizedWorkflowContent.match(/  typecheck:\n([\s\S]*?)(?:\n  [A-Za-z0-9_-]+:|\n$)/);
     assert.ok(typecheckJobMatch, "typecheck job is not defined");
     const [, typecheckJobContent] = typecheckJobMatch;
     assert.ok(/run: npm run lint/.test(typecheckJobContent));

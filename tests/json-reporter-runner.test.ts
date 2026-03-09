@@ -490,8 +490,8 @@ test(
     const normalizedTargets = args
       .filter((value) => typeof value === "string" && !value.startsWith("--"))
       .map((value) => value.replace(/\\+/g, "/"));
-    assert.ok(normalizedTargets.includes("dist/tests"));
-    assert.ok(normalizedTargets.includes("dist/frontend/tests"));
+    assert.ok(normalizedTargets.some((value) => value.startsWith("dist/tests/")));
+    assert.ok(normalizedTargets.some((value) => value.startsWith("dist/frontend/tests/")));
     const expectedDirectory = pathModule.dirname(
       pathModule.resolve(projectRoot, "logs/test.jsonl"),
     );
@@ -996,7 +996,7 @@ test("JSON reporter runner maps directory targets into dist", async () => {
   const invocation = spawnCalls[0]!;
   assert.ok(Array.isArray(invocation.args));
   const args = invocation.args as ReadonlyArray<string>;
-  assert.ok(args.includes("dist/tests"));
+  assert.ok(args.some((value) => value.startsWith("dist/tests/")));
   assert.deepEqual(exitCodes, [0]);
 });
 

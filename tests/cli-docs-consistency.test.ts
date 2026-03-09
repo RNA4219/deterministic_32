@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { fileURLToPath } from "node:url";
 
 type FsPromisesModule = { readFile(path: string, encoding: "utf8"): Promise<string> };
 
@@ -14,8 +15,8 @@ const dynamicImport = new Function("specifier", "return import(specifier);") as 
 const isDist = import.meta.url.includes("/dist/tests/");
 const distUrl = new URL(isDist ? "../" : "../dist/", import.meta.url);
 const projectUrl = new URL("../", distUrl);
-const cliDocPath = new URL("./docs/CLI.md", projectUrl).pathname;
-const cliSourcePath = new URL("./src/cli.ts", projectUrl).pathname;
+const cliDocPath = fileURLToPath(new URL("./docs/CLI.md", projectUrl));
+const cliSourcePath = fileURLToPath(new URL("./src/cli.ts", projectUrl));
 
 test("CLI documented exit codes match implementation", async () => {
   const { readFile } = (await dynamicImport("node:fs/promises")) as FsPromisesModule;

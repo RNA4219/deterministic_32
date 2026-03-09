@@ -2,22 +2,22 @@ import assert from "node:assert/strict";
 import test from "node:test";
 const dynamicImport = new Function("specifier", "return import(specifier);");
 const repoRootUrl = new URL("../../..", import.meta.url);
-const { env: baseEnv = {}, platform = "linux" } = process ?? {};
-const getNpmExecutable = () => (platform === "win32" ? "npm.cmd" : "npm");
+const { env: baseEnv = {} } = process ?? {};
+const nodeExecutable = (process.execPath) ?? "node";
 const runTsc = async (command) => {
     const { execFile } = (await dynamicImport("node:child_process"));
     const { fileURLToPath } = (await dynamicImport("node:url"));
     const repoRootPath = fileURLToPath(repoRootUrl);
-    const env = { ...baseEnv, CI: "1" };
+    const env = { ...baseEnv, CI: "1", CAT32_SKIP_DIST_CLEAN: "1" };
     const [file, ...args] = (() => {
         switch (command) {
             case "npm run build":
-                return [getNpmExecutable(), "run", "build"];
+                return [nodeExecutable, "scripts/build.js"];
         }
     })();
     return new Promise((resolve, reject) => {
         execFile(file, args, { cwd: repoRootPath, env }, (error, stdout, stderr) => {
-            if (error) {
+            if (error !== null && error !== undefined) {
                 reject(Object.assign(error ?? {}, { stdout, stderr }));
                 return;
             }

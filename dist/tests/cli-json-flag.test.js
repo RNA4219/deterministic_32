@@ -1,11 +1,12 @@
 import test from "node:test";
 import assert from "node:assert";
+import { fileURLToPath } from "node:url";
 const dynamicImport = new Function("specifier", "return import(specifier);");
 const isRunningFromDistTests = import.meta.url.includes("/dist/tests/");
 const distDirectoryUrl = new URL(isRunningFromDistTests ? "../" : "../dist/", import.meta.url);
-const DIST_CLI_BIN = new URL("./cli.js", distDirectoryUrl).pathname;
+const DIST_CLI_BIN = fileURLToPath(new URL("./cli.js", distDirectoryUrl));
 const CAT32_BIN = DIST_CLI_BIN;
-const DIST_SRC_CLI_BIN = new URL("./src/cli.js", distDirectoryUrl).pathname;
+const DIST_SRC_CLI_BIN = fileURLToPath(new URL("./src/cli.js", distDirectoryUrl));
 async function runCat32(args, options = {}) {
     const { spawn } = (await dynamicImport("node:child_process"));
     const { bin = CAT32_BIN } = options;

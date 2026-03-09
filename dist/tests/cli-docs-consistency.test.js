@@ -1,0 +1,39 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { fileURLToPath } from "node:url";
+function sortNumbers(values) {
+    return Array.from(values).sort((a, b) => a - b);
+}
+const dynamicImport = new Function("specifier", "return import(specifier);");
+const isDist = import.meta.url.includes("/dist/tests/");
+const distUrl = new URL(isDist ? "../" : "../dist/", import.meta.url);
+const projectUrl = new URL("../", distUrl);
+const cliDocPath = fileURLToPath(new URL("./docs/CLI.md", projectUrl));
+const cliSourcePath = fileURLToPath(new URL("./src/cli.ts", projectUrl));
+test("CLI documented exit codes match implementation", async () => {
+    const { readFile } = (await dynamicImport("node:fs/promises"));
+    const doc = await readFile(cliDocPath, "utf8");
+    const source = await readFile(cliSourcePath, "utf8");
+    const docExitCodes = new Set(Array.from(doc.matchAll(/^- `(?<code>\d+)`/gmu))
+        .map(({ groups }) => Number(groups?.code))
+        .filter((code) => Number.isInteger(code)));
+    assert.ok(docExitCodes.size > 0, "docs should list at least one exit code");
+    assert.ok(doc.includes("RangeError"), "docs should describe how RangeError is handled for CLI exit codes");
+    assert.ok(/cat32 -- --[\w-]+/.test(doc), "docs should document using \"--\" to treat subsequent arguments as literal keys");
+    const exitCodeMappingMatch = source.match(/const exitCode = isSpecificationViolation\(error\) \? (?<violation>\d+) : (?<general>\d+);/u);
+    if (exitCodeMappingMatch === null || exitCodeMappingMatch.groups === undefined) {
+        throw new Error("cli.ts should map specification violations to explicit exit codes");
+    }
+    const groups = exitCodeMappingMatch.groups;
+    const violationCode = Number(groups.violation);
+    const generalCode = Number(groups.general);
+    const implementationExitCodes = new Set([0, violationCode, generalCode]);
+    assert.deepEqual(sortNumbers(docExitCodes), sortNumbers(implementationExitCodes), `docs exit codes must match implementation (RangeError should exit with ${violationCode})`);
+    assert.ok(!docExitCodes.has(3), "docs must not advertise an exit code 3 for RangeError or other cases");
+});
+test("CLI docs describe --json fallback for disallowed next token", async () => {
+    const { readFile } = (await dynamicImport("node:fs/promises"));
+    const doc = await readFile(cliDocPath, "utf8");
+    assert.ok(/--json[\s\S]{0,160}フォールバック[\s\S]{0,160}位置引数/u.test(doc), "docs should explain that --json falls back to the default format and treats the token as a positional argument when the next token is not allowed");
+    assert.ok(/cat32 --json foo[\s\S]{0,200}foo[\s\S]{0,120}キー/u.test(doc), "docs should explain why cat32 --json foo accepts foo as the key");
+});
